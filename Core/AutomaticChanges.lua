@@ -20,7 +20,7 @@ local KEPT_CHANGES = 100
 ---@class WhosWho.IdentitySnapshot
 ---@field id string
 ---@field nickname string? the identity's own nickname (People.IdentityNickname)
----@field myNickname string?
+---@field customNickname string?
 ---@field main string GUID of the main character
 
 ---A character as it was when the change happened.
@@ -41,7 +41,7 @@ local KEPT_CHANGES = 100
 function AutomaticChanges.IdentitySnapshot(id)
     local person = ns.People.Get(id)
     ---@cast person -nil
-    return { id = id, nickname = ns.People.IdentityNickname(id), myNickname = person.myNickname, main = person.main }
+    return { id = id, nickname = ns.People.IdentityNickname(id), customNickname = person.customNickname, main = person.main }
 end
 
 ---@param character WhosWho.PersonCharacter

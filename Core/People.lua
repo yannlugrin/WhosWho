@@ -15,7 +15,7 @@ ns.People = People
 ---@class WhosWho.Person
 ---@field record WhosWho.IdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
 ---@field nickname string? the player's own nickname, from the record
----@field myNickname string? my nickname for this person
+---@field customNickname string? my nickname for this person
 ---@field main string GUID of the main character. Another identity can hold a shared person's main.
 ---@field chars table<string, WhosWho.PersonCharacter> by GUID
 
@@ -107,7 +107,7 @@ function People.Nickname(id)
     local person = ns.data.people[id]
     if not person then return nil end
 
-    return person.myNickname or People.IdentityNickname(id)
+    return person.customNickname or People.IdentityNickname(id)
 end
 
 -- My changes -------------------------------------------------------------------------------------
@@ -182,7 +182,7 @@ function People.Rename(id, nickname)
 
     local clean, err = ns.Record.CleanName(nickname)
     if err then return false, err end
-    person.myNickname = clean
+    person.customNickname = clean
 
     return true
 end
@@ -237,7 +237,7 @@ local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
             toPerson.chars[movedGuid] = movedCharacter
             indexCharacter(movedGuid, toPersonId)
         end
-        toPerson.myNickname = toPerson.myNickname or fromPerson.myNickname
+        toPerson.customNickname = toPerson.customNickname or fromPerson.customNickname
         People.Forget(fromPersonId)
     end
 

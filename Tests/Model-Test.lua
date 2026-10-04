@@ -304,7 +304,7 @@ do
     P.AddCharacter(manual, G4, INFO)
     P.Rename(manual, "Tanky")
     check(P.Confirm(B, G1, 10) and P.Find(G1) == B and state(G1) == "confirmed", "the confirmed character moves to its player")
-    check(P.Get(manual) == nil and P.Find(G4) == B and state(G4) == "added" and P.Get(B).myNickname == "Tanky",
+    check(P.Get(manual) == nil and P.Find(G4) == B and state(G4) == "added" and P.Get(B).customNickname == "Tanky",
         "my manual identity holding it merges into that player")
     local merge = ns.AutomaticChanges.List()[1]
     check(merge.kind == "merged" and merge.from.id == manual and merge.to.id == B and count(merge.chars) == 2,
@@ -409,14 +409,14 @@ do
     check(P.Find(G4) == B and state(G4) == "listed", "a manual person's character listed by its player")
     check(P.Find(G6) == B and state(G6) == "added", "the manual person's other characters merge as added ones")
     check(P.Get(m3) == nil, "the merged manual person is removed")
-    check(P.Get(B).myNickname == "Tanky", "my nickname for the manual person moves to the shared person")
+    check(P.Get(B).customNickname == "Tanky", "my nickname for the manual person moves to the shared person")
 
     local m4 = P.Create(G5, INFO)
     P.Rename(m4, "Other")
     P.Accept(makeRecord(C, 1, { G2 }, "Cee"))
     P.Rename(C, "Mine")
     P.Accept(makeRecord(C, 2, { G2, G5 }, "Cee"))
-    check(P.Get(C).myNickname == "Mine" and P.Get(m4) == nil, "an existing nickname of mine is kept")
+    check(P.Get(C).customNickname == "Mine" and P.Get(m4) == nil, "an existing nickname of mine is kept")
 
     P.AddCharacter(A, G7, INFO)
     P.Accept(makeRecord(D, 1, { G7 }))
@@ -433,7 +433,7 @@ do
     check(P.Get(m5) == nil and P.Get(m6) == nil, "a record listing characters of two manual identities merges both")
     check(state(G8) == "listed" and state(G9) == "listed" and state(G10) == "listed",
         "every character the record lists is listed, two of them from the same manual identity")
-    local nickname = P.Get(E).myNickname
+    local nickname = P.Get(E).customNickname
     check(nickname == "First" or nickname == "Second", "my nickname comes from one of the merged identities")
     check(indexMatchesSavedData({ G1, G2, G3, G4, G5, G6, G7, G8, G9, G10 }),
         "index kept up to date: manual identities, added alts, merges")
@@ -461,9 +461,9 @@ do
     P.Accept(makeRecord(B, 1, { G4 }, "Bob"))
     local change = latest()
     check(change.kind == "merged" and change.time == 5 and change.read == false, "merge logged, unread")
-    check(change.from.id == manual and change.from.myNickname == "Tanky" and change.from.nickname == "Tank Bob"
+    check(change.from.id == manual and change.from.customNickname == "Tanky" and change.from.nickname == "Tank Bob"
         and change.from.main == G4, "the manual identity as it was")
-    check(change.to.id == B and change.to.nickname == "Bob" and change.to.myNickname == nil,
+    check(change.to.id == B and change.to.nickname == "Bob" and change.to.customNickname == nil,
         "the player's identity as it was, before my nickname moved to it")
     check(count(change.chars) == 2 and change.chars[G5].name == "Tank Bob" and change.chars[G5].state == "added",
         "every character of the manual identity")
@@ -486,7 +486,7 @@ do
     P.Accept(makeRecord(A, 2, { G2 }, "Anna"))
     change = latest()
     check(change.kind == "dropped" and change.to == nil and change.from.nickname == "Ann"
-        and change.from.myNickname == "Annie", "a dropped character logged, with the nicknames before the revision")
+        and change.from.customNickname == "Annie", "a dropped character logged, with the nicknames before the revision")
     check(count(change.chars) == 1 and change.chars[G3] ~= nil, "only the characters this revision dropped")
     before = #AC.List()
     P.Accept(makeRecord(A, 3, { G2 }, "Anna"))
@@ -495,7 +495,7 @@ do
     P.AddCharacter(A, G8, INFO)
     P.Accept({ v = 1, id = A, rev = 4, chars = {} })
     change = latest()
-    check(change.kind == "forgotten" and change.from.nickname == "Anna" and change.from.myNickname == "Annie",
+    check(change.kind == "forgotten" and change.from.nickname == "Anna" and change.from.customNickname == "Annie",
         "a forgotten identity logged with my nickname for it")
     check(count(change.chars) == 2 and change.chars[G2].state == "listed" and change.chars[G8].state == "added",
         "with its characters and my added alts")

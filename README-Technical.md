@@ -135,7 +135,7 @@ A character belongs to one person: one that already belongs to a person cannot b
 
 A newer revision without characters means the player unlinked them all: the person is forgotten, with my nickname and the alts I added to it. Its ID and that revision stay in `forgotten`, so an older copy relayed later is stale; a newer revision with characters brings the player back.
 
-Every change to my links that I did not make is kept in `AutomaticChanges` for the Review tab. `People` adds one for each kind: `merged` (my manual identity merged into a player's), `moved` (an alt I added to a shared identity moved to another player's), `taken` (a character a player listed, taken by the identity a message from it confirmed, possibly that player's main), all three from the same place whether a record or a confirmation caused them; `dropped` (the characters one new revision no longer lists) and `forgotten` (an identity whose player unlinked every character, with its characters and my added alts). Each change keeps its time, kind, `from` (the identity the characters left) and `to` (the one they joined: merged, moved and taken only), each as `{ id, nickname, myNickname, main }`: `from` as it was before the change, `to` as it is when the characters join it (with the revision that caused the change already applied), the characters with their state then, and a read flag. Only the 100 most recent are kept. People calls `AutomaticChanges.Record` just before a change, which takes the snapshots; for `dropped` it takes them itself with `IdentitySnapshot` and `CharacterSnapshot`, before the revision overwrites the person, and passes them to `Add`. `AutomaticChanges.List()` gives them most recent first, `UnreadCount()` the number on the tab, `MarkRead(change)` marks one read.
+Every change to my links that I did not make is kept in `AutomaticChanges` for the Review tab. `People` adds one for each kind: `merged` (my manual identity merged into a player's), `moved` (an alt I added to a shared identity moved to another player's), `taken` (a character a player listed, taken by the identity a message from it confirmed, possibly that player's main), all three from the same place whether a record or a confirmation caused them; `dropped` (the characters one new revision no longer lists) and `forgotten` (an identity whose player unlinked every character, with its characters and my added alts). Each change keeps its time, kind, `from` (the identity the characters left) and `to` (the one they joined: merged, moved and taken only), each as `{ id, nickname, customNickname, main }`: `from` as it was before the change, `to` as it is when the characters join it (with the revision that caused the change already applied), the characters with their state then, and a read flag. Only the 100 most recent are kept. People calls `AutomaticChanges.Record` just before a change, which takes the snapshots; for `dropped` it takes them itself with `IdentitySnapshot` and `CharacterSnapshot`, before the revision overwrites the person, and passes them to `Add`. `AutomaticChanges.List()` gives them most recent first, `UnreadCount()` the number on the tab, `MarkRead(change)` marks one read.
 
 A shared identity counts as **confirmed** once one of its characters is; until then (for example a record relayed by someone else) it is shared but not confirmed. The frames use this to tell a shared identity from one I created; the rules on characters are the same.
 
@@ -316,14 +316,14 @@ AceDB (defaults in `Core/Store.lua`). Data is account-wide, in `WhosWhoDB.global
 identity    id (public key, hex), seed (private key, hex), rev, nickname (override), main (GUID),
             chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false, guild } },
             sig (signature of the current revision)
-people      { [identityID or "M<n>"] = { record (shared only), nickname (the player's own), myNickname, main,
+people      { [identityID or "M<n>"] = { record (shared only), nickname (the player's own), customNickname, main,
                                    chars = { [guid] = { name, ruleset, classID, state, level, lastSeen,
                                                         guild, friendOf = { [my character's GUID] = true } } } } }
             guild and friendOf on confirmed characters only (see Scopes)
 nextManual  number of the next manual identity ("M<n>")
 forgotten   { [identityID] = revision in which the player unlinked every character }
 automaticChanges  { { time, kind = "merged" | "moved" | "taken" | "dropped" | "forgotten",
-                    from = { id, nickname, myNickname, main }, to = same or nil,
+                    from = { id, nickname, customNickname, main }, to = same or nil,
                     chars = { [guid] = { name, ruleset, classID, state } }, read }, ... }   most recent first, at most 100
 ```
 
