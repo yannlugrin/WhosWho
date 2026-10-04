@@ -11,6 +11,7 @@ ns.Store = Store
 ---@field people table<string, WhosWho.Person> by identity ID
 ---@field nextManual integer number of the next manual person ("M<n>")
 ---@field forgotten table<string, integer> identity ID -> revision in which the player unlinked every character
+---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
@@ -27,6 +28,7 @@ Store.DEFAULTS = {
         people = {},
         nextManual = 1,
         forgotten = {},
+        automaticChanges = {},
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },

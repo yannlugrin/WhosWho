@@ -31,11 +31,12 @@ WhosWho/
 │   ├── Store.lua                  AceDB defaults and init (ns.data = account-wide data, ns.settings = profile)
 │   ├── Record.lua                 Shared data format: name rules, identity record validation, canonical bytes, sign, verify
 │   ├── Identity.lua               Own identity: keys (and their entropy), characters and links, nickname, signed record
+│   ├── AutomaticChanges.lua       Changes to my links made by Who's Who on its own, for the Review tab
 │   ├── People.lua                 Other players' identities: records as received, characters with state and activity, manual identities
 │   └── Resolver.lua               One answer per character, by precedence
 ├── Tests/
 │   ├── Crypto-Test.lua            SHA-512 and Ed25519 against OpenSSL and RFC 8032 vectors, timing
-│   ├── Model-Test.lua             Name rules, Record, Identity, People, Resolver
+│   ├── Model-Test.lua             Name rules, Record, Identity, People, automatic changes, Resolver
 │   ├── Locale-Test.lua            Every L[...] key used by a TOC file exists in enUS, and every enUS key is used
 │   ├── Data/Crypto-Vectors.lua    Generated vectors (OpenSSL, sha512sum)
 │   └── Support/Bit.lua            Stand-in for the game's bit library under plain Lua 5.1
@@ -70,7 +71,7 @@ Planned:
 Layers, each only calling the ones below it:
 
 1. **Store**: AceDB setup and defaults; `ns.data` is the account-wide data, `ns.settings` the settings (AceDB profile).
-2. **Model**: Identity (self), People (other players), GuildLinks (pulled, planned). Each owns its part of `ns.data`. No frames or events; the few game functions they call (`time`, the key's entropy sources) are stubbed by the offline tests.
+2. **Model**: Identity (self), People (other players), AutomaticChanges (what People changed on its own; People calls it, and it reads people through People), GuildLinks (pulled, planned). Each owns its part of `ns.data`. No frames or events; the few game functions they call (`time`, the key's entropy sources) are stubbed by the offline tests.
 3. **Resolver**: answers "who is this character?" from the model, following the precedence rules.
 4. **Trust**: decides whether an incoming record or link is accepted (sender, rank, signature).
 5. **Comm**: codec, queue, protocol, scopes, guild sync.
@@ -130,7 +131,7 @@ A character belongs to one person: one that already belongs to a person cannot b
 
 A newer revision without characters means the player unlinked them all: the person is forgotten, with my nickname and the alts I added to it. Its ID and that revision stay in `forgotten`, so an older copy relayed later is stale; a newer revision with characters brings the player back.
 
-Planned: every change to my links that I did not make (a manual identity merged, an alt moved to another player's identity, a character dropped by a new revision, an identity removed by its player) is logged for the Review tab: time, kind, the identities involved with their nicknames at the time, the characters moved, and a read flag. Only the most recent entries are kept (about 100).
+Every change to my links that I did not make is kept in `AutomaticChanges` for the Review tab. `People` adds one for each kind: `merged` (my manual identity merged into a player's), `moved` (an alt I added to a shared identity moved to another player's), `taken` (a character a player listed, taken by the identity a message from it confirmed, possibly that player's main), all three from the same place whether a record or a confirmation caused them; `dropped` (the characters one new revision no longer lists) and `forgotten` (an identity whose player unlinked every character, with its characters and my added alts). Each change keeps its time, kind, `from` (the identity the characters left) and `to` (the one they joined: merged, moved and taken only), each as `{ id, nickname, myNickname, main }`: `from` as it was before the change, `to` as it is when the characters join it (with the revision that caused the change already applied), the characters with their state then, and a read flag. Only the 100 most recent are kept. People calls `AutomaticChanges.Record` just before a change, which takes the snapshots; for `dropped` it takes them itself with `IdentitySnapshot` and `CharacterSnapshot`, before the revision overwrites the person, and passes them to `Add`. `AutomaticChanges.List()` gives them most recent first, `UnreadCount()` the number on the tab, `MarkRead(change)` marks one read.
 
 A shared identity counts as **confirmed** once one of its characters is; until then (for example a record relayed by someone else) it is shared but not confirmed. The frames use this to tell a shared identity from one I created; the rules on characters are the same.
 
@@ -239,6 +240,9 @@ people      { [identityID or "M<n>"] = { record (shared only), nickname (the pla
                                    chars = { [guid] = { name, ruleset, classID, state, level, lastSeen } } } }
 nextManual  number of the next manual identity ("M<n>")
 forgotten   { [identityID] = revision in which the player unlinked every character }
+automaticChanges  { { time, kind = "merged" | "moved" | "taken" | "dropped" | "forgotten",
+                    from = { id, nickname, myNickname, main }, to = same or nil,
+                    chars = { [guid] = { name, ruleset, classID, state } }, read }, ... }   most recent first, at most 100
 ```
 
 Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared by every character), so they can be reset without touching the data:
@@ -250,7 +254,7 @@ tooltipOtherCharacters, guildShare, guildPull
 
 Planned: `scopes.selected` and the list of players selected with **Share my identity**.
 
-Planned: `guild = { [guildKey] = { links, digest, lastSync } }`, and `log = { { time, kind, identities, characters, read }, ... }` (most recent first, about 100).
+Planned: `guild = { [guildKey] = { links, digest, lastSync } }`.
 
 `linked = nil` means the player was not asked yet on that character.
 

@@ -1,5 +1,5 @@
 -- luacheck: allow defined, ignore 121 122 131 143
--- Offline suite: name rules, Record, Identity, People and Resolver on a fresh data table.
+-- Offline suite: name rules, Record, Identity, People, automatic changes and Resolver on a fresh data table.
 -- Run from the add-on root: lua Tests/Model-Test.lua [root]
 
 local root = (arg and arg[1]) or "."
@@ -20,7 +20,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 local ns = {}
 for _, file in ipairs({
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Record.lua",
-    "Core/Identity.lua", "Core/People.lua", "Core/Resolver.lua",
+    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end
@@ -301,6 +301,9 @@ do
     check(P.Confirm(B, G1, 10) and P.Find(G1) == B and state(G1) == "confirmed", "the confirmed character moves to its player")
     check(P.Get(manual) == nil and P.Find(G4) == B and state(G4) == "added" and P.Get(B).myNickname == "Tanky",
         "my manual identity holding it merges into that player")
+    local merge = ns.AutomaticChanges.List()[1]
+    check(merge.kind == "merged" and merge.from.id == manual and merge.to.id == B and count(merge.chars) == 2,
+        "a merge from a confirmation is an automatic change too")
     check(indexMatchesSavedData({ G1, G2, G3, G4 }), "index kept up to date: confirmation merge")
 end
 
@@ -432,6 +435,103 @@ do
 
     P.Reset()
     check(P.Find(G3) == A and P.Find(G4) == B, "index rebuilt from saved data")
+end
+
+-- Automatic changes -------------------------------------------------------------------------------------------
+
+fresh()
+do
+    local P, AC = ns.People, ns.AutomaticChanges
+    local A, B, C, D, F = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64), string.rep("d", 64), string.rep("f", 64)
+    local G6, G7, G8 = "Player-70-0000000F", "Player-70-00000010", "Player-70-00000011"
+    local function latest() return AC.List()[1] end
+
+    P.Accept(makeRecord(A, 1, { G1, G2, G3 }, "Ann"))
+    check(#AC.List() == 0, "a first record changes nothing of mine")
+
+    clock = 5
+    local manual = P.Create(G4, INFO)
+    P.AddCharacter(manual, G5, INFO)
+    P.Rename(manual, "Tanky")
+    P.Accept(makeRecord(B, 1, { G4 }, "Bob"))
+    local change = latest()
+    check(change.kind == "merged" and change.time == 5 and change.read == false, "merge logged, unread")
+    check(change.from.id == manual and change.from.myNickname == "Tanky" and change.from.nickname == "Tank Bob"
+        and change.from.main == G4, "the manual identity as it was")
+    check(change.to.id == B and change.to.nickname == "Bob" and change.to.myNickname == nil,
+        "the player's identity as it was, before my nickname moved to it")
+    check(count(change.chars) == 2 and change.chars[G5].name == "Tank Bob" and change.chars[G5].state == "added",
+        "every character of the manual identity")
+
+    P.AddCharacter(A, G6, INFO)
+    P.Accept(makeRecord(C, 1, { G6 }, "Cee"))
+    change = latest()
+    check(change.kind == "moved" and change.from.id == A and change.from.nickname == "Ann" and change.to.id == C
+        and count(change.chars) == 1 and change.chars[G6].state == "added", "an alt I added moving away logged")
+
+    local before = #AC.List()
+    P.Accept(makeRecord(D, 1, { G7, G1 }, "Dee"))
+    check(#AC.List() == before, "a character another player keeps logs nothing")
+    P.Confirm(D, G1, 10)
+    change = latest()
+    check(change.kind == "taken" and change.from.id == A and change.from.main == G1 and change.to.id == D
+        and change.chars[G1].state == "listed", "a listed character taken by a confirmation logged, with the main it was")
+
+    P.Rename(A, "Annie")
+    P.Accept(makeRecord(A, 2, { G2 }, "Anna"))
+    change = latest()
+    check(change.kind == "dropped" and change.to == nil and change.from.nickname == "Ann"
+        and change.from.myNickname == "Annie", "a dropped character logged, with the nicknames before the revision")
+    check(count(change.chars) == 1 and change.chars[G3] ~= nil, "only the characters this revision dropped")
+    before = #AC.List()
+    P.Accept(makeRecord(A, 3, { G2 }, "Anna"))
+    check(#AC.List() == before, "a revision dropping nothing logs nothing")
+
+    P.AddCharacter(A, G8, INFO)
+    P.Accept({ v = 1, id = A, rev = 4, chars = {} })
+    change = latest()
+    check(change.kind == "forgotten" and change.from.nickname == "Anna" and change.from.myNickname == "Annie",
+        "a forgotten identity logged with my nickname for it")
+    check(count(change.chars) == 2 and change.chars[G2].state == "listed" and change.chars[G8].state == "added",
+        "with its characters and my added alts")
+    before = #AC.List()
+    P.Accept({ v = 1, id = F, rev = 1, chars = {} })
+    check(#AC.List() == before, "forgetting an identity I never had logs nothing")
+
+    check(AC.UnreadCount() == before, "every change unread")
+    AC.MarkRead(latest())
+    check(latest().read and AC.UnreadCount() == before - 1, "a change marked read")
+
+    for i = 1, 105 do
+        clock = 100 + i
+        AC.Add("dropped", { id = A, main = G1 }, nil, {})
+    end
+    check(#AC.List() == 100 and AC.List()[1].time == 205 and AC.List()[100].time == 106,
+        "only the 100 most recent changes kept, most recent first")
+end
+
+-- Automatic changes: one revision, several changes ------------------------------------------------------------
+
+fresh()
+do
+    local P, AC = ns.People, ns.AutomaticChanges
+    local A, B, C = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+    P.Accept(makeRecord(A, 1, { G1 }, "Ann"))
+    P.Accept(makeRecord(B, 1, { G2, G3 }, "Bob"))
+    P.AddCharacter(A, G4, INFO)
+    P.Accept(makeRecord(B, 2, { G2, G4 }, "Bobby"))
+    local moved, dropped = AC.List()[1], AC.List()[2]
+    check(#AC.List() == 2 and dropped.kind == "dropped" and dropped.chars[G3] ~= nil and moved.kind == "moved"
+        and moved.chars[G4] ~= nil, "a revision dropping one character and taking my alt logs both")
+    check(dropped.from.nickname == "Bob" and moved.from.id == A and moved.to.nickname == "Bobby",
+        "dropped shows the identity before the revision, moved the identity the alt joins")
+
+    P.Accept(makeRecord(C, 1, { G5 }, "Cee"))
+    check(not P.Confirm(B, G5, 10), "a confirmation of a character the record does not list yet waits")
+    P.Accept(makeRecord(B, 3, { G2, G4, G5 }, "Bobby"))
+    local taken = AC.List()[1]
+    check(taken.kind == "taken" and taken.from.id == C and taken.to.id == B and taken.chars[G5].state == "listed",
+        "a waiting confirmation applied by the revision logs the character taken")
 end
 
 -- Resolver ---------------------------------------------------------------------------------------------------

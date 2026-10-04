@@ -1,5 +1,6 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
+local AutomaticChanges = ns.AutomaticChanges
 
 -- Other players' identities, by identity ID: shared ones built from the player's record, manual ones ("M<n>")
 -- created by me for players without the add-on.
@@ -224,12 +225,14 @@ local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
     local fromPerson = fromPersonId and fromPersonId ~= toPersonId and people[fromPersonId] or nil
     if fromPerson and fromPerson.record then
         if not confirmedLevel and fromPerson.chars[guid].state ~= "added" then return false end
+        AutomaticChanges.Record(fromPerson.chars[guid].state == "added" and "moved" or "taken", fromPersonId, toPersonId, { [guid] = true })
         fromPerson.chars[guid] = nil
     end
 
     -- A manual identity I created for this player: merge it into this identity.
     local toPerson = people[toPersonId]
     if fromPersonId and fromPerson and not fromPerson.record then
+        AutomaticChanges.Record("merged", fromPersonId, toPersonId, fromPerson.chars)
         for movedGuid, movedCharacter in pairs(fromPerson.chars) do
             toPerson.chars[movedGuid] = movedCharacter
             indexCharacter(movedGuid, toPersonId)
@@ -260,22 +263,31 @@ function People.Accept(record)
     if forgotten[record.id] and forgotten[record.id] >= record.rev then return "stale" end
 
     if not record.main then
-        People.Forget(record.id)
+        if sharedPerson then
+            AutomaticChanges.Record("forgotten", record.id, nil, sharedPerson.chars)
+            People.Forget(record.id)
+        end
         forgotten[record.id] = record.rev
         return "forgotten"
     end
     forgotten[record.id] = nil
 
+    local originalIdentitySnapshot = sharedPerson and AutomaticChanges.IdentitySnapshot(record.id)
     sharedPerson = sharedPerson or { chars = {} }
     people[record.id] = sharedPerson
     sharedPerson.record, sharedPerson.nickname, sharedPerson.main = record, record.nickname, record.main
 
     -- Characters the player dropped leave; my added alts stay.
+    local droppedCharacterSnapshots = {}
     for guid, character in pairs(sharedPerson.chars) do
         if character.state ~= "added" and not record.chars[guid] then
+            droppedCharacterSnapshots[guid] = AutomaticChanges.CharacterSnapshot(character)
             sharedPerson.chars[guid] = nil
             unindexCharacter(guid, record.id)
         end
+    end
+    if next(droppedCharacterSnapshots) then
+        AutomaticChanges.Add("dropped", originalIdentitySnapshot, nil, droppedCharacterSnapshots)
     end
 
     -- Confirmations of characters this revision now lists, received before it arrived.

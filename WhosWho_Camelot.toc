@@ -17,5 +17,6 @@ Core\Core.lua
 Core\Store.lua
 Core\Record.lua
 Core\Identity.lua
+Core\AutomaticChanges.lua
 Core\People.lua
 Core\Resolver.lua

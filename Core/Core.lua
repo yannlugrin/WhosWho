@@ -14,6 +14,7 @@ local addonName, ns = ...
 ---@field Store WhosWho.Store
 ---@field Record WhosWho.Record
 ---@field Identity WhosWho.Identity
+---@field AutomaticChanges WhosWho.AutomaticChanges
 ---@field People WhosWho.People
 ---@field Resolver WhosWho.Resolver
 
