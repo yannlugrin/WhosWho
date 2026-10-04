@@ -109,7 +109,7 @@ Forever runs the Midnight-era API: some chat, unit and roster values may be secr
 
 ## Data Model
 
-Characters are keyed by **GUID** (`Player-<id>-<hex>`). Forever has no realms: a character has a whole name "First Surname" (`UnitNameUnmodified` returns both parts), unique per **ruleset** (Normal, PvP, RP, Hardcore, from `C_GameRules`) within a region. Each character caches its whole name, ruleset and class, the last two as numbers: the ruleset as `Record.RULESET` (1 Normal, 2 PvP, 3 RP, 4 Hardcore), the class as the game's class ID (`UnitClass`, third return). Whole name + ruleset is the secondary key, used to resolve a name seen in a menu or typed by the player to a GUID. AceDB's own character and realm keys already follow this (`RegionalUniqueNamesEnabled()`).
+Characters are keyed by **GUID** (`Player-<id>-<hex>`). Forever has no realms: a character has a whole name "First Surname" (`UnitFullName` returns both parts for any unit, checked in game; `UnitNameUnmodified` only for the player), unique per **ruleset** (Normal, PvP, RP, Hardcore, from `C_GameRules`) within a region. Each character caches its whole name, ruleset and class, the last two as numbers: the ruleset as `Record.RULESET` (1 Normal, 2 PvP, 3 RP, 4 Hardcore), the class as the game's class ID (`UnitClass`, third return). Whole name + ruleset is the secondary key, used to resolve a name seen in a menu or typed by the player to a GUID. AceDB's own character and realm keys already follow this (`RegionalUniqueNamesEnabled()`).
 
 Everything is an **identity** (a person): a nickname and characters. The interface has no other concept; a glyph marks what does not come from the player.
 
@@ -230,7 +230,7 @@ The sender of an add-on message is its whole name, authenticated by the server; 
 | Friends | `C_FriendList.GetFriendInfo(name).guid` (*to verify in game*) |
 | Battle.net friends | `C_BattleNet.GetGameAccountInfoByID(id).playerGuid` (*to verify in game*) |
 | Whispers | the whisper chat events of the session (sender and GUID, arguments 2 and 12) |
-| Group | the group's units (*to verify in game*) |
+| Group | the group's units: whole name from `UnitFullName`, GUID from `UnitGUID` (checked in game) |
 
 Names match exactly, never by spelling variants; the roster spells them exactly like the add-on sender (checked in game). Without a match there is no confirmation; the record is still fetched.
 

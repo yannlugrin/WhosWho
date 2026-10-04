@@ -38,11 +38,12 @@ function ns.Print(msg)
     print("|cff66bbff" .. L["Who's Who"] .. "|r " .. msg)
 end
 
----A player's whole name, "First Surname" (UnitName returns the first name only).
+---A player's whole name, "First Surname". On Forever, UnitFullName returns the surname where retail returns the realm;
+---UnitName gives the first name only, and UnitNameUnmodified the surname only for the player.
 ---@param unit string
 ---@return string?
 function ns.UnitWholeName(unit)
-    local name, surname = UnitNameUnmodified(unit)
+    local name, surname = UnitFullName(unit)
     return surname and (name .. " " .. surname) or name
 end
 

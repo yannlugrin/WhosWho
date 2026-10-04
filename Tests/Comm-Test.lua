@@ -189,7 +189,7 @@ local function newEnvironment(session)
         local u = unitCharacter(unit)
         return u and u.guid
     end
-    env.UnitNameUnmodified = function(unit)
+    env.UnitFullName = function(unit)
         local u = unitCharacter(unit)
         if not u then return nil end
         return u.name:match("^(%S+) (.+)$")
