@@ -593,15 +593,15 @@ do
     P.Confirm(A, G2, 10)
     local function character(guid) return select(2, P.Find(guid)) end
 
-    P.UpdateGuildMembers("7", { [G1] = true, [G3] = true })
-    check(character(G1).guild == "7" and character(G3).guild == "7", "a roster sets the guild of any character I hold")
-    P.UpdateGuildMembers("7", { [G2] = true })
-    check(character(G1).guild == nil and character(G2).guild == "7", "a character no longer in the roster loses it")
-    P.UpdateGuildMembers("8", {})
-    check(character(G2).guild == "7", "another guild's roster leaves it")
-    P.SetGuild(G1, "8")
-    check(character(G1).guild == "8", "a character's guild set from an announcement")
-    P.SetGuild(G4, "8")
+    P.UpdateGuildMembers(7, { [G1] = true, [G3] = true })
+    check(character(G1).guild == 7 and character(G3).guild == 7, "a roster sets the guild of any character I hold")
+    P.UpdateGuildMembers(7, { [G2] = true })
+    check(character(G1).guild == nil and character(G2).guild == 7, "a character no longer in the roster loses it")
+    P.UpdateGuildMembers(8, {})
+    check(character(G2).guild == 7, "another guild's roster leaves it")
+    P.SetGuild(G1, 8)
+    check(character(G1).guild == 8, "a character's guild set from an announcement")
+    P.SetGuild(G4, 8)
     check(P.Find(G4) == nil, "a character I do not hold gets nothing")
 
     P.UpdateFriends(ME1, { [G1] = true, [G3] = true })
@@ -615,10 +615,10 @@ do
     check(character(G1).friendOf == nil, "no friendOf once no character of mine has it as a friend")
 
     local B = string.rep("b", 64)
-    P.UpdateGuildMembers("7", { [G3] = true })
+    P.UpdateGuildMembers(7, { [G3] = true })
     P.Accept(makeRecord(B, 1, { G3 }))
     P.Confirm(B, G3, 10)
-    check(P.Find(G3) == B and character(G3).guild == "7", "a character taken by another identity keeps what I saw of it")
+    check(P.Find(G3) == B and character(G3).guild == 7, "a character taken by another identity keeps what I saw of it")
 
     local C = string.rep("c", 64)
     clock = 50
@@ -637,12 +637,12 @@ do
     I.EnsureKeys()
     I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
     check(I.Ruleset(G1) == PVP and I.Ruleset(G2) == nil, "my character's ruleset")
-    I.SetGuild(G1, "7")
-    check(I.HasCharacterInGuild("7", PVP) and not I.HasCharacterInGuild("8", PVP) and I.Revision() == 1,
+    I.SetGuild(G1, 7)
+    check(I.HasCharacterInGuild(7, PVP) and not I.HasCharacterInGuild(8, PVP) and I.Revision() == 1,
         "my character's guild, outside the record")
-    check(not I.HasCharacterInGuild("7", NORMAL), "the same club ID in another ruleset is another guild")
+    check(not I.HasCharacterInGuild(7, NORMAL), "the same club ID in another ruleset is another guild")
     I.SetGuild(G1, nil)
-    check(not I.HasCharacterInGuild("7", PVP), "a guild left")
+    check(not I.HasCharacterInGuild(7, PVP), "a guild left")
 
     local changes = 0
     I.OnRevisionChanged(function() changes = changes + 1 end)

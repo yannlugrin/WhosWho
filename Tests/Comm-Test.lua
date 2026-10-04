@@ -343,7 +343,7 @@ end
 
 -- Characters -------------------------------------------------------------------------------------
 
-local GUILD = "22835221"
+local GUILD = 22835221
 local WARRIOR, MAGE, PRIEST, ROGUE = 1, 8, 5, 4
 
 local annAccount, bobAccount, catAccount, danAccount, eveAccount =

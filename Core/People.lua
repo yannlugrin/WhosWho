@@ -28,7 +28,7 @@ ns.People = People
 ---@field state WhosWho.CharacterState
 ---@field level integer?
 ---@field lastSeen number? seconds, from time()
----@field guild string? club ID of the guild in which one of my characters saw it
+---@field guild integer? club ID of the guild in which one of my characters saw it
 ---@field friendOf table<string, true>? GUIDs of my characters that have it as a WoW friend
 
 ---A character I add, as I know it.
@@ -418,14 +418,14 @@ end
 
 ---A character seen in the guild roster of one of my characters.
 ---@param guid string
----@param clubId string
+---@param clubId integer
 function People.SetGuild(guid, clubId)
     local _, character = People.Find(guid)
     if character then character.guild = clubId end
 end
 
 ---Applies a whole guild roster: its characters get the guild, the others lose it.
----@param clubId string
+---@param clubId integer
 ---@param memberGuids table<string, true>
 function People.UpdateGuildMembers(clubId, memberGuids)
     for _, person in pairs(ns.data.people) do

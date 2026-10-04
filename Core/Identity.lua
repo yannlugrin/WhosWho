@@ -22,7 +22,7 @@ ns.Identity = Identity
 ---@field linked boolean? nil until the player answers
 ---@field level integer at the end of the last session
 ---@field lastSeen number seconds, from time(): end of the last session (or its start, after a crash)
----@field guild string? club ID of the character's guild (C_Club.GetGuildClubId)
+---@field guild integer? club ID of the character's guild (C_Club.GetGuildClubId)
 ---@field removedInRevision integer? unlinked: the first revision without it, which it announces
 
 ---@return WhosWho.IdentityData
@@ -123,14 +123,14 @@ end
 
 ---Sets or clears the guild of one of this account's characters; does not change the record.
 ---@param guid string
----@param clubId string?
+---@param clubId integer?
 function Identity.SetGuild(guid, clubId)
     local character = data().chars[guid]
     if character then character.guild = clubId end
 end
 
 ---Whether one of this account's characters is in that guild.
----@param clubId string
+---@param clubId integer
 ---@param ruleset WhosWho.Ruleset the ruleset of the character seen in that guild
 ---@return boolean
 function Identity.HasCharacterInGuild(clubId, ruleset)
