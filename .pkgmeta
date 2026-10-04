@@ -1,0 +1,31 @@
+package-as: WhosWho
+enable-nolib-creation: no
+
+externals:
+  Libs/LibStub:
+    url: https://repos.curseforge.com/wow/libstub/trunk/
+  Libs/CallbackHandler-1.0:
+    url: https://repos.curseforge.com/wow/callbackhandler/trunk/CallbackHandler-1.0/
+  Libs/AceDB-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceDB-3.0/
+  Libs/AceComm-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceComm-3.0/
+  Libs/AceLocale-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceLocale-3.0/
+  Libs/AceGUI-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceGUI-3.0/
+  Libs/AceConfig-3.0:
+    url: https://repos.curseforge.com/wow/ace3/trunk/AceConfig-3.0/
+  Libs/LibSerialize:
+    url: https://github.com/rossnichols/LibSerialize
+  Libs/LibDeflate:
+    url: https://github.com/SafeteeWoW/LibDeflate
+
+ignore:
+  - .github
+  - .gitignore
+  - .luacheckrc
+  - .pkgmeta
+  - .vscode
+  - README-Technical.md
+  - Tests

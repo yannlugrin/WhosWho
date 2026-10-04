@@ -1,0 +1,56 @@
+local addonName, ns = ...
+---@cast ns WhosWho.Namespace
+
+---@class WhosWho.Store
+local Store = {}
+ns.Store = Store
+
+---Account-wide saved data (WhosWhoDB.global), the table every model module works on.
+---@class WhosWho.Data
+---@field identity WhosWho.IdentityData
+---@field people table<string, WhosWho.Person> by identity ID
+---@field nextManual integer number of the next manual person ("M<n>")
+
+---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
+---@class WhosWho.Settings
+---@field scopes { guild: boolean, friends: boolean, whispers: boolean, group: boolean }
+---@field chatNicknames boolean
+---@field tooltipNickname "afterName"|"ownLine"|"hidden"
+---@field tooltipOtherCharacters boolean the "Also:" line
+---@field guildShare boolean
+---@field guildPull boolean
+
+Store.DEFAULTS = {
+    global = {
+        identity = { rev = 1, chars = {} },
+        people = {},
+        nextManual = 1,
+    },
+    profile = {
+        scopes = { guild = true, friends = true, whispers = false, group = false },
+        chatNicknames = true,
+        tooltipNickname = "ownLine",
+        tooltipOtherCharacters = true,
+        guildShare = false,
+        guildPull = false,
+    },
+}
+
+---Sets ns.db, ns.data and ns.settings. Call on ADDON_LOADED.
+function Store.Init()
+    local db = LibStub("AceDB-3.0"):New(addonName .. "DB", Store.DEFAULTS, true)
+    ns.db = db
+    ns.data = db.global
+    ns.settings = db.profile
+end
+
+---A fresh data table with the defaults, for the offline tests.
+---@return WhosWho.Data
+function Store.NewData()
+    local function copy(t)
+        local out = {}
+        for k, v in pairs(t) do out[k] = type(v) == "table" and copy(v) or v end
+        return out
+    end
+    return copy(Store.DEFAULTS.global)
+end

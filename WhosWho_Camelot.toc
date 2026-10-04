@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: Who's Who
+## Notes: Link your characters into one identity and recognise people across their alts.
+## Author: Mr Caillou
+## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Misc_QuestionMark
+## SavedVariables: WhosWhoDB
+
+Libs.xml
+
+Locales\enUS.lua
+
+Crypto\SHA512.lua
+Crypto\Ed25519.lua
+
+Core\Core.lua
+Core\Store.lua
+Core\Record.lua
+Core\Identity.lua
+Core\People.lua
+Core\Resolver.lua

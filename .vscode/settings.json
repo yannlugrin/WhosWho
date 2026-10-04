@@ -1,0 +1,34 @@
+{
+    "Lua.runtime.version": "Lua 5.1",
+    "Lua.runtime.builtin": {
+        "basic": "disable",
+        "debug": "disable",
+        "io": "disable",
+        "math": "disable",
+        "os": "disable",
+        "package": "disable",
+        "string": "disable",
+        "table": "disable",
+        "utf8": "disable"
+    },
+    "Lua.workspace.library": [
+        ".vscode/Annotations",
+        "~\\.vscode\\extensions\\ketho.wow-api-0.22.3\\Annotations\\Core"
+    ],
+    "Lua.workspace.ignoreDir": [
+        "Tests"
+    ],
+    "Lua.diagnostics.globals": [
+        "BNET_CLIENT_WOW",
+        "ChatFrame_AddMessageEventFilter",
+        "ChatFrameUtil",
+        "EllesmereUI",
+        "GuildRoster",
+        "NUM_CHAT_WINDOWS",
+        "Settings",
+        "SlashCmdList",
+        "TooltipDataProcessor",
+        "WOW_PROJECT_CAMELOT"
+    ],
+    "Lua.type.weakUnionCheck": true
+}

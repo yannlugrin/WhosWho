@@ -1,0 +1,26 @@
+name: Package and release
+
+on:
+  push:
+    tags:
+      - "**"
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_TOKEN }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install Subversion
+        run: sudo apt-get update && sudo apt-get install -y subversion
+      - uses: BigWigsMods/packager@v2
