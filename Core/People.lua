@@ -310,11 +310,20 @@ end
 ---@return boolean confirmed false while it waits
 function People.Confirm(id, guid, level)
     local person = ns.data.people[id]
+
+    -- The player's record must list the character; otherwise the confirmation waits for the revision that does.
     local recordCharacter = person and person.record and person.record.chars[guid]
     if not recordCharacter then
         pendingConfirmations[id] = pendingConfirmations[id] or {}
         pendingConfirmations[id][guid] = level
         return false
+    end
+
+    -- Already confirmed in this identity: only its activity changes.
+    local personCharacter = person.chars[guid]
+    if personCharacter and personCharacter.state == "confirmed" then
+        personCharacter.level, personCharacter.lastSeen = level, time()
+        return true
     end
 
     return storeCharacter(id, guid, recordCharacter, level)

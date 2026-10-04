@@ -259,6 +259,11 @@ do
     check(not P.Activity(G1, 10, 40), "activity for an unknown character is ignored")
     P.Accept(makeRecord(B, 2, { G2 }, "Bob"))
     check(P.Get(B).chars[G2].level == 26, "a new revision keeps the character's activity")
+    local changeCount = #ns.AutomaticChanges.List()
+    clock = 40
+    check(P.Confirm(B, G2, 27) and P.Get(B).chars[G2].level == 27 and P.Get(B).chars[G2].lastSeen == 40
+        and state(G2) == "confirmed" and P.Get(B).chars[G2].name == "N1" and #ns.AutomaticChanges.List() == changeCount,
+        "a confirmed character's next confirmation only updates its activity")
 
     P.Accept(makeRecord(C, 1, { G5 }))
     P.Accept(makeRecord(D, 1, { G5 }))

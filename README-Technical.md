@@ -92,8 +92,12 @@ Implemented:
 
 Planned:
 
-- `PLAYER_LOGIN`: first-login prompt, decorations, settings, comm prefix.
-- `PLAYER_ENTERING_WORLD` / `GUILD_ROSTER_UPDATE` / `GROUP_ROSTER_UPDATE` / `FRIENDLIST_UPDATE`: announcements and pruning, throttled.
+- `PLAYER_LOGIN`: first-login prompt, decorations, settings, comm prefix, roster request (`C_GuildInfo.GuildRoster`), login announcement.
+- `PLAYER_LEVEL_UP`, `PLAYER_LOGOUT`: announcement.
+- `GUILD_ROSTER_UPDATE`: `guild` of confirmed characters in my current guild (see Scopes); sends nothing.
+- `FRIENDLIST_UPDATE`: `friendOf` of confirmed characters for my current character (see Scopes); sends nothing.
+- `PLAYER_GUILD_UPDATE`: my current character's guild, in `Identity`.
+- `PLAYER_ENTERING_WORLD` / `GROUP_ROSTER_UPDATE`: announcements to the other scopes and pruning, throttled.
 - `CHAT_MSG_ADDON`, `BN_CHAT_MSG_ADDON`: protocol.
 - `CHAT_MSG_WHISPER*`, `UPDATE_MOUSEOVER_UNIT`, tooltip post-call: lazy fetch on encounter.
 
@@ -125,7 +129,7 @@ Each character of a person has a **state**:
 
 Each person has **one table of characters** (`chars`), each with its state; that table is what the frames list. A shared person also keeps the player's **record** exactly as received: what the player declared, signed, used to compare revisions and to relay it to others. A new revision copies the player's nickname, main and characters into the person, keeping confirmed states, activity and my added characters; everything else reads the person, not the record.
 
-Each character also carries its **activity**: `level` and `lastSeen`. It is not part of the record. `People.Confirm` records it from the character's own message; `People.Activity` takes it from any source (relays included), keeps it only when more recent, and never confirms. `People.Create` and `People.AddCharacter` take the level when I can see the character I add. `People.Find(guid)` returns the person's ID and the character's whole entry. My own characters keep their level and last seen time in `Identity`, refreshed at login, logout and level-up.
+Each character also carries its **activity**: `level` and `lastSeen`. It is not part of the record. `People.Confirm` records it from the character's own message (once the character is confirmed in that identity, that is all a confirmation changes); `People.Activity` takes it from any source (relays included), keeps it only when more recent, and never confirms. `People.Create` and `People.AddCharacter` take the level when I can see the character I add. `People.Find(guid)` returns the person's ID and the character's whole entry. My own characters keep their level and last seen time in `Identity`, refreshed at login, logout and level-up.
 
 A character belongs to one person: one that already belongs to a person cannot be added to another. When a player's record lists a character of one of my manual identities, the manual identity merges into the player's: the characters the record lists become listed, the others stay added, my nickname for it moves unless I already named the player's identity, and the manual identity is removed. An alt I added to another shared identity moves alone. A manual identity's main cannot be removed (`RemoveCharacter` returns `"main"`): change the main first, or forget the person. A character another player's identity holds stays there: a later record listing it doesn't get it, until a message sent from that character confirms the later identity, which then takes it (a character transferred to another account, or a false claim). If another identity holds a shared person's main, the person is still shown under that main's name from its record. A confirmation for a character the stored record doesn't list yet (a new alt announcing itself before its revision arrives) waits in memory, for the session only, and applies when the revision listing it is accepted; nothing unproven is saved. `People` keeps one GUID → person index, updated on each change.
 
@@ -161,7 +165,7 @@ Guild link (planned)
 
 ### Character Confirmations
 
-An identity record is the owner's claim about which characters are theirs. Add-on users are trusted by default: listed characters are shown right away, as unconfirmed. A character is confirmed once a message **sent from that character** carried that identity (the server authenticates the sender). A character confirmed by another identity is shown under that identity, not the claimant's. How to handle false claims is still open.
+An identity record is the owner's claim about which characters are theirs. Add-on users are trusted by default: listed characters are shown right away, as unconfirmed. A character is confirmed once a message **sent from that character** carried that identity (the server authenticates the sender): an announcement (see Protocol). A character confirmed by another identity is shown under that identity, not the claimant's. How to handle false claims is still open.
 
 ### Resolution
 
@@ -179,33 +183,109 @@ Measured on build 1.60.1 (in-instance behaviour still *to verify in game*):
 
 - A message over 255 characters returns `Success` but is silently dropped: never rely on the send result for size.
 - Byte 0 truncates a message; bytes 1–255 arrive intact.
-- The sender argument is the whole Forever name, `First Surname` with a space and no realm, while `UnitName` returns only the first name. Never identify a sender by name: identity comes from the payload (identity ID, signature) and from GUIDs seen in chat events and the roster.
+- A `WHISPER` to an offline character returns `Success` and prints nothing on either side; the message is lost (checked in game).
+- The sender argument is the whole Forever name, `First Surname` with a space and no realm, while `UnitName` returns only the first name. A name alone never confirms a character: the GUID comes from the game's own sources (see Senders).
+- Whispers never cross rulesets.
 - Own `GUILD` and self-`WHISPER` messages come back to the sender, so handlers must recognise and skip their own messages by content.
 
 - One prefix, `WhosWho`. AceComm handles splitting messages over 255 characters; ChatThrottleLib is the single throttled outgoing queue. Each client may send about 10 messages per prefix, then about 1 per second (whispers outside instances are exempt); sending too much data at once, even over several prefixes, can disconnect the client.
-- Payloads: LibSerialize then LibDeflate, encoded for the add-on channel. Announcements stay short plain text so they fit in one message.
+- Payloads: LibSerialize then LibDeflate, encoded for the add-on channel. Announcements and `GET`s stay short plain text so they fit in one message.
 - Every message starts with a protocol version. Unknown versions and types are ignored, never errors.
 
 | Type | Content | Sent |
 |---|---|---|
-| `HELLO` | identity ID, revision, current character's level (unsigned activity) | On login and on joining a scope's audience, to the enabled scopes only |
-| `GET` | identity ID | When a `HELLO` revision is newer than ours, or on encounter (whisper, group, tooltip) |
-| `REC` | full identity record | In answer to `GET`, only to an enabled scope |
+| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now | At login, level-up and logout, from a linked character, to the audiences of the enabled scopes |
+| `GET` | identity ID | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend); planned: on encounter (whisper, group, tooltip) |
+| `REC` | the signed identity record | After a change of revision, or in answer to `GET`s (see Sending a Record) |
 | `GDIGEST` | digest of the whole guild link set + 16 bucket digests | On login and after a change, to `GUILD` |
 | `GPULL` | list of differing buckets | When digests differ |
 | `GLINKS` | the links in those buckets | In answer to `GPULL`, from members passing the rank gate |
 
+The 30 and 60 second values below are starting values, to adjust in game.
+
+### Channels
+
+A message for several players goes out on the cheapest channel that reaches them, in this order: `GUILD`, then `PARTY` or `RAID`, then one message each (`WHISPER`, or `BNSendGameData` to a Battle.net friend). A broadcast channel is used only when its scope is enabled, since it reaches every member of that audience: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope. A player reached by a broadcast gets no individual copy: a friend who is also a guild member counts as a guild member.
+
+### Announcements
+
+`1 ANNOUNCE <id> <rev> <level> <acceptsGet>`, `acceptsGet` being `1` or `0`; about 90 bytes, one message.
+
+Confirming characters is the core of the system, so one message carries the confirmation, the activity and the revision, and every announcement carries the identity.
+
+- **Sent** at login, at level-up and at logout, only from a linked character, to the audiences of the enabled scopes (see Channels). At logout it goes out directly through `C_ChatInfo.SendAddonMessage` (the throttled queue would not empty in time), with `acceptsGet` = `0`: the sender is leaving, so a `GET` would get no answer. The sender may set `0` for other reasons later (a raid or a battleground) without any change to receivers.
+- **Received**: my own identity ID is ignored. When the sender's GUID is known (see Senders), `People.Confirm(id, guid, level)`: the first one confirms the character, the next ones only update its level and last seen time. When `People` holds an older revision and `acceptsGet` is `1`, a `GET` (see Requesting a Record), only from a sender my scopes allow (see Receiving a Record).
+
+### Senders
+
+The sender of an add-on message is its whole name, authenticated by the server; a Battle.net message gives a game account ID instead. A confirmation needs the sender's GUID, taken from what the game itself says about that name, looked up when the announcement arrives:
+
+| Audience | Source of the sender's GUID |
+|---|---|
+| Guild | the guild roster (`GetGuildRosterInfo`, name and GUID of every member, offline ones included) |
+| Friends | `C_FriendList.GetFriendInfo(name).guid` (*to verify in game*) |
+| Battle.net friends | `C_BattleNet.GetGameAccountInfoByID(id).playerGuid` (*to verify in game*) |
+| Whispers | the whisper chat events of the session (sender and GUID, arguments 2 and 12) |
+| Group | the group's units (*to verify in game*) |
+
+Names match exactly, never by spelling variants; the roster spells them exactly like the add-on sender (checked in game). Without a match there is no confirmation; the record is still fetched.
+
 ### Scopes
 
-Guild and Friends are on by default, Whispers and Group off; nothing goes out until a character is linked; unlinking every character sends one last revision without characters, so others forget the identity. A message about the own identity goes out only on channels a scope allows:
+Guild and Friends are on by default, Whispers and Group off; nothing goes out until a character is linked; unlinking every character sends one last revision without characters, so others forget the identity.
+
+**Sharing goes both ways**: I only get the identity of a player I share mine with. The same test, `Scopes.Allows`, decides whether I send my record to a player and whether I use a record or ask for one from them (see Announcements and Receiving a Record).
+
+Two separate questions, for each player asking for my record:
+
+1. **Whether my scopes allow sharing with that person**, `Scopes.Allows`. The requesting character is allowed when it is, for my current character, a guild member (`C_GuildInfo.MemberExistsByName`, callable by add-ons, checked in game) with the Guild scope, a WoW friend (`C_FriendList.GetFriendInfo`) or Battle.net friend with the Friends scope, a group member with the Group scope, or someone whispered with this session with the Whispers scope. It is also allowed when it is a confirmed character of a person whose confirmed characters include one with a `guild` among my characters' guilds (Guild scope) or a non-empty `friendOf` (Friends scope). Sharing is about people: an alt of a player my scopes allow gets my record, and their account already holds it anyway.
+2. **The channel**, from the requesting character and my current character only (see Channels): `GUILD` if it is in my current guild, `PARTY` or `RAID` if it is in my group, otherwise one message to it.
+
+The relationships behind the first question are stored, since a character only sees its own guild roster and friend list. They are kept on **confirmed characters only**, so a record listing a character never makes it count:
+
+- `guild`: the guild in which one of my characters saw this character, written from that character's roster: set for each confirmed character in it, cleared for a confirmed character with that `guild` no longer in it, also set when an announcement confirms a character found in the roster. It counts only while one of my characters is in that guild; `Identity` keeps each of my characters' guild. The guild's key (name and ruleset, or a club ID) is *to verify in game*.
+- `friendOf`: which of my characters has this character as a WoW friend, each of my characters writing only its own entry from its friend list. Battle.net friends are account-wide and checked live.
+
+A requesting character found only through a person is recognised by its whole name and my current character's ruleset among confirmed characters (the secondary key, see Data Model): whispers never cross rulesets, so that pair names one character. The risk is limited to sending a `REC`: a confirmed alt deleted or renamed, whose name someone else takes, would get my record. Confirmations never use names alone.
+
+Audiences per scope:
 
 - **Guild**: `GUILD` channel.
 - **Friends**: `WHISPER` to online WoW friends; `BNSendGameData` to Battle.net friends in Forever (*to verify in game*). Battle.net IDs are used only locally to address the message and are never part of a payload.
 - **Whispers**: `WHISPER` to people the player whispered with (sent or received) this session.
+  To design when this scope is built: it must stay opt-in, a `REC` from a whisper being used once I have sent a whisper to that person.
 - **Group**: `PARTY` or `RAID` channel, whichever the player is in (*to verify in game*).
 - **Selected** (planned, not a priority): `WHISPER` to the players I chose with **Share my identity** in the right-click menu; an alternative to Whispers and Group.
 
 Never transmitted: BattleTags, account IDs, Battle.net presence or game account IDs.
+
+### Sending a Record
+
+- `Identity` notifies each change of revision. A `GET` for my identity puts its sender (name, or Battle.net game account) in a queue of requesters, once per sender, with no lookup yet.
+- Either one starts a wait of a few seconds, unless one is running. When it ends:
+  - locked: the wait starts again;
+  - the revision changed since the last one published this session: a `REC` to the audiences of every enabled scope (see Channels), and every requester they reach leaves the queue;
+  - then each remaining requester: dropped unless `Scopes.Allows` it. Each one kept gets a single channel, in this order: `GUILD` if it is in my current guild, otherwise `PARTY` or `RAID` if it is in my group, otherwise its own message. A requester in both my guild and my group counts for `GUILD` only.
+  - then, per channel: two requesters or more on `GUILD`, or on `PARTY`/`RAID`, get one `REC` on that channel; a requester alone on its channel gets its own `REC`.
+
+    Example: A and B in my guild, B and C in my group, D a friend. A and B are on `GUILD`, C alone on `PARTY`, D on its own message: one `REC` on `GUILD`, one whisper to C, one whisper to D.
+- `Protocol.LockRecordSending()` and `Protocol.UnlockRecordSending()` only set and clear the lock. The UI holds it while the player edits their own identity, so a `REC` goes out once they are done, at the end of the next wait; a `GET` received meanwhile waits too.
+- The published revision starts, each session, at the current revision: a change found at login (a renamed character) reaches online players through the login announcement and their `GET`s.
+- The record is signed once per change of revision (`Identity.SignedRecord`, about 120 ms), whatever the number of changes it holds or of `REC`s sent.
+- For about 30 seconds after a `REC` has left (AceComm's send callback, after its last part), `GET`s from the requesters it reached are ignored: a `REC` can wait in the throttled queue, and the `GET`s that crossed it must not send it again.
+
+### Requesting a Record
+
+- A `GET` is remembered with its time; no other `GET` for that identity goes out for about 60 seconds.
+- A `REC` with a newer revision clears it, and so does an announcement from that identity with `acceptsGet` = `0` (the owner left). Otherwise, after 60 seconds, the `GET` is sent once more; after that, the next announcement with `acceptsGet` = `1` asks again.
+
+### Receiving a Record
+
+My own identity ID is ignored. A `REC` is used only when it came through a channel I share on: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope, or by whisper or Battle.net from a sender `Scopes.Allows` (see Scopes); otherwise it is ignored, so strangers cannot fill my saved data. It must also bring an identity `People` does not hold yet (a change can reach a friend who never received it) or a newer revision of one it holds, and not an identity forgotten at that revision or a later one. A used `REC` goes to the verification queue (see Signatures), then to `People.Accept`, which also applies the confirmations waiting for it. A `REC` never confirms a character; only announcements do.
+
+### Own Messages
+
+Recognised by content: an announcement or a `REC` carrying my identity ID is mine (the `GUILD` and group echo) and is ignored; a `GET` is answered only for my identity ID, and none is ever sent for it; whispers only go to other players.
 
 ## Trust
 
@@ -234,10 +314,12 @@ AceDB (defaults in `Core/Store.lua`). Data is account-wide, in `WhosWhoDB.global
 
 ```
 identity    id (public key, hex), seed (private key, hex), rev, nickname (override), main (GUID),
-            chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false } },
+            chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false, guild } },
             sig (signature of the current revision)
 people      { [identityID or "M<n>"] = { record (shared only), nickname (the player's own), myNickname, main,
-                                   chars = { [guid] = { name, ruleset, classID, state, level, lastSeen } } } }
+                                   chars = { [guid] = { name, ruleset, classID, state, level, lastSeen,
+                                                        guild, friendOf = { [my character's GUID] = true } } } } }
+            guild and friendOf on confirmed characters only (see Scopes)
 nextManual  number of the next manual identity ("M<n>")
 forgotten   { [identityID] = revision in which the player unlinked every character }
 automaticChanges  { { time, kind = "merged" | "moved" | "taken" | "dropped" | "forgotten",
