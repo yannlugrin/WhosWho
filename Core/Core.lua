@@ -105,7 +105,7 @@ end)
 ns.Commands = {}
 
 local function help()
-    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>"])
+    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww debug <on|off>"])
 end
 
 ns.Commands.status = function()
@@ -183,6 +183,17 @@ ns.Commands.people = function(rest)
         return
     end
     for _, id in ipairs(ids) do printPerson(id) end
+end
+
+ns.Commands.debug = function(rest)
+    local state = rest:lower()
+    if state == "on" or state == "off" then
+        ns.settings.debugMessages = state == "on"
+    elseif rest ~= "" then
+        ns.Print(L["Usage: /ww debug <on|off>"])
+        return
+    end
+    ns.Print(L["Debug messages: %s"]:format(ns.settings.debugMessages and L["on"] or L["off"]))
 end
 
 local REASONS = {

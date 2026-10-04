@@ -339,7 +339,7 @@ Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared b
 
 ```
 scopes = { guild, friends, whispers, group }, chatNicknames, tooltipNickname ("afterName" | "ownLine" | "hidden"),
-tooltipOtherCharacters, guildShare, guildPull
+tooltipOtherCharacters, guildShare, guildPull, debugMessages (every Who's Who message sent or received, printed in chat)
 ```
 
 Planned: `scopes.selected` and the list of players selected with **Share my identity**.

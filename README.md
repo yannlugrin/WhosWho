@@ -33,6 +33,7 @@ For **World of Warcraft: Forever**.
 | `/ww scope <scope> <on\|off>` | Turn one of them on or off, for example `/ww scope group on` |
 | `/ww people` | The 10 people you saw most recently, with their characters |
 | `/ww people <character name>` | The people with a character of that name |
+| `/ww debug <on\|off>` | Print every Who's Who message sent or received in chat, to report a problem |
 
 ## Looks
 

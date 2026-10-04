@@ -610,6 +610,24 @@ run(10)
 check(bob.ns.People.Get(annId) == nil and bob.ns.People.Find(annMain.guid) == nil,
     "the last removed character's announcement makes others forget the identity")
 
+-- Debug messages -----------------------------------------------------------------------------------------
+
+local printed = {}
+bob.env.print = function(...) printed[#printed + 1] = table.concat({ ... }, " ") end
+levelUp(annMain.session)
+run(1)
+check(not printed[1], "nothing printed while debug messages are off")
+slash(bob, "debug on")
+printed = {}
+levelUp(annMain.session)
+run(1)
+local traced = false
+for _, line in ipairs(printed) do
+    if line:find("Received, GUILD Ann Main: 1 ANNOUNCE " .. annId, 1, true) then traced = true end
+end
+check(traced, "with debug messages on, a received announcement is printed")
+slash(bob, "debug off")
+
 clearLog()
 slash(dan, "nick Danny")
 run(10)

@@ -19,6 +19,26 @@ local RETRY_LIMIT = 1
 
 local issecretvalue = issecretvalue or function() return false end
 
+-- Debug -----------------------------------------------------------------------------------------
+
+local L = ns.L
+
+-- A REC's payload is binary: only its size is shown.
+local function describe(text)
+    local recordUpdate = text:match("^%d+ REC ")
+    return recordUpdate and L["%s(%d bytes)"]:format(recordUpdate, #text) or text
+end
+
+local function traceSent(text, distribution, name)
+    if not ns.settings.debugMessages then return end
+    ns.Print(L["Sent, %s: %s"]:format(name and (distribution .. " " .. name) or distribution, describe(text)))
+end
+
+local function traceReceived(text, distribution, sender)
+    if not ns.settings.debugMessages then return end
+    ns.Print(L["Received, %s: %s"]:format(distribution .. " " .. sender, describe(text)))
+end
+
 -- Sending a record ------------------------------------------------------------------------------
 
 ---A REC sent: the revision it carried, and when its last part left (nil while queued).
@@ -51,6 +71,7 @@ end
 local function sendRecord(message, channel, name)
     local delivery = { revision = Identity.Revision() }
     deliveries[name or channel] = delivery
+    traceSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name, "NORMAL", function(_, sent, total)
         if sent >= total then delivery.leftAt = GetTime() end
     end)
@@ -150,7 +171,9 @@ end
 local requests = {}
 
 local function sendRequest(id, name)
-    Protocol:SendCommMessage(PREFIX, Codec.RecordRequest(id), "WHISPER", name)
+    local message = Codec.RecordRequest(id)
+    traceSent(message, "WHISPER", name)
+    Protocol:SendCommMessage(PREFIX, message, "WHISPER", name)
 end
 
 local function requestRecord(id, name)
@@ -220,6 +243,7 @@ end
 
 local function receive(_, text, distribution, sender)
     if issecretvalue(text) or issecretvalue(sender) then return end
+    traceReceived(text, distribution, sender)
     local message = Codec.Decode(text)
     if not message then return end
 
@@ -245,10 +269,12 @@ local function announce(level, acceptsGet, send)
 end
 
 local function sendQueued(message, channel, name)
+    traceSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name)
 end
 
 local function sendNow(message, channel, name)
+    traceSent(message, channel, name)
     C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
 end
 
