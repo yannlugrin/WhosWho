@@ -1,12 +1,26 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("WhosWho", "enUS", true)
 if not L then return end
 
+L["%s scope: %s"] = true
 L["(no linked character)"] = true
-L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name)"] = true
+L["- %s: %s, level %s"] = true
+L["added by you"] = true
+L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>"] = true
+L["confirmed"] = true
+L["created by you"] = true
+L["Friends"] = true
+L["Group"] = true
+L["Guild"] = true
 L["Linked characters: %d"] = true
 L["linked"] = true
 L["linked, main"] = true
 L["Link this character first: /ww link"] = true
+L["listed"] = true
+L["No one known with a character named %s."] = true
+L["No one known yet."] = true
+L["off"] = true
+L["on"] = true
+L["shared, revision %d"] = true
 L["This character is now your main."] = true
 L["Nickname: %s"] = true
 L["not asked yet"] = true
@@ -17,5 +31,7 @@ L["The name is too short."] = true
 L["This character is no longer linked to your identity."] = true
 L["This character is now linked to your identity."] = true
 L["This character: %s"] = true
+L["Usage: /ww scope <guild|friends|whispers|group> <on|off>"] = true
 L["Version: %s"] = true
+L["Whispers"] = true
 L["Who's Who"] = true

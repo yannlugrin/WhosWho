@@ -138,6 +138,44 @@ function People.Nickname(id)
     return person.customNickname or People.IdentityNickname(id)
 end
 
+---The people whose characters were seen most recently (their latest lastSeen), most recent first.
+---@param count integer
+---@return string[] ids
+function People.MostRecent(count)
+    local lastSeenById, ids = {}, {}
+    for id, person in pairs(ns.data.people) do
+        local lastSeen = 0
+        for _, character in pairs(person.chars) do
+            if character.lastSeen and character.lastSeen > lastSeen then lastSeen = character.lastSeen end
+        end
+        lastSeenById[id] = lastSeen
+        ids[#ids + 1] = id
+    end
+    table.sort(ids, function(a, b)
+        if lastSeenById[a] ~= lastSeenById[b] then return lastSeenById[a] > lastSeenById[b] end
+        return a < b
+    end)
+    for i = #ids, count + 1, -1 do ids[i] = nil end
+    return ids
+end
+
+---The people holding a character with that whole name, in any ruleset; letter case is ignored.
+---@param name string "First Surname"
+---@return string[] ids
+function People.FindByCharacterName(name)
+    local wanted, ids = name:lower(), {}
+    for id, person in pairs(ns.data.people) do
+        for _, character in pairs(person.chars) do
+            if character.name:lower() == wanted then
+                ids[#ids + 1] = id
+                break
+            end
+        end
+    end
+    table.sort(ids)
+    return ids
+end
+
 -- My changes -------------------------------------------------------------------------------------
 
 local function addedCharacter(character)

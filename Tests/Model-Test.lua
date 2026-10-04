@@ -559,6 +559,28 @@ do
     check(P.FindConfirmedByName("N1", PVP) == nil, "the same name in another ruleset is another character")
 end
 
+-- People: lookups for the commands ---------------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A, B, C = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+    P.Accept(makeRecord(A, 1, { G1 }))
+    P.Accept(makeRecord(B, 1, { G2 }))
+    P.Accept(makeRecord(C, 1, { G3 }))
+    P.Activity(G1, 10, 100)
+    P.Activity(G2, 10, 300)
+    local recent = P.MostRecent(2)
+    check(#recent == 2 and recent[1] == B and recent[2] == A, "the most recently seen people first, cut to the count")
+    check(P.MostRecent(10)[3] == C, "a person never seen comes last")
+
+    P.Accept(makeRecord(B, 2, { G2, G4 }))
+    check(P.FindByCharacterName("n2")[1] == B and #P.FindByCharacterName("N2") == 1,
+        "a person found by a character's whole name, letter case ignored")
+    check(#P.FindByCharacterName("N1") == 3 and #P.FindByCharacterName("Nobody") == 0,
+        "every person with a character of that name")
+end
+
 -- People: relationships ----------------------------------------------------------------------------------------
 
 fresh()

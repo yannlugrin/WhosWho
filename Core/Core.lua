@@ -104,7 +104,7 @@ end)
 ns.Commands = {}
 
 local function help()
-    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name)"])
+    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>"])
 end
 
 ns.Commands.status = function()
@@ -139,6 +139,49 @@ ns.Commands.main = function()
         return
     end
     ns.Print(L["This character is now your main."])
+end
+
+local SCOPES = { "guild", "friends", "whispers", "group" }
+local SCOPE_NAMES = { guild = L["Guild"], friends = L["Friends"], whispers = L["Whispers"], group = L["Group"] }
+
+ns.Commands.scope = function(rest)
+    local scope, state = rest:lower():match("^(%S+)%s+(%S+)$")
+    if scope and SCOPE_NAMES[scope] and (state == "on" or state == "off") then
+        ns.settings.scopes[scope] = state == "on"
+    elseif rest ~= "" then
+        ns.Print(L["Usage: /ww scope <guild|friends|whispers|group> <on|off>"])
+        return
+    end
+    for _, key in ipairs(SCOPES) do
+        ns.Print(L["%s scope: %s"]:format(SCOPE_NAMES[key], ns.settings.scopes[key] and L["on"] or L["off"]))
+    end
+end
+
+local PEOPLE_LISTED = 10
+local STATE_NAMES = { confirmed = L["confirmed"], listed = L["listed"], added = L["added by you"] }
+
+local function printPerson(id)
+    local person = ns.People.Get(id)
+    local origin = person.signedRecord and L["shared, revision %d"]:format(person.signedRecord.rev) or L["created by you"]
+    ns.Print(("%s (%s)"):format(ns.People.Nickname(id), origin))
+
+    local guids = {}
+    for guid in pairs(person.chars) do guids[#guids + 1] = guid end
+    table.sort(guids, function(a, b) return person.chars[a].name < person.chars[b].name end)
+    for _, guid in ipairs(guids) do
+        local character = person.chars[guid]
+        ns.Print(L["- %s: %s, level %s"]:format(character.name, STATE_NAMES[character.state], character.level or "?"))
+    end
+end
+
+ns.Commands.people = function(rest)
+    local name = rest:match('^"(.*)"$') or rest
+    local ids = name == "" and ns.People.MostRecent(PEOPLE_LISTED) or ns.People.FindByCharacterName(name)
+    if not ids[1] then
+        ns.Print(name == "" and L["No one known yet."] or L["No one known with a character named %s."]:format(name))
+        return
+    end
+    for _, id in ipairs(ids) do printPerson(id) end
 end
 
 local REASONS = {

@@ -29,6 +29,10 @@ For **World of Warcraft: Forever**.
 | `/ww main` | Make the character you are playing your main |
 | `/ww link` / `/ww unlink` | Link or unlink the character you are playing |
 | `/ww nick <name>` | Set your nickname (`/ww nick` alone goes back to your main character's name) |
+| `/ww scope` | Who you share your identity with: guild, friends, whispers, group, each on or off |
+| `/ww scope <scope> <on\|off>` | Turn one of them on or off, for example `/ww scope group on` |
+| `/ww people` | The 10 people you saw most recently, with their characters |
+| `/ww people <character name>` | The people with a character of that name |
 
 ## Looks
 
