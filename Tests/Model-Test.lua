@@ -94,7 +94,7 @@ do
     I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, 10)
     check(I.Revision() == 5, "a linked character moving ruleset bumps")
     I.Refresh(G1, "Alt Renamed", NORMAL, ROGUE, 10)
-    check(I.Revision() == 5 and I.Record().chars[G1].classID == MAGE, "class kept from the first touch")
+    check(I.Revision() == 5 and I.UnsignedRecord().chars[G1].classID == MAGE, "class kept from the first touch")
     clock = 2
     I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, 11)
     check(I.Revision() == 5, "level and last seen do not bump")
@@ -110,16 +110,16 @@ do
     check(not I.SetNickname("x"), "short nickname refused")
     check(I.Nickname() == "Yann", "refused nickname leaves the old one")
     check(I.SetNickname(nil) and I.Nickname() == "Okrãg Sorn" and I.Revision() == 7, "removing the override falls back to the main")
-    check(I.Record().nickname == nil, "the main's name is not copied into the record's nickname")
+    check(I.UnsignedRecord().nickname == nil, "the main's name is not copied into the record's nickname")
     I.SetNickname("Yann")
 
     check(not I.SetMain(G4), "an unlinked character cannot be the main")
     check(I.SetMain(G1) and I.Main() == G1 and I.Revision() == 9, "main changed, revision bumped")
     check(I.Nickname() == "Yann", "the override stays when the main changes")
 
-    local record = I.Record()
-    check(ns.Record.Validate(record), "own record is valid: " .. tostring((select(2, ns.Record.Validate(record)))))
-    check(count(record.chars) == 2 and record.chars[G1] and record.chars[G2], "linked characters in the record")
+    local unsignedRecord = I.UnsignedRecord()
+    check(ns.Record.Validate(unsignedRecord), "own record is valid: " .. tostring((select(2, ns.Record.Validate(unsignedRecord)))))
+    check(count(unsignedRecord.chars) == 2 and unsignedRecord.chars[G1] and unsignedRecord.chars[G2], "linked characters in the record")
 
     local signed = I.SignedRecord()
     check(ns.Record.Verify(signed), "signed record verifies")
@@ -140,7 +140,7 @@ do
     check(not ns.Record.Verify(tampered), "a field added to a character breaks the signature check")
 
     I.Unlink(G1)
-    check(count(I.Record().chars) == 1 and I.Revision() == 10, "unlinking removes the character and bumps")
+    check(count(I.UnsignedRecord().chars) == 1 and I.Revision() == 10, "unlinking removes the character and bumps")
     check(I.Main() == G2, "unlinking the main makes another linked character the main")
     check(I.SignedRecord().sig ~= signed.sig and ns.Record.Verify(I.SignedRecord()), "new revision signed again")
 
@@ -537,6 +537,111 @@ do
     local taken = AC.List()[1]
     check(taken.kind == "taken" and taken.from.id == C and taken.to.id == B and taken.chars[G5].state == "listed",
         "a waiting confirmation applied by the revision logs the character taken")
+end
+
+-- People: newer revisions and the secondary key ----------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A, B = string.rep("a", 64), string.rep("b", 64)
+    check(ns.Record.IsId(A) and not ns.Record.IsId(string.rep("A", 64)) and not ns.Record.IsId("M1"),
+        "identity IDs are 64 lowercase hex characters")
+    check(P.IsNewer(A, 1), "an identity not held yet is new")
+    P.Accept(makeRecord(A, 2, { G1, G2 }))
+    check(not P.IsNewer(A, 2) and not P.IsNewer(A, 1) and P.IsNewer(A, 3), "only a later revision is newer")
+    P.Accept({ v = 1, id = B, rev = 4, chars = {} })
+    check(not P.IsNewer(B, 4) and P.IsNewer(B, 5), "a forgotten identity is newer only past the revision that forgot it")
+
+    check(P.FindConfirmedByName("N1", NORMAL) == nil, "a listed character is not found by name")
+    P.Confirm(A, G1, 10)
+    check(P.FindConfirmedByName("N1", NORMAL) == A, "a confirmed character found by whole name and ruleset")
+    check(P.FindConfirmedByName("N1", PVP) == nil, "the same name in another ruleset is another character")
+end
+
+-- People: relationships ----------------------------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A = string.rep("a", 64)
+    local ME1, ME2 = "Player-70-000000F1", "Player-70-000000F2"
+    P.Accept(makeRecord(A, 1, { G1, G2, G3 }))
+    P.Confirm(A, G1, 10)
+    P.Confirm(A, G2, 10)
+    local function character(guid) return select(2, P.Find(guid)) end
+
+    P.UpdateGuildMembers("7", { [G1] = true, [G3] = true })
+    check(character(G1).guild == "7" and character(G3).guild == "7", "a roster sets the guild of any character I hold")
+    P.UpdateGuildMembers("7", { [G2] = true })
+    check(character(G1).guild == nil and character(G2).guild == "7", "a character no longer in the roster loses it")
+    P.UpdateGuildMembers("8", {})
+    check(character(G2).guild == "7", "another guild's roster leaves it")
+    P.SetGuild(G1, "8")
+    check(character(G1).guild == "8", "a character's guild set from an announcement")
+    P.SetGuild(G4, "8")
+    check(P.Find(G4) == nil, "a character I do not hold gets nothing")
+
+    P.UpdateFriends(ME1, { [G1] = true, [G3] = true })
+    P.SetFriendOf(G1, ME2)
+    check(character(G1).friendOf[ME1] and character(G1).friendOf[ME2] and character(G3).friendOf[ME1],
+        "friendOf kept per character of mine, on any character I hold")
+    P.UpdateFriends(ME1, { [G1] = true })
+    P.UpdateFriends(ME1, {})
+    check(character(G1).friendOf[ME1] == nil and character(G1).friendOf[ME2], "each of my characters writes only its own entry")
+    P.UpdateFriends(ME2, {})
+    check(character(G1).friendOf == nil, "no friendOf once no character of mine has it as a friend")
+
+    local B = string.rep("b", 64)
+    P.UpdateGuildMembers("7", { [G3] = true })
+    P.Accept(makeRecord(B, 1, { G3 }))
+    P.Confirm(B, G3, 10)
+    check(P.Find(G3) == B and character(G3).guild == "7", "a character taken by another identity keeps what I saw of it")
+
+    local C = string.rep("c", 64)
+    clock = 50
+    P.AddCharacter(A, G4, { name = "Seen Alt", ruleset = NORMAL, classID = ROGUE, level = 33 })
+    clock = 60
+    P.Accept(makeRecord(C, 1, { G4 }))
+    check(P.Find(G4) == C and state(G4) == "listed" and character(G4).level == 33 and character(G4).lastSeen == 50,
+        "an alt I added, moving to the player who lists it, keeps its level and last seen")
+end
+
+-- Identity: guilds and revision changes ------------------------------------------------------------------------
+
+fresh()
+do
+    local I = ns.Identity
+    I.EnsureKeys()
+    I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
+    check(I.Ruleset(G1) == PVP and I.Ruleset(G2) == nil, "my character's ruleset")
+    I.SetGuild(G1, "7")
+    check(I.HasCharacterInGuild("7", PVP) and not I.HasCharacterInGuild("8", PVP) and I.Revision() == 1,
+        "my character's guild, outside the record")
+    check(not I.HasCharacterInGuild("7", NORMAL), "the same club ID in another ruleset is another guild")
+    I.SetGuild(G1, nil)
+    check(not I.HasCharacterInGuild("7", PVP), "a guild left")
+
+    local changes = 0
+    I.OnRevisionChanged(function() changes = changes + 1 end)
+    I.Link(G1)
+    I.SetNickname("Yann")
+    I.SetNickname("Yann")
+    check(changes == 2, "each change of revision notified once")
+    I.OnRevisionChanged(function() end)
+
+    I.Refresh(G2, "Never Linked", PVP, MAGE, 10)
+    I.Unlink(G2)
+    check(I.AnnouncedRevision(G2) == nil, "a character never linked announces nothing")
+    check(I.AnnouncedRevision(G1) == I.Revision(), "a linked character announces the current revision")
+    I.Unlink(G1)
+    local removal = I.Revision()
+    I.SetNickname("Other")
+    check(I.AnnouncedRevision(G1) == removal and removal < I.Revision(),
+        "an unlinked character announces the revision that removed it")
+    I.Link(G1)
+    check(I.AnnouncedRevision(G1) == I.Revision() and ns.data.identity.chars[G1].removedInRevision == nil,
+        "linked again, it announces the current revision")
 end
 
 -- Resolver ---------------------------------------------------------------------------------------------------

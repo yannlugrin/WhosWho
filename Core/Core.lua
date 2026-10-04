@@ -6,6 +6,7 @@ local addonName, ns = ...
 ---@field L table<string, string>
 ---@field Version string
 ---@field Print fun(msg: string)
+---@field UnitWholeName fun(unit: string): string?
 ---@field Commands table<string, fun(rest: string)>
 ---@field db table AceDB object
 ---@field data WhosWho.Data
@@ -17,6 +18,10 @@ local addonName, ns = ...
 ---@field AutomaticChanges WhosWho.AutomaticChanges
 ---@field People WhosWho.People
 ---@field Resolver WhosWho.Resolver
+---@field RecordVerification WhosWho.RecordVerification
+---@field Codec WhosWho.Codec
+---@field Scopes WhosWho.Scopes
+---@field Protocol WhosWho.Protocol
 
 -- Add-on -----------------------------------------------------------------------------------------
 
@@ -33,6 +38,14 @@ function ns.Print(msg)
     print("|cff66bbff" .. L["Who's Who"] .. "|r " .. msg)
 end
 
+---A player's whole name, "First Surname" (UnitName returns the first name only).
+---@param unit string
+---@return string?
+function ns.UnitWholeName(unit)
+    local name, surname = UnitNameUnmodified(unit)
+    return surname and (name .. " " .. surname) or name
+end
+
 -- Events -----------------------------------------------------------------------------------------
 
 local function ruleset()
@@ -44,29 +57,45 @@ local function ruleset()
     return RULESET.Normal
 end
 
-local function playerName()
-    local name, surname = UnitNameUnmodified("player")
-    return surname and (name .. " " .. surname) or name
-end
-
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_LOGOUT")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
-frame:SetScript("OnEvent", function(_, event, arg1)
+frame:RegisterEvent("PLAYER_GUILD_UPDATE")
+frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+frame:RegisterEvent("FRIENDLIST_UPDATE")
+frame:RegisterEvent("CHAT_MSG_WHISPER")
+frame:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
+frame:SetScript("OnEvent", function(_, event, ...)
+    local arg1 = ...
     if event == "ADDON_LOADED" and arg1 == addonName then
         ns.Store.Init()
     elseif event == "PLAYER_LOGIN" then
         ns.Identity.EnsureKeys()
         local _, _, classID = UnitClass("player")
-        ns.Identity.Refresh(UnitGUID("player"), playerName(), ruleset(), classID, UnitLevel("player"))
+        ns.Identity.Refresh(UnitGUID("player"), ns.UnitWholeName("player"), ruleset(), classID, UnitLevel("player"))
+        ns.Protocol.Start()
+        ns.Protocol.AnnounceLogin()
+        if IsInGuild() then C_GuildInfo.GuildRoster() end
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
+        ns.Protocol.AnnounceLogout()
     elseif event == "PLAYER_LEVEL_UP" then
         -- arg1 is the new level.
         ns.Identity.Seen(UnitGUID("player"), arg1)
+        ns.Protocol.AnnounceLevel(arg1)
+    elseif event == "PLAYER_GUILD_UPDATE" and arg1 == "player" then
+        ns.Scopes.GuildChanged()
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        ns.Scopes.ReadGuildRoster()
+    elseif event == "FRIENDLIST_UPDATE" then
+        ns.Scopes.ReadFriends()
+    elseif event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_WHISPER_INFORM" then
+        -- The other player's name and GUID.
+        local name, guid = select(2, ...), select(12, ...)
+        ns.Scopes.Whispered(name, guid)
     end
 end)
 

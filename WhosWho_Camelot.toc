@@ -20,3 +20,8 @@ Core\Identity.lua
 Core\AutomaticChanges.lua
 Core\People.lua
 Core\Resolver.lua
+Core\RecordVerification.lua
+
+Comm\Codec.lua
+Comm\Scopes.lua
+Comm\Protocol.lua

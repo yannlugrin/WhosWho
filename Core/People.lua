@@ -13,7 +13,7 @@ ns.People = People
 
 ---Saved in ns.data.people, by identity ID.
 ---@class WhosWho.Person
----@field record WhosWho.IdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
+---@field signedRecord WhosWho.SignedIdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
 ---@field nickname string? the player's own nickname, from the record
 ---@field customNickname string? my nickname for this person
 ---@field main string GUID of the main character. Another identity can hold a shared person's main.
@@ -28,6 +28,8 @@ ns.People = People
 ---@field state WhosWho.CharacterState
 ---@field level integer?
 ---@field lastSeen number? seconds, from time()
+---@field guild string? club ID of the guild in which one of my characters saw it
+---@field friendOf table<string, true>? GUIDs of my characters that have it as a WoW friend
 
 ---A character I add, as I know it.
 ---@class WhosWho.NewCharacter: WhosWho.Character
@@ -87,6 +89,32 @@ function People.Find(guid)
     return id, ns.data.people[id].chars[guid]
 end
 
+---The person holding a confirmed character with that whole name in that ruleset (the secondary key).
+---@param name string "First Surname"
+---@param ruleset WhosWho.Ruleset
+---@return string? id
+function People.FindConfirmedByName(name, ruleset)
+    for id, person in pairs(ns.data.people) do
+        for _, character in pairs(person.chars) do
+            if character.state == "confirmed" and character.name == name and character.ruleset == ruleset then return id end
+        end
+    end
+    return nil
+end
+
+---Whether a record of that identity and revision would be new: not held at that revision or a later one, and not
+---forgotten at that revision or a later one.
+---@param id string
+---@param rev integer
+---@return boolean
+function People.IsNewer(id, rev)
+    local person = ns.data.people[id]
+    if person and person.signedRecord and person.signedRecord.rev >= rev then return false end
+
+    local forgottenRevision = ns.data.forgotten[id]
+    return not (forgottenRevision and forgottenRevision >= rev)
+end
+
 ---The nickname the identity itself gives, whatever overrides it: the player's own (shared person), otherwise the
 ---main character's name.
 ---@param id string
@@ -96,7 +124,7 @@ function People.IdentityNickname(id)
     if not person then return nil end
 
     -- Another identity can hold the main (a confirmation moved it there); its name is still in the record.
-    local main = person.chars[person.main] or (person.record and person.record.chars[person.main])
+    local main = person.chars[person.main] or (person.signedRecord and person.signedRecord.chars[person.main])
     return person.nickname or (main and main.name)
 end
 
@@ -195,7 +223,7 @@ end
 function People.SetMain(id, guid)
     local person = ns.data.people[id]
     if not person then return false, "missing" end
-    if person.record then return false, "shared" end
+    if person.signedRecord then return false, "shared" end
     if not person.chars[guid] then return false, "character" end
 
     person.main = guid
@@ -223,15 +251,17 @@ local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
     -- Another player keeps a character they declared, unless this is a confirmation.
     local fromPersonId = index()[guid]
     local fromPerson = fromPersonId and fromPersonId ~= toPersonId and people[fromPersonId] or nil
-    if fromPerson and fromPerson.record then
-        if not confirmedLevel and fromPerson.chars[guid].state ~= "added" then return false end
-        AutomaticChanges.Record(fromPerson.chars[guid].state == "added" and "moved" or "taken", fromPersonId, toPersonId, { [guid] = true })
+    local fromCharacter
+    if fromPerson and fromPerson.signedRecord then
+        fromCharacter = fromPerson.chars[guid]
+        if not confirmedLevel and fromCharacter.state ~= "added" then return false end
+        AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPersonId, toPersonId, { [guid] = true })
         fromPerson.chars[guid] = nil
     end
 
     -- A manual identity I created for this player: merge it into this identity.
     local toPerson = people[toPersonId]
-    if fromPersonId and fromPerson and not fromPerson.record then
+    if fromPersonId and fromPerson and not fromPerson.signedRecord then
         AutomaticChanges.Record("merged", fromPersonId, toPersonId, fromPerson.chars)
         for movedGuid, movedCharacter in pairs(fromPerson.chars) do
             toPerson.chars[movedGuid] = movedCharacter
@@ -241,8 +271,9 @@ local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
         People.Forget(fromPersonId)
     end
 
-    -- The character itself, with the record's data: listed, or confirmed once proven.
-    local character = toPerson.chars[guid] or {}
+    -- The character itself, its entry moved from the identity it left, with the record's data: listed, or confirmed
+    -- once proven.
+    local character = toPerson.chars[guid] or fromCharacter or {}
     character.name, character.ruleset, character.classID = recordCharacter.name, recordCharacter.ruleset, recordCharacter.classID
     if character.state ~= "confirmed" then character.state = "listed" end
     if confirmedLevel then character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time() end
@@ -254,36 +285,35 @@ end
 
 ---Stores a newer revision of a player's record. A revision without characters means the player unlinked them all:
 ---the person is forgotten, my nickname and added alts with it.
----@param record WhosWho.IdentityRecord already validated and verified
+---@param signedRecord WhosWho.SignedIdentityRecord already validated and verified
 ---@return "updated"|"stale"|"forgotten"
-function People.Accept(record)
+function People.Accept(signedRecord)
     local people, forgotten = ns.data.people, ns.data.forgotten
-    local sharedPerson = people[record.id]
-    if sharedPerson and sharedPerson.record.rev >= record.rev then return "stale" end
-    if forgotten[record.id] and forgotten[record.id] >= record.rev then return "stale" end
+    if not People.IsNewer(signedRecord.id, signedRecord.rev) then return "stale" end
+    local sharedPerson = people[signedRecord.id]
 
-    if not record.main then
+    if not signedRecord.main then
         if sharedPerson then
-            AutomaticChanges.Record("forgotten", record.id, nil, sharedPerson.chars)
-            People.Forget(record.id)
+            AutomaticChanges.Record("forgotten", signedRecord.id, nil, sharedPerson.chars)
+            People.Forget(signedRecord.id)
         end
-        forgotten[record.id] = record.rev
+        forgotten[signedRecord.id] = signedRecord.rev
         return "forgotten"
     end
-    forgotten[record.id] = nil
+    forgotten[signedRecord.id] = nil
 
-    local originalIdentitySnapshot = sharedPerson and AutomaticChanges.IdentitySnapshot(record.id)
+    local originalIdentitySnapshot = sharedPerson and AutomaticChanges.IdentitySnapshot(signedRecord.id)
     sharedPerson = sharedPerson or { chars = {} }
-    people[record.id] = sharedPerson
-    sharedPerson.record, sharedPerson.nickname, sharedPerson.main = record, record.nickname, record.main
+    people[signedRecord.id] = sharedPerson
+    sharedPerson.signedRecord, sharedPerson.nickname, sharedPerson.main = signedRecord, signedRecord.nickname, signedRecord.main
 
     -- Characters the player dropped leave; my added alts stay.
     local droppedCharacterSnapshots = {}
     for guid, character in pairs(sharedPerson.chars) do
-        if character.state ~= "added" and not record.chars[guid] then
+        if character.state ~= "added" and not signedRecord.chars[guid] then
             droppedCharacterSnapshots[guid] = AutomaticChanges.CharacterSnapshot(character)
             sharedPerson.chars[guid] = nil
-            unindexCharacter(guid, record.id)
+            unindexCharacter(guid, signedRecord.id)
         end
     end
     if next(droppedCharacterSnapshots) then
@@ -291,12 +321,12 @@ function People.Accept(record)
     end
 
     -- Confirmations of characters this revision now lists, received before it arrived.
-    local pending = pendingConfirmations[record.id] or {}
-    pendingConfirmations[record.id] = nil
+    local pending = pendingConfirmations[signedRecord.id] or {}
+    pendingConfirmations[signedRecord.id] = nil
 
     -- Update or add the characters this revision lists.
-    for guid, recordCharacter in pairs(record.chars) do
-        storeCharacter(record.id, guid, recordCharacter, pending[guid])
+    for guid, recordCharacter in pairs(signedRecord.chars) do
+        storeCharacter(signedRecord.id, guid, recordCharacter, pending[guid])
     end
 
     return "updated"
@@ -312,7 +342,7 @@ function People.Confirm(id, guid, level)
     local person = ns.data.people[id]
 
     -- The player's record must list the character; otherwise the confirmation waits for the revision that does.
-    local recordCharacter = person and person.record and person.record.chars[guid]
+    local recordCharacter = person and person.signedRecord and person.signedRecord.chars[guid]
     if not recordCharacter then
         pendingConfirmations[id] = pendingConfirmations[id] or {}
         pendingConfirmations[id][guid] = level
@@ -341,4 +371,60 @@ function People.Activity(guid, level, lastSeen)
     character.level, character.lastSeen = level, lastSeen
 
     return true
+end
+
+-- Relationships ----------------------------------------------------------------------------------
+
+-- What my characters saw themselves, kept on any character I hold. Only confirmed characters count for sharing
+-- (Scopes), so a record listing a character never makes it count.
+
+---A character seen in the guild roster of one of my characters.
+---@param guid string
+---@param clubId string
+function People.SetGuild(guid, clubId)
+    local _, character = People.Find(guid)
+    if character then character.guild = clubId end
+end
+
+---Applies a whole guild roster: its characters get the guild, the others lose it.
+---@param clubId string
+---@param memberGuids table<string, true>
+function People.UpdateGuildMembers(clubId, memberGuids)
+    for _, person in pairs(ns.data.people) do
+        for guid, character in pairs(person.chars) do
+            if memberGuids[guid] then
+                character.guild = clubId
+            elseif character.guild == clubId then
+                character.guild = nil
+            end
+        end
+    end
+end
+
+---A character in the friend list of one of my characters.
+---@param guid string
+---@param ownCharacterGuid string my character whose friend it is
+function People.SetFriendOf(guid, ownCharacterGuid)
+    local _, character = People.Find(guid)
+    if not character then return end
+
+    character.friendOf = character.friendOf or {}
+    character.friendOf[ownCharacterGuid] = true
+end
+
+---Applies the whole friend list of one of my characters.
+---@param ownCharacterGuid string
+---@param friendGuids table<string, true>
+function People.UpdateFriends(ownCharacterGuid, friendGuids)
+    for _, person in pairs(ns.data.people) do
+        for guid, character in pairs(person.chars) do
+            if friendGuids[guid] then
+                character.friendOf = character.friendOf or {}
+                character.friendOf[ownCharacterGuid] = true
+            elseif character.friendOf then
+                character.friendOf[ownCharacterGuid] = nil
+                if not next(character.friendOf) then character.friendOf = nil end
+            end
+        end
+    end
 end

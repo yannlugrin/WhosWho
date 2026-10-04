@@ -27,5 +27,5 @@ function Resolver.Resolve(guid)
     local person, nickname = People.Get(id), People.Nickname(id)
     if not (person and nickname) then return nil end
 
-    return { id = id, nickname = nickname, mine = false, shared = person.record ~= nil, state = character.state }
+    return { id = id, nickname = nickname, mine = false, shared = person.signedRecord ~= nil, state = character.state }
 end

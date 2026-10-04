@@ -21,7 +21,10 @@ Record.MAX_REVISION = 2 ^ 31 - 1
 ---@field nickname string? override of the main character's name
 ---@field main string? GUID of the main character, one of chars; nil when the player unlinked every character
 ---@field chars table<string, WhosWho.Character> by GUID
----@field sig string? signature, 128 hex characters
+
+---An identity record with its signature.
+---@class WhosWho.SignedIdentityRecord: WhosWho.IdentityRecord
+---@field sig string signature, 128 hex characters
 
 ---@enum WhosWho.Ruleset
 Record.RULESET = { Normal = 1, PvP = 2, RP = 3, Hardcore = 4 }
@@ -68,6 +71,13 @@ end
 
 local function isHex(s, length)
     return type(s) == "string" and #s == length and not s:find("[^0-9a-f]")
+end
+
+---An identity ID: a public key, 64 lowercase hex characters.
+---@param s any
+---@return boolean
+function Record.IsId(s)
+    return isHex(s, 64)
 end
 
 ---@param s any
@@ -126,7 +136,7 @@ function Record.Validate(record)
     if type(record) ~= "table" then return false, "not a table" end
     if not hasOnlyFields(record, RECORD_FIELDS) then return false, "field" end
     if record.v ~= Record.VERSION then return false, "version" end
-    if not isHex(record.id, 64) then return false, "id" end
+    if not Record.IsId(record.id) then return false, "id" end
     if not isRevision(record.rev) then return false, "rev" end
     if record.nickname ~= nil and not isName(record.nickname) then return false, "nickname" end
     if record.sig ~= nil and not isHex(record.sig, 128) then return false, "sig" end
@@ -177,16 +187,17 @@ end
 ---Sets record.sig.
 ---@param record WhosWho.IdentityRecord
 ---@param seedHex string private key, 64 hex characters
----@return WhosWho.IdentityRecord record
+---@return WhosWho.SignedIdentityRecord signedRecord the same table, signed
 function Record.Sign(record, seedHex)
+    ---@cast record WhosWho.SignedIdentityRecord
     record.sig = Crypto.ToHex(Crypto.Ed25519.Sign(Record.Canonical(record), Crypto.FromHex(seedHex), Crypto.FromHex(record.id)))
     return record
 end
 
 ---Slow (about 250 ms in game); call it from a coroutine with Ed25519 slicing on.
----@param record WhosWho.IdentityRecord
+---@param signedRecord WhosWho.SignedIdentityRecord
 ---@return boolean
-function Record.Verify(record)
-    if not Record.Validate(record) or not record.sig then return false end
-    return Crypto.Ed25519.Verify(Record.Canonical(record), Crypto.FromHex(record.sig), Crypto.FromHex(record.id))
+function Record.Verify(signedRecord)
+    if not Record.Validate(signedRecord) or not signedRecord.sig then return false end
+    return Crypto.Ed25519.Verify(Record.Canonical(signedRecord), Crypto.FromHex(signedRecord.sig), Crypto.FromHex(signedRecord.id))
 end

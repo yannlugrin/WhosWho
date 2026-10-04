@@ -2,7 +2,7 @@
 
 Architecture notes and contribution guidance for developers working on Who's Who. For end-user documentation, see [README.md](README.md).
 
-> **Status: in development.** The model layer (Core/) is built and tested; trust, comm and UI are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
+> **Status: in development.** The model layer (Core/), the signature verification queue and the comm protocol (announcements, GET, REC) are built and tested offline; Battle.net, guild links, the rank gate and UI are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
 
 ## File Map
 
@@ -33,10 +33,16 @@ WhosWho/
 │   ├── Identity.lua               Own identity: keys (and their entropy), characters and links, nickname, signed record
 │   ├── AutomaticChanges.lua       Changes to my links made by Who's Who on its own, for the Review tab
 │   ├── People.lua                 Other players' identities: records as received, characters with state and activity, manual identities
-│   └── Resolver.lua               One answer per character, by precedence
+│   ├── Resolver.lua               One answer per character, by precedence
+│   └── RecordVerification.lua     Signature verification queue for received records, sliced over frames
+├── Comm/
+│   ├── Codec.lua                  Message text: version, type, fields; REC serialized, compressed, encoded
+│   ├── Scopes.lua                 Who may receive what, channels, audiences, senders' GUIDs, guild and friendOf
+│   └── Protocol.lua               Announcements, GET, REC: waits, lock, requesters, own messages
 ├── Tests/
 │   ├── Crypto-Test.lua            SHA-512 and Ed25519 against OpenSSL and RFC 8032 vectors, timing
 │   ├── Model-Test.lua             Name rules, Record, Identity, People, automatic changes, Resolver
+│   ├── Comm-Test.lua              Clients exchanging messages over a simulated add-on channel, through the real events
 │   ├── Locale-Test.lua            Every L[...] key used by a TOC file exists in enUS, and every enUS key is used
 │   ├── Data/Crypto-Vectors.lua    Generated vectors (OpenSSL, sha512sum)
 │   └── Support/Bit.lua            Stand-in for the game's bit library under plain Lua 5.1
@@ -50,12 +56,8 @@ Planned:
 ```
 ├── Core/
 │   ├── GuildLinks.lua             Manual identities and added alts pulled from the guild, by author
-│   └── Trust.lua                  Rank gate, guild info tag, verification queue
+│   └── Trust.lua                  Rank gate, guild info tag
 ├── Comm/
-│   ├── Codec.lua                  Message encoding, versioning, 255-character limit
-│   ├── Queue.lua                  Single outgoing queue over AceComm / ChatThrottleLib, priorities
-│   ├── Protocol.lua               Message types and handlers
-│   ├── Scopes.lua                 Who may receive what (guild, friends, whispers, group)
 │   └── GuildSync.lua              Digest, bucket compare, link diffs, roster pruning
 └── UI/
     ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
@@ -73,33 +75,33 @@ Layers, each only calling the ones below it:
 1. **Store**: AceDB setup and defaults; `ns.data` is the account-wide data, `ns.settings` the settings (AceDB profile).
 2. **Model**: Identity (self), People (other players), AutomaticChanges (what People changed on its own; People calls it, and it reads people through People), GuildLinks (pulled, planned). Each owns its part of `ns.data`. No frames or events; the few game functions they call (`time`, the key's entropy sources) are stubbed by the offline tests.
 3. **Resolver**: answers "who is this character?" from the model, following the precedence rules.
-4. **Trust**: decides whether an incoming record or link is accepted (sender, rank, signature).
-5. **Comm**: codec, queue, protocol, scopes, guild sync.
+4. **Trust**: decides whether an incoming record or link is accepted (sender, rank, signature). Built: the signature verification queue (`RecordVerification`).
+5. **Comm**: codec, scopes, protocol; guild sync planned. AceComm (with ChatThrottleLib) is the single outgoing queue.
 6. **UI**: windows, decorations, settings. Reads through the Resolver, writes through the model.
 
 Every file casts the add-on table with `---@cast ns WhosWho.Namespace`. That class, declared in `Core.lua`, lists each field a file puts in `ns`; each module table has a class named after the module (`WhosWho.People`, …), so the language server checks calls across files. A new module adds its field to `WhosWho.Namespace`.
 
 ### Event Loop
 
-`Core.lua` registers `ADDON_LOADED`, `PLAYER_LOGIN`, `PLAYER_LOGOUT` and `PLAYER_LEVEL_UP` on its own frame. Registering an event the client does not know throws on Forever, so any event that may be missing from a build must be registered inside `pcall`.
+`Core.lua` registers the events below on its own frame; AceComm handles `CHAT_MSG_ADDON` for the `WhosWho` prefix. Registering an event the client does not know throws on Forever, so any event that may be missing from a build must be registered inside `pcall`.
 
 Implemented:
 
 - `ADDON_LOADED` (own name): AceDB.
-- `PLAYER_LOGIN`: keys created if missing; own character entry (name, ruleset, class ID, level, last seen).
-- `PLAYER_LOGOUT` (also on `/reload`): level and last seen time of the current character, saved right after.
-- `PLAYER_LEVEL_UP`: the same refresh, with the new level from the event (`UnitLevel` still returns the old one).
+- `PLAYER_LOGIN`: keys created if missing; own character entry (name, ruleset, class ID, level, last seen); `Protocol.Start` (comm prefix, published revision, revision listener), then `Protocol.AnnounceLogin`; roster request (`C_GuildInfo.GuildRoster`).
+- `PLAYER_LOGOUT` (also on `/reload`): level and last seen time of the current character, saved right after; logout announcement.
+- `PLAYER_LEVEL_UP`: the same refresh, with the new level from the event (`UnitLevel` still returns the old one); announcement.
+- `GUILD_ROSTER_UPDATE`: my current character's guild in `Identity`, `guild` of the characters I hold (see Scopes); sends nothing.
+- `FRIENDLIST_UPDATE`: `friendOf` of the characters I hold, for my current character (see Scopes); sends nothing.
+- `PLAYER_GUILD_UPDATE` (player): a guild left clears my current character's guild; a guild joined requests the roster.
+- `CHAT_MSG_WHISPER`, `CHAT_MSG_WHISPER_INFORM`: the other player's name and GUID, for the Whispers scope and the senders' GUIDs.
 
 Planned:
 
-- `PLAYER_LOGIN`: first-login prompt, decorations, settings, comm prefix, roster request (`C_GuildInfo.GuildRoster`), login announcement.
-- `PLAYER_LEVEL_UP`, `PLAYER_LOGOUT`: announcement.
-- `GUILD_ROSTER_UPDATE`: `guild` of confirmed characters in my current guild (see Scopes); sends nothing.
-- `FRIENDLIST_UPDATE`: `friendOf` of confirmed characters for my current character (see Scopes); sends nothing.
-- `PLAYER_GUILD_UPDATE`: my current character's guild, in `Identity`.
+- `PLAYER_LOGIN`: first-login prompt, decorations, settings.
 - `PLAYER_ENTERING_WORLD` / `GROUP_ROSTER_UPDATE`: announcements to the other scopes and pruning, throttled.
-- `CHAT_MSG_ADDON`, `BN_CHAT_MSG_ADDON`: protocol.
-- `CHAT_MSG_WHISPER*`, `UPDATE_MOUSEOVER_UNIT`, tooltip post-call: lazy fetch on encounter.
+- `BN_CHAT_MSG_ADDON`: protocol over Battle.net.
+- `UPDATE_MOUSEOVER_UNIT`, tooltip post-call, whispers: lazy fetch on encounter.
 
 ### Secret Values
 
@@ -188,7 +190,8 @@ Measured on build 1.60.1 (in-instance behaviour still *to verify in game*):
 - Whispers never cross rulesets.
 - Own `GUILD` and self-`WHISPER` messages come back to the sender, so handlers must recognise and skip their own messages by content.
 
-- One prefix, `WhosWho`. AceComm handles splitting messages over 255 characters; ChatThrottleLib is the single throttled outgoing queue. Each client may send about 10 messages per prefix, then about 1 per second (whispers outside instances are exempt); sending too much data at once, even over several prefixes, can disconnect the client.
+- One prefix, `WhosWho`. AceComm handles splitting messages over 255 characters; ChatThrottleLib is the single throttled outgoing queue.
+- Battle.net is not built yet: AceComm cannot send over `BNSendGameData`, and no Battle.net friend has been seen in Forever yet. Every Battle.net path below (friends audience, sender lookup, `GET` and `REC`) waits for an in-game round trip. Each client may send about 10 messages per prefix, then about 1 per second (whispers outside instances are exempt); sending too much data at once, even over several prefixes, can disconnect the client.
 - Payloads: LibSerialize then LibDeflate, encoded for the add-on channel. Announcements and `GET`s stay short plain text so they fit in one message.
 - Every message starts with a protocol version. Unknown versions and types are ignored, never errors.
 
@@ -205,7 +208,7 @@ The 30 and 60 second values below are starting values, to adjust in game.
 
 ### Channels
 
-A message for several players goes out on the cheapest channel that reaches them, in this order: `GUILD`, then `PARTY` or `RAID`, then one message each (`WHISPER`, or `BNSendGameData` to a Battle.net friend). A broadcast channel is used only when its scope is enabled, since it reaches every member of that audience: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope. A player reached by a broadcast gets no individual copy: a friend who is also a guild member counts as a guild member.
+A message for several players goes out on the cheapest channel that reaches them, in this order: `GUILD`, then `PARTY` or `RAID`, then one message each (`WHISPER`, or `BNSendGameData` to a Battle.net friend). A member channel (`GUILD`, `PARTY`, `RAID`: one message reaches every member) is used only when its scope is enabled, since it reaches every member of that audience: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope. A player reached by a member channel gets no individual copy: a friend who is also a guild member counts as a guild member.
 
 ### Announcements
 
@@ -213,8 +216,9 @@ A message for several players goes out on the cheapest channel that reaches them
 
 Confirming characters is the core of the system, so one message carries the confirmation, the activity and the revision, and every announcement carries the identity.
 
-- **Sent** at login, at level-up and at logout, only from a linked character, to the audiences of the enabled scopes (see Channels). At logout it goes out directly through `C_ChatInfo.SendAddonMessage` (the throttled queue would not empty in time), with `acceptsGet` = `0`: the sender is leaving, so a `GET` would get no answer. The sender may set `0` for other reasons later (a raid or a battleground) without any change to receivers.
-- **Received**: my own identity ID is ignored. When the sender's GUID is known (see Senders), `People.Confirm(id, guid, level)`: the first one confirms the character, the next ones only update its level and last seen time. When `People` holds an older revision and `acceptsGet` is `1`, a `GET` (see Requesting a Record), only from a sender my scopes allow (see Receiving a Record).
+- **Sent** at login, at level-up and at logout, from a linked character or a character removed from the identity (see Removals), to the audiences of the enabled scopes (see Channels). At logout it goes out directly through `C_ChatInfo.SendAddonMessage` (the throttled queue would not empty in time), with `acceptsGet` = `0`: the sender is leaving, so a `GET` would get no answer. The sender may set `0` for other reasons later (a raid or a battleground) without any change to receivers.
+- **Removals**: a character unlinked from my identity keeps the revision that removed it, the first one without it (`removedInRevision` in `Identity`), and announces that revision instead of the current one, indefinitely, until it is linked again. A removal must reach every player holding an older revision, and a linked character only announces when I play it; the character I removed is often the one I keep playing. A player holding that revision or a later one does not ask (`People.IsNewer`), so the announcement costs nothing once most players have it from my linked characters; a player holding an older revision, which still lists the character, sends a `GET` and receives my current `REC`, which does not list it either. Unlinking every character is the same case: each one announces the revision that removed it, the last one the revision without characters, which makes others forget the identity. Without a server, a player never online at the same time as one of my characters keeps the older revision.
+- **Received**: my own identity ID is ignored. When the sender's GUID is known (see Senders), `People.Confirm(id, guid, level)`: the first one confirms the character, the next ones only update its level and last seen time. The sender found in my roster or friend list gets its `guild` or `friendOf` (`Scopes.SetRelationships`). When the revision is newer than what `People` holds (`People.IsNewer`: not held, or held at an older revision, and not forgotten at that revision or a later one) and `acceptsGet` is `1`, a `GET` (see Requesting a Record), only from a sender my scopes allow (see Receiving a Record).
 
 ### Senders
 
@@ -232,7 +236,7 @@ Names match exactly, never by spelling variants; the roster spells them exactly 
 
 ### Scopes
 
-Guild and Friends are on by default, Whispers and Group off; nothing goes out until a character is linked; unlinking every character sends one last revision without characters, so others forget the identity.
+Guild and Friends are on by default, Whispers and Group off; nothing goes out until a character is linked; unlinking every character sends one last revision without characters, so others forget the identity, and the removed characters keep announcing it (see Removals).
 
 **Sharing goes both ways**: I only get the identity of a player I share mine with. The same test, `Scopes.Allows`, decides whether I send my record to a player and whether I use a record or ask for one from them (see Announcements and Receiving a Record).
 
@@ -241,10 +245,10 @@ Two separate questions, for each player asking for my record:
 1. **Whether my scopes allow sharing with that person**, `Scopes.Allows`. The requesting character is allowed when it is, for my current character, a guild member (`C_GuildInfo.MemberExistsByName`, callable by add-ons, checked in game) with the Guild scope, a WoW friend (`C_FriendList.GetFriendInfo`) or Battle.net friend with the Friends scope, a group member with the Group scope, or someone whispered with this session with the Whispers scope. It is also allowed when it is a confirmed character of a person whose confirmed characters include one with a `guild` among my characters' guilds (Guild scope) or a non-empty `friendOf` (Friends scope). Sharing is about people: an alt of a player my scopes allow gets my record, and their account already holds it anyway.
 2. **The channel**, from the requesting character and my current character only (see Channels): `GUILD` if it is in my current guild, `PARTY` or `RAID` if it is in my group, otherwise one message to it.
 
-The relationships behind the first question are stored, since a character only sees its own guild roster and friend list. They are kept on **confirmed characters only**, so a record listing a character never makes it count:
+The relationships behind the first question are stored, since a character only sees its own guild roster and friend list. They are what my characters saw themselves, never sent by the other player, so they are kept on any character I hold, and move with it to another identity. Only **confirmed characters** count for sharing, so a record listing a character never makes it count:
 
-- `guild`: the guild in which one of my characters saw this character, written from that character's roster: set for each confirmed character in it, cleared for a confirmed character with that `guild` no longer in it, also set when an announcement confirms a character found in the roster. It counts only while one of my characters is in that guild; `Identity` keeps each of my characters' guild. The guild's key (name and ruleset, or a club ID) is *to verify in game*.
-- `friendOf`: which of my characters has this character as a WoW friend, each of my characters writing only its own entry from its friend list. Battle.net friends are account-wide and checked live.
+- `guild`: the guild in which one of my characters saw this character, written from that character's roster: set for each character in it, cleared for a character with that `guild` no longer in it, also set when an announcement comes from a character found in the roster. It counts only while one of my characters of the same ruleset is in that guild; `Identity` keeps each of my characters' guild. The guild is its club ID (`C_Club.GetGuildClubId()`, a string in the API documentation; present on Forever, checked in game; that two characters of one guild get the same value is *to verify in game*). Nothing says club IDs are unique across rulesets, so a guild is its club ID and the ruleset of the characters in it.
+- `friendOf`: which of my characters has this character as a WoW friend, each of my characters writing only its own entry from its friend list, also set when an announcement comes from a character found in that list. Battle.net friends are account-wide and checked live.
 
 A requesting character found only through a person is recognised by its whole name and my current character's ruleset among confirmed characters (the secondary key, see Data Model): whispers never cross rulesets, so that pair names one character. The risk is limited to sending a `REC`: a confirmed alt deleted or renamed, whose name someone else takes, would get my record. Confirmations never use names alone.
 
@@ -265,10 +269,13 @@ Never transmitted: BattleTags, account IDs, Battle.net presence or game account 
 - Either one starts a wait of a few seconds, unless one is running. When it ends:
   - locked: the wait starts again;
   - the revision changed since the last one published this session: a `REC` to the audiences of every enabled scope (see Channels), and every requester they reach leaves the queue;
-  - then each remaining requester: dropped unless `Scopes.Allows` it. Each one kept gets a single channel, in this order: `GUILD` if it is in my current guild, otherwise `PARTY` or `RAID` if it is in my group, otherwise its own message. A requester in both my guild and my group counts for `GUILD` only.
-  - then, per channel: two requesters or more on `GUILD`, or on `PARTY`/`RAID`, get one `REC` on that channel; a requester alone on its channel gets its own `REC`.
+  - then each remaining requester: dropped unless `Scopes.Allows` it. The `REC` reaches the ones kept in the fewest messages: one on `GUILD` reaches every requester in my current guild, one on `PARTY` or `RAID` every requester in my group, and each requester neither reaches gets its own message. A requester reached by a member channel gets no other copy. At equal count: fewer member channels first (a requester alone on its channel gets its own message), then `GUILD` before the group.
 
     Example: A and B in my guild, B and C in my group, D a friend. A and B are on `GUILD`, C alone on `PARTY`, D on its own message: one `REC` on `GUILD`, one whisper to C, one whisper to D.
+
+    Example: A in my guild, A, B and C in my group, D a friend. A is alone on `GUILD`, A, B and C on `PARTY`, D on its own message: one `REC` on `PARTY`, one whisper to D.
+
+    Example: A and B in my guild, A, B and C in my group. One `REC` on `PARTY` reaches all three: one message, where `GUILD` would need a whisper to C as well.
 - `Protocol.LockRecordSending()` and `Protocol.UnlockRecordSending()` only set and clear the lock. The UI holds it while the player edits their own identity, so a `REC` goes out once they are done, at the end of the next wait; a `GET` received meanwhile waits too.
 - The published revision starts, each session, at the current revision: a change found at login (a renamed character) reaches online players through the login announcement and their `GET`s.
 - The record is signed once per change of revision (`Identity.SignedRecord`, about 120 ms), whatever the number of changes it holds or of `REC`s sent.
@@ -302,7 +309,7 @@ Recognised by content: an announcement or a `REC` carrying my identity ID is min
 
 - Ed25519 (RFC 8032) over SHA-512, pure Lua 5.1 on doubles, TweetNaCl algorithms. Curve constants are computed at load and checked by the vectors.
 - In game (build 1.60.1): public key 120 ms, sign 122 ms, verify 249 ms. Offline under PUC Lua 5.1 it is about 2.5× faster.
-- `Ed25519.SetSlicing(bits)` makes scalar multiplication yield inside a coroutine. At 16 bits per slice, one verify takes 33 frames at most 21 ms each. Planned: verification always runs this way, in a background queue, its result cached per identity and revision.
+- `Ed25519.SetSlicing(bits)` makes scalar multiplication yield inside a coroutine. At 16 bits per slice, one verify takes 33 frames at most 21 ms each. `RecordVerification.Queue(signedRecord, onVerified)` always runs this way, one record at a time in a background queue (a frame's `OnUpdate`, hidden when idle). Its result is cached for the session by canonical bytes and signature, not by identity and revision, so a forged copy of a revision cannot block the genuine one.
 - Not constant-time; side channels are out of scope in a game client.
 - Key generation: `math.randomseed` does not exist on Forever (add-ons cannot seed `math.random`); the seed is SHA-512 over several local entropy sources.
 
@@ -314,12 +321,13 @@ AceDB (defaults in `Core/Store.lua`). Data is account-wide, in `WhosWhoDB.global
 
 ```
 identity    id (public key, hex), seed (private key, hex), rev, nickname (override), main (GUID),
-            chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false, guild } },
+            chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false, guild,
+                                 removedInRevision (unlinked: the first revision without it, see Removals) } },
             sig (signature of the current revision)
-people      { [identityID or "M<n>"] = { record (shared only), nickname (the player's own), customNickname, main,
+people      { [identityID or "M<n>"] = { signedRecord (shared only), nickname (the player's own), customNickname, main,
                                    chars = { [guid] = { name, ruleset, classID, state, level, lastSeen,
                                                         guild, friendOf = { [my character's GUID] = true } } } } }
-            guild and friendOf on confirmed characters only (see Scopes)
+            guild (club ID) and friendOf: what my characters saw; only confirmed characters count (see Scopes)
 nextManual  number of the next manual identity ("M<n>")
 forgotten   { [identityID] = revision in which the player unlinked every character }
 automaticChanges  { { time, kind = "merged" | "moved" | "taken" | "dropped" | "forgotten",
@@ -349,12 +357,13 @@ WoW's sandboxed Lua has no test framework, so logic tests are plain-Lua scripts.
 ```
 lua Tests/Crypto-Test.lua
 lua Tests/Model-Test.lua
+lua Tests/Comm-Test.lua
 lua Tests/Locale-Test.lua
 ```
 
 `.github/workflows/checks.yml` runs luacheck and every `Tests/*-Test.lua` on each push.
 
-Suites `loadfile` the shipping files with a fake `ns`. `Tests/Support/Bit.lua` provides `bit` under plain Lua 5.1.
+Suites `loadfile` the shipping files with a fake `ns`. `Comm-Test` runs each logged-in character in its own environment (`setfenv`) over a simulated world (guild, friends, group, add-on channel, clock); LibSerialize and LibDeflate are replaced by stand-ins, since `Libs/` is not in the repository. `Tests/Support/Bit.lua` provides `bit` under plain Lua 5.1.
 
 ## Localization
 

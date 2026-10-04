@@ -22,16 +22,22 @@ ns.Identity = Identity
 ---@field linked boolean? nil until the player answers
 ---@field level integer at the end of the last session
 ---@field lastSeen number seconds, from time(): end of the last session (or its start, after a crash)
+---@field guild string? club ID of the character's guild (C_Club.GetGuildClubId)
+---@field removedInRevision integer? unlinked: the first revision without it, which it announces
 
 ---@return WhosWho.IdentityData
 local function data()
     return ns.data.identity
 end
 
+---@type fun()?
+local revisionListener
+
 local function nextRevision()
     local identity = data()
     identity.rev = identity.rev + 1
     identity.sig = nil
+    if revisionListener then revisionListener() end
 end
 
 -- Keys -------------------------------------------------------------------------------------------
@@ -108,6 +114,42 @@ function Identity.IsLinked(guid)
     return character ~= nil and character.linked == true
 end
 
+---@param guid string
+---@return WhosWho.Ruleset? ruleset nil for a character this account never logged in
+function Identity.Ruleset(guid)
+    local character = data().chars[guid]
+    return character and character.ruleset
+end
+
+---Sets or clears the guild of one of this account's characters; does not change the record.
+---@param guid string
+---@param clubId string?
+function Identity.SetGuild(guid, clubId)
+    local character = data().chars[guid]
+    if character then character.guild = clubId end
+end
+
+---Whether one of this account's characters is in that guild.
+---@param clubId string
+---@param ruleset WhosWho.Ruleset the ruleset of the character seen in that guild
+---@return boolean
+function Identity.HasCharacterInGuild(clubId, ruleset)
+    for _, character in pairs(data().chars) do
+        if character.guild == clubId and character.ruleset == ruleset then return true end
+    end
+    return false
+end
+
+---The revision a character announces: the current one when linked, the one that removed it when unlinked.
+---@param guid string
+---@return integer? revision nil for a character that never was linked
+function Identity.AnnouncedRevision(guid)
+    local character = data().chars[guid]
+    if not character then return nil end
+    if character.linked then return data().rev end
+    return character.removedInRevision
+end
+
 ---@return integer
 function Identity.LinkedCount()
     local count = 0
@@ -137,6 +179,7 @@ local function setLinked(guid, linked)
     if linked and not identity.main then identity.main = guid end
     if not linked and identity.main == guid then identity.main = findFirstLinked(identity) end
     nextRevision()
+    character.removedInRevision = not linked and identity.rev or nil
 end
 
 ---Adds one of this account's characters to the identity. The first one linked becomes the main.
@@ -205,10 +248,16 @@ function Identity.Revision()
     return data().rev
 end
 
+---Called after each change of revision.
+---@param listener fun()
+function Identity.OnRevisionChanged(listener)
+    revisionListener = listener
+end
+
 ---The unsigned record of the current revision, with linked characters only. Past Record.MAX_CHARACTERS, the main
 ---and the lowest GUIDs are kept.
 ---@return WhosWho.IdentityRecord
-function Identity.Record()
+function Identity.UnsignedRecord()
     local identity = data()
     local others = {}
     for guid, character in pairs(identity.chars) do
@@ -230,15 +279,17 @@ function Identity.Record()
 end
 
 ---Signing takes about 120 ms in game, so the signature is kept until the next change.
----@return WhosWho.IdentityRecord
+---@return WhosWho.SignedIdentityRecord
 function Identity.SignedRecord()
     local identity = data()
-    local record = Identity.Record()
     if identity.sig then
-        record.sig = identity.sig
-    else
-        ns.Record.Sign(record, identity.seed)
-        identity.sig = record.sig
+        local signedRecord = Identity.UnsignedRecord()
+        ---@cast signedRecord WhosWho.SignedIdentityRecord
+        signedRecord.sig = identity.sig
+        return signedRecord
     end
-    return record
+
+    local signedRecord = ns.Record.Sign(Identity.UnsignedRecord(), identity.seed)
+    identity.sig = signedRecord.sig
+    return signedRecord
 end
