@@ -10,6 +10,7 @@ ns.Store = Store
 ---@field identity WhosWho.IdentityData
 ---@field people table<string, WhosWho.Person> by identity ID
 ---@field nextManual integer number of the next manual person ("M<n>")
+---@field forgotten table<string, integer> identity ID -> revision in which the player unlinked every character
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
@@ -25,6 +26,7 @@ Store.DEFAULTS = {
         identity = { rev = 1, chars = {} },
         people = {},
         nextManual = 1,
+        forgotten = {},
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },

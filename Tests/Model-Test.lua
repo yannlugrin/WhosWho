@@ -205,12 +205,24 @@ local function state(guid)
     return c and c.state
 end
 
+-- The index kept up to date change by change gives the same answers as one rebuilt from the saved data.
+local function indexMatchesSavedData(guids)
+    local before = {}
+    for i, guid in ipairs(guids) do before[i] = ns.People.Find(guid) or false end
+    ns.People.Reset()
+    for i, guid in ipairs(guids) do
+        if (ns.People.Find(guid) or false) ~= before[i] then return false end
+    end
+    return true
+end
+
 fresh()
 do
     local P = ns.People
     local A, B = string.rep("a", 64), string.rep("b", 64)
 
-    check(not P.Confirm(A, G1, 10) and P.Get(A) == nil, "a confirmation for an unknown identity is ignored")
+    local Z = string.rep("f", 64)
+    check(not P.Confirm(Z, G1, 10) and P.Get(Z) == nil, "a confirmation for an unknown identity leaves no data")
     check(P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann")) == "updated", "record accepted")
     check(P.Find(G1) == A and state(G1) == "listed", "a listed character is trusted before any confirmation")
     check(P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann")) == "stale", "same revision is stale")
@@ -220,13 +232,13 @@ do
     check(P.Confirm(A, G2, 10) and state(G2) == "confirmed", "listed character confirmed")
 
     P.Accept(makeRecord(B, 1, { G2 }, "Bob"))
-    check(P.Find(G2) == A, "a confirmation wins over another record's listing")
+    check(P.Find(G2) == A and P.Get(B).chars[G2] == nil, "a character another identity holds is not taken by a later record")
     P.Confirm(B, G2, 10)
-    check(P.Find(G2) == B and P.Get(A).chars[G2].state == "listed", "the latest confirmation wins; the other is listed again")
+    check(P.Find(G2) == B and P.Get(A).chars[G2] == nil, "a confirmation moves the character; the other identity no longer has it")
 
     P.Accept(makeRecord(A, 2, { G2, G3 }, "Ann"))
     check(P.Get(A).chars[G1] == nil and P.Find(G1) == nil, "a character dropped from the record is gone")
-    check(P.Get(A).chars[G2].state == "listed", "a new revision keeps the character's state (listed here)")
+    check(P.Get(A).chars[G2] == nil, "a new revision does not take back a character another identity holds")
     P.Confirm(A, G3, 10)
     P.Accept(makeRecord(A, 3, { G2, G3 }, "Ann"))
     check(state(G3) == "confirmed", "a confirmed character stays confirmed in a new revision")
@@ -248,17 +260,86 @@ do
     P.Accept(makeRecord(B, 2, { G2 }, "Bob"))
     check(P.Get(B).chars[G2].level == 26, "a new revision keeps the character's activity")
 
-    clock = 21
     P.Accept(makeRecord(C, 1, { G5 }))
-    clock = 20
     P.Accept(makeRecord(D, 1, { G5 }))
-    check(P.Find(G5) == C, "listed by two records: the one received last wins")
-    clock = 25
-    P.Rename(D, "Dee")
-    P.Reset()
-    check(P.Find(G5) == C, "renaming a person does not change which record wins")
+    check(P.Find(G5) == C and P.Get(D).chars[G5] == nil, "listed by two records: the first one keeps it")
     P.Confirm(D, G5, 10)
-    check(P.Find(G5) == D and state(G5) == "confirmed", "a confirmation wins over a listing")
+    check(P.Find(G5) == D and state(G5) == "confirmed" and P.Get(C).chars[G5] == nil,
+        "a confirmation takes a character the identity never held")
+    check(indexMatchesSavedData({ G1, G2, G3, G4, G5 }), "index kept up to date: shared identities")
+end
+
+-- People: a main held by another identity ------------------------------------------------------------
+
+fresh()
+do
+    local P, R = ns.People, ns.Resolver
+    local A, B, C = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+    P.Accept(makeRecord(A, 1, { G1, G2 }))
+    P.Accept(makeRecord(B, 1, { G3, G1 }))
+    P.Confirm(B, G1, 10)
+    check(P.Find(G1) == B and P.Nickname(A) == "N1" and R.Resolve(G2) ~= nil,
+        "an identity whose main another identity confirmed keeps its name and its other characters")
+
+    P.Accept(makeRecord(C, 1, { G2, G4 }))
+    check(P.Find(G2) == A and P.Nickname(C) == "N1" and R.Resolve(G4) ~= nil,
+        "a record whose main another identity holds still gives a name")
+end
+
+-- People: a confirmation of a character in my manual identity ------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A, B = string.rep("a", 64), string.rep("b", 64)
+    P.Accept(makeRecord(A, 1, { G1, G2 }))
+    P.Accept(makeRecord(B, 1, { G3, G1 }))
+    P.Accept(makeRecord(A, 2, { G2 }))
+    local manual = P.Create(G1, INFO)
+    P.AddCharacter(manual, G4, INFO)
+    P.Rename(manual, "Tanky")
+    check(P.Confirm(B, G1, 10) and P.Find(G1) == B and state(G1) == "confirmed", "the confirmed character moves to its player")
+    check(P.Get(manual) == nil and P.Find(G4) == B and state(G4) == "added" and P.Get(B).myNickname == "Tanky",
+        "my manual identity holding it merges into that player")
+    check(indexMatchesSavedData({ G1, G2, G3, G4 }), "index kept up to date: confirmation merge")
+end
+
+-- People: a confirmation before the record listing the character ----------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A, B = string.rep("a", 64), string.rep("b", 64)
+    P.Accept(makeRecord(A, 1, { G1 }))
+    check(not P.Confirm(A, G2, 12) and P.Find(G2) == nil, "a new character's confirmation waits for the record")
+    P.Accept(makeRecord(A, 2, { G1, G2 }))
+    check(state(G2) == "confirmed" and select(2, P.Find(G2)).level == 12, "it applies when the revision listing it arrives")
+
+    check(not P.Confirm(B, G3, 5) and P.Get(B) == nil, "a confirmation for an identity not received yet waits")
+    P.Accept(makeRecord(B, 1, { G3 }))
+    check(state(G3) == "confirmed", "it applies when the identity's first record arrives")
+end
+
+-- People: a player who unlinks every character ---------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A = string.rep("a", 64)
+    local empty = { v = 1, id = A, rev = 2, chars = {} }
+    check(ns.Record.Validate(empty), "a record without characters is valid")
+    check(not ns.Record.Validate({ v = 1, id = A, rev = 2, main = G1, chars = {} }), "a main without characters refused")
+
+    P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann"))
+    P.AddCharacter(A, G3, INFO)
+    P.Rename(A, "Annie")
+    check(P.Accept(empty) == "forgotten", "a revision without characters forgets the person")
+    check(P.Get(A) == nil and P.Find(G1) == nil and P.Find(G3) == nil,
+        "its characters, my nickname and my added alts are gone")
+    check(P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann")) == "stale" and P.Get(A) == nil,
+        "an older copy relayed later does not bring the person back")
+    check(P.Accept(makeRecord(A, 3, { G1 }, "Ann")) == "updated" and P.Find(G1) == A and ns.data.forgotten[A] == nil,
+        "a newer revision with characters brings the player back")
 end
 
 -- People: manual persons and added characters ---------------------------------------------------------
@@ -346,6 +427,8 @@ do
         "every character the record lists is listed, two of them from the same manual identity")
     local nickname = P.Get(E).myNickname
     check(nickname == "First" or nickname == "Second", "my nickname comes from one of the merged identities")
+    check(indexMatchesSavedData({ G1, G2, G3, G4, G5, G6, G7, G8, G9, G10 }),
+        "index kept up to date: manual identities, added alts, merges")
 
     P.Reset()
     check(P.Find(G3) == A and P.Find(G4) == B, "index rebuilt from saved data")

@@ -126,9 +126,11 @@ Each person has **one table of characters** (`chars`), each with its state; that
 
 Each character also carries its **activity**: `level` and `lastSeen`. It is not part of the record. `People.Confirm` records it from the character's own message; `People.Activity` takes it from any source (relays included), keeps it only when more recent, and never confirms. `People.Create` and `People.AddCharacter` take the level when I can see the character I add. `People.Find(guid)` returns the person's ID and the character's whole entry. My own characters keep their level and last seen time in `Identity`, refreshed at login, logout and level-up.
 
-A character belongs to one person: one that already belongs to a person cannot be added to another. When a player's record lists a character of one of my manual identities, the manual identity merges into the player's: the characters the record lists become listed, the others stay added, my nickname for it moves unless I already named the player's identity, and the manual identity is removed. An alt I added to another shared identity moves alone. A manual identity's main cannot be removed (`RemoveCharacter` returns `"main"`): change the main first, or forget the person. When a character is confirmed for a new identity, any older confirmation becomes listed again. A character listed by several records, none confirmed, goes to the record received last. A confirmation for a character the record doesn't list is ignored. `People` keeps one GUID → person index, rebuilt after any change.
+A character belongs to one person: one that already belongs to a person cannot be added to another. When a player's record lists a character of one of my manual identities, the manual identity merges into the player's: the characters the record lists become listed, the others stay added, my nickname for it moves unless I already named the player's identity, and the manual identity is removed. An alt I added to another shared identity moves alone. A manual identity's main cannot be removed (`RemoveCharacter` returns `"main"`): change the main first, or forget the person. A character another player's identity holds stays there: a later record listing it doesn't get it, until a message sent from that character confirms the later identity, which then takes it (a character transferred to another account, or a false claim). If another identity holds a shared person's main, the person is still shown under that main's name from its record. A confirmation for a character the stored record doesn't list yet (a new alt announcing itself before its revision arrives) waits in memory, for the session only, and applies when the revision listing it is accepted; nothing unproven is saved. `People` keeps one GUID → person index, updated on each change.
 
-Planned: every change to my links that I did not make (a manual identity merged, an alt moved to another player's identity, a character dropped by a new revision) is logged for the Review tab: time, kind, the identities involved with their nicknames at the time, the characters moved, and a read flag. Only the most recent entries are kept (about 100).
+A newer revision without characters means the player unlinked them all: the person is forgotten, with my nickname and the alts I added to it. Its ID and that revision stay in `forgotten`, so an older copy relayed later is stale; a newer revision with characters brings the player back.
+
+Planned: every change to my links that I did not make (a manual identity merged, an alt moved to another player's identity, a character dropped by a new revision, an identity removed by its player) is logged for the Review tab: time, kind, the identities involved with their nicknames at the time, the characters moved, and a read flag. Only the most recent entries are kept (about 100).
 
 A shared identity counts as **confirmed** once one of its characters is; until then (for example a record relayed by someone else) it is shared but not confirmed. The frames use this to tell a shared identity from one I created; the rules on characters are the same.
 
@@ -142,7 +144,7 @@ Identity record (shared)
   id        identity ID: the public key, hex
   rev       revision, +1 on every change, at most 2^31 - 1
   nickname  optional override; the main character's name is shown otherwise
-  main      GUID of the main character, one of chars (required when chars is not empty)
+  main      GUID of the main character, one of chars; absent when chars is empty
   chars     { [guid] = { name, ruleset, classID } }   characters the owner declares, signed in GUID order;
             ruleset one of Record.RULESET, classID a class the game knows
   sig       signature over the other fields; a record holding any other key, or a character any other field, is refused
@@ -165,10 +167,8 @@ An identity record is the owner's claim about which characters are theirs. Add-o
 For a character GUID:
 
 1. This account's own linked character.
-2. A shared identity that confirmed the character.
-3. Otherwise a shared identity that lists it (if several do, the record received last).
-4. Otherwise a local link: an alt added to a shared identity, or a manual identity.
-5. Otherwise a guild link from an accepted author; the newest revision per link.
+2. Otherwise the one person holding it: a shared identity (the first to list it, or the one a message from that character confirmed), or my own link (an alt added to a shared identity, or a manual identity).
+3. Otherwise a guild link from an accepted author; the newest revision per link.
 
 The nickname shown, for me: my nickname, otherwise the guild's (planned), otherwise the player's own (shared identity), otherwise the main character's name. `People.IdentityNickname` gives the identity's own nickname whatever overrides it (the player's, otherwise the main character's name), which the frames show small and grey under mine or the guild's. `Identity.Nickname` applies the same rule to my own identity: my nickname, otherwise my main's name. `Resolver.Resolve` returns the identity ID, that nickname, `mine` (this account's own identity) and what the glyphs need: `shared` (the player shares this identity) and `state` (`confirmed`, `listed` or `added`). Pulling guild links never touches local ones.
 
@@ -196,7 +196,7 @@ Measured on build 1.60.1 (in-instance behaviour still *to verify in game*):
 
 ### Scopes
 
-Guild and Friends are on by default, Whispers and Group off; nothing goes out while no character is linked. A message about the own identity goes out only on channels a scope allows:
+Guild and Friends are on by default, Whispers and Group off; nothing goes out until a character is linked; unlinking every character sends one last revision without characters, so others forget the identity. A message about the own identity goes out only on channels a scope allows:
 
 - **Guild**: `GUILD` channel.
 - **Friends**: `WHISPER` to online WoW friends; `BNSendGameData` to Battle.net friends in Forever (*to verify in game*). Battle.net IDs are used only locally to address the message and are never part of a payload.
@@ -235,9 +235,10 @@ AceDB (defaults in `Core/Store.lua`). Data is account-wide, in `WhosWhoDB.global
 identity    id (public key, hex), seed (private key, hex), rev, nickname (override), main (GUID),
             chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false } },
             sig (signature of the current revision)
-people      { [identityID or "M<n>"] = { record and received (shared only), nickname (the player's own), myNickname, main,
+people      { [identityID or "M<n>"] = { record (shared only), nickname (the player's own), myNickname, main,
                                    chars = { [guid] = { name, ruleset, classID, state, level, lastSeen } } } }
 nextManual  number of the next manual identity ("M<n>")
+forgotten   { [identityID] = revision in which the player unlinked every character }
 ```
 
 Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared by every character), so they can be reset without touching the data:

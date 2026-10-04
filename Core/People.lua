@@ -13,10 +13,9 @@ ns.People = People
 ---Saved in ns.data.people, by identity ID.
 ---@class WhosWho.Person
 ---@field record WhosWho.IdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
----@field received number? seconds, from time(): when the record arrived
 ---@field nickname string? the player's own nickname, from the record
 ---@field myNickname string? my nickname for this person
----@field main string? GUID of the main character; nil for a shared person whose record lists no characters
+---@field main string GUID of the main character. Another identity can hold a shared person's main.
 ---@field chars table<string, WhosWho.PersonCharacter> by GUID
 
 ---@alias WhosWho.CharacterState
@@ -34,32 +33,38 @@ ns.People = People
 ---@field level integer? known when I can see the character
 
 -- Index ------------------------------------------------------------------------------------------
----@type table<string, string>? GUID -> ID of the person the character belongs to
+
+-- A character is in one person only. Every change to a person's characters updates the index.
+---@type table<string, string>? GUID -> ID of the person holding the character
 local personIdByGuid
 
--- Several records can list the same character: the one that confirmed it wins, otherwise the one received last.
--- A character I added is in one person only.
-local function claimStrength(person, character)
-    if character.state == "confirmed" then return math.huge end
-    return person.received or 0
-end
+local function index()
+    if personIdByGuid then return personIdByGuid end
 
-local function buildIndex()
-    local personIds, strengths = {}, {}
+    personIdByGuid = {}
     for id, person in pairs(ns.data.people) do
-        for guid, character in pairs(person.chars) do
-            local strength = claimStrength(person, character)
-            if not personIds[guid] or strength > strengths[guid] then
-                personIds[guid], strengths[guid] = id, strength
-            end
-        end
+        for guid in pairs(person.chars) do personIdByGuid[guid] = id end
     end
-    return personIds
+    return personIdByGuid
 end
 
----Drops the GUID index; the next lookup rebuilds it. Call after replacing ns.data.
+local function indexCharacter(guid, id)
+    index()[guid] = id
+end
+
+local function unindexCharacter(guid, id)
+    if index()[guid] == id then index()[guid] = nil end
+end
+
+-- Confirmations that arrived before the record listing their character; kept for the session only.
+---@type table<string, table<string, integer>> identity ID -> GUID -> level
+local pendingConfirmations = {}
+
+---Drops the GUID index (the next lookup rebuilds it from the saved data) and the pending confirmations. Call after
+---replacing ns.data.
 function People.Reset()
     personIdByGuid = nil
+    pendingConfirmations = {}
 end
 
 -- Reading ----------------------------------------------------------------------------------------
@@ -75,9 +80,7 @@ end
 ---@return string? id
 ---@return WhosWho.PersonCharacter? character
 function People.Find(guid)
-    personIdByGuid = personIdByGuid or buildIndex()
-
-    local id = personIdByGuid[guid]
+    local id = index()[guid]
     if not id then return nil end
 
     return id, ns.data.people[id].chars[guid]
@@ -91,7 +94,8 @@ function People.IdentityNickname(id)
     local person = ns.data.people[id]
     if not person then return nil end
 
-    local main = person.chars[person.main]
+    -- Another identity can hold the main (a confirmation moved it there); its name is still in the record.
+    local main = person.chars[person.main] or (person.record and person.record.chars[person.main])
     return person.nickname or (main and main.name)
 end
 
@@ -127,8 +131,8 @@ function People.Create(guid, character)
     local id = "M" .. data.nextManual
     data.nextManual = data.nextManual + 1
     data.people[id] = { main = guid, chars = { [guid] = addedCharacter(character) } }
+    indexCharacter(guid, id)
 
-    People.Reset()
     return id
 end
 
@@ -144,8 +148,8 @@ function People.AddCharacter(id, guid, character)
     if People.Find(guid) then return false, "taken" end
 
     person.chars[guid] = addedCharacter(character)
+    indexCharacter(guid, id)
 
-    People.Reset()
     return true
 end
 
@@ -161,8 +165,8 @@ function People.RemoveCharacter(id, guid)
     if guid == person.main then return false, "main" end
 
     person.chars[guid] = nil
+    unindexCharacter(guid, id)
 
-    People.Reset()
     return true
 end
 
@@ -200,84 +204,108 @@ end
 
 ---@param id string
 function People.Forget(id)
+    local person = ns.data.people[id]
+    if not person then return end
+
+    for guid in pairs(person.chars) do unindexCharacter(guid, id) end
     ns.data.people[id] = nil
-    People.Reset()
 end
 
 -- Received from players --------------------------------------------------------------------------
 
----Stores a newer revision of a player's record. Its characters become listed; confirmed ones stay confirmed and
----every character keeps its activity. A manual identity of mine holding one of its characters is the same person and
----merges into it (several can); an alt I added to another player's identity moves alone.
----@param record WhosWho.IdentityRecord already validated and verified
----@return "updated"|"stale"
-function People.Accept(record)
+-- Puts one of a record's characters in identity `toPersonId`, and removes it from the person it no longer belongs to.
+-- `confirmedLevel` is given when a message from the character proved it (its level then); without it, another
+-- player's identity keeps the character.
+local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
     local people = ns.data.people
+
+    -- Another player keeps a character they declared, unless this is a confirmation.
+    local fromPersonId = index()[guid]
+    local fromPerson = fromPersonId and fromPersonId ~= toPersonId and people[fromPersonId] or nil
+    if fromPerson and fromPerson.record then
+        if not confirmedLevel and fromPerson.chars[guid].state ~= "added" then return false end
+        fromPerson.chars[guid] = nil
+    end
+
+    -- A manual identity I created for this player: merge it into this identity.
+    local toPerson = people[toPersonId]
+    if fromPersonId and fromPerson and not fromPerson.record then
+        for movedGuid, movedCharacter in pairs(fromPerson.chars) do
+            toPerson.chars[movedGuid] = movedCharacter
+            indexCharacter(movedGuid, toPersonId)
+        end
+        toPerson.myNickname = toPerson.myNickname or fromPerson.myNickname
+        People.Forget(fromPersonId)
+    end
+
+    -- The character itself, with the record's data: listed, or confirmed once proven.
+    local character = toPerson.chars[guid] or {}
+    character.name, character.ruleset, character.classID = recordCharacter.name, recordCharacter.ruleset, recordCharacter.classID
+    if character.state ~= "confirmed" then character.state = "listed" end
+    if confirmedLevel then character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time() end
+    toPerson.chars[guid] = character
+    indexCharacter(guid, toPersonId)
+
+    return true
+end
+
+---Stores a newer revision of a player's record. A revision without characters means the player unlinked them all:
+---the person is forgotten, my nickname and added alts with it.
+---@param record WhosWho.IdentityRecord already validated and verified
+---@return "updated"|"stale"|"forgotten"
+function People.Accept(record)
+    local people, forgotten = ns.data.people, ns.data.forgotten
     local sharedPerson = people[record.id]
     if sharedPerson and sharedPerson.record.rev >= record.rev then return "stale" end
+    if forgotten[record.id] and forgotten[record.id] >= record.rev then return "stale" end
+
+    if not record.main then
+        People.Forget(record.id)
+        forgotten[record.id] = record.rev
+        return "forgotten"
+    end
+    forgotten[record.id] = nil
 
     sharedPerson = sharedPerson or { chars = {} }
     people[record.id] = sharedPerson
+    sharedPerson.record, sharedPerson.nickname, sharedPerson.main = record, record.nickname, record.main
 
-    for guid in pairs(record.chars) do
-        local personId, character = People.Find(guid)
-        local person = personId and personId ~= record.id and people[personId]
-
-        -- My manual identities holding one of this player's characters are this player: they merge into it.
-        if personId and person and not person.record then
-            for personGuid, personCharacter in pairs(person.chars) do
-                sharedPerson.chars[personGuid] = personCharacter
-            end
-            sharedPerson.myNickname = sharedPerson.myNickname or person.myNickname
-
-            people[personId] = nil
-            People.Reset()
-        end
-
-        -- My alts on other players' identities that this player lists move here.
-        if personId and person and person.record and character and character.state == "added" then
-            person.chars[guid] = nil
+    -- Characters the player dropped leave; my added alts stay.
+    for guid, character in pairs(sharedPerson.chars) do
+        if character.state ~= "added" and not record.chars[guid] then
+            sharedPerson.chars[guid] = nil
+            unindexCharacter(guid, record.id)
         end
     end
 
-    -- Characters from the new revision: the ones it lists (confirmed ones stay confirmed) and my added ones;
-    -- the ones the player dropped are left out.
-    local characters = {}
-    for sharedGuid, sharedCharacter in pairs(sharedPerson.chars) do
-        if sharedCharacter.state == "added" then characters[sharedGuid] = sharedCharacter end
-    end
-    for recordGuid, recordCharacter in pairs(record.chars) do
-        local character = sharedPerson.chars[recordGuid] or {}
-        character.name, character.ruleset, character.classID = recordCharacter.name, recordCharacter.ruleset, recordCharacter.classID
-        if character.state ~= "confirmed" then character.state = "listed" end
-        characters[recordGuid] = character
+    -- Confirmations of characters this revision now lists, received before it arrived.
+    local pending = pendingConfirmations[record.id] or {}
+    pendingConfirmations[record.id] = nil
+
+    -- Update or add the characters this revision lists.
+    for guid, recordCharacter in pairs(record.chars) do
+        storeCharacter(record.id, guid, recordCharacter, pending[guid])
     end
 
-    sharedPerson.record, sharedPerson.received = record, time()
-    sharedPerson.nickname, sharedPerson.main, sharedPerson.chars = record.nickname, record.main, characters
-
-    People.Reset()
     return "updated"
 end
 
----A message sent from the character carried the identity, while the character was at that level. Ignored unless
----the identity's record lists the character. Another identity's confirmation of it becomes a listing.
+---A message sent from the character carried the identity, while the character was at that level. When the record
+---doesn't list the character yet, the confirmation waits for the revision that does (People.Accept).
 ---@param id string
 ---@param guid string
 ---@param level integer
----@return boolean confirmed
+---@return boolean confirmed false while it waits
 function People.Confirm(id, guid, level)
     local person = ns.data.people[id]
-    local character = person and person.chars[guid]
-    if not character or character.state == "added" then return false end
+    local recordCharacter = person and person.record and person.record.chars[guid]
+    if not recordCharacter then
+        pendingConfirmations[id] = pendingConfirmations[id] or {}
+        pendingConfirmations[id][guid] = level
+        return false
+    end
 
-    local storedPersonId, storedCharacter = People.Find(guid)
-    if storedCharacter and storedCharacter.state == "confirmed" and storedPersonId ~= id then storedCharacter.state = "listed" end
-
-    character.state, character.level, character.lastSeen = "confirmed", level, time()
-
-    People.Reset()
-    return true
+    return storeCharacter(id, guid, recordCharacter, level)
 end
 
 ---Activity of a character from any source, a relay included. Never confirms; kept only when more recent.
