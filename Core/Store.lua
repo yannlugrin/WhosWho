@@ -19,8 +19,6 @@ ns.Store = Store
 ---@field chatNicknames boolean
 ---@field tooltipNickname "afterName"|"ownLine"|"hidden"
 ---@field tooltipOtherCharacters boolean the "Also:" line
----@field guildShare boolean
----@field guildPull boolean
 ---@field debugMessages boolean every Who's Who message sent or received, printed in chat
 
 Store.DEFAULTS = {
@@ -36,8 +34,6 @@ Store.DEFAULTS = {
         chatNicknames = true,
         tooltipNickname = "ownLine",
         tooltipOtherCharacters = true,
-        guildShare = false,
-        guildPull = false,
         debugMessages = false,
     },
 }

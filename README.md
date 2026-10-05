@@ -4,19 +4,19 @@ Link all your characters into one identity, choose who can see it, and recognise
 
 For **World of Warcraft: Forever**.
 
-> **In development.** Nothing is shared yet: this build only stores your own identity locally.
+> **In development.** Sharing works, through the commands below; there are no windows yet, and what is marked *coming* isn't built.
 
 ## Features
 
-- **One identity for all your characters.** The first time you log in on a character, Who's Who asks whether to link it. Pick your main character: you're shown under its name, or under a nickname if you set one.
+- **One identity for all your characters.** Link the character you're playing with `/ww link`. Pick your main character: you're shown under its name, or under a nickname if you set one. *Coming:* the first time you log in on a character, Who's Who asks whether to link it.
 - **You decide who sees it.** Share with your guild, your friends, or the people you whisper and group with. Guild and friends are on by default, and nothing is shared until you link a character.
-- **Recognise people across their alts.** When someone shares their identity with you, their nickname appears next to their messages in chat and in their tooltip, on every character they linked.
-- **Link players who don't use the add-on.** Group someone's characters and give them a nickname, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
-- **Share your links with your guild** (optional), so the whole guild benefits without everyone installing Who's Who. Guild officers decide which ranks may share.
+- **Recognise people across their alts.** When someone shares their identity with you, `/ww people` lists them with their characters. *Coming:* their nickname next to their messages in chat and in their tooltip, on every character they linked.
+- *Coming:* **Link players who don't use the add-on.** Group someone's characters and give them a nickname, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
 
 ## Privacy
 
 - Nothing leaves your client as long as you haven't linked a character to your identity.
+- A character you unlink keeps telling the players who knew it, when you log in or out on it, that it left your identity, so they drop it even if they were offline when you unlinked it. It still carries your identity's ID.
 - Who's Who never sends BattleTags or Battle.net account information.
 - Your identity is signed with a key that stays on your computer, so nobody else can change it, even when it is passed along by other players.
 - What a player shares about themselves can't be changed by others. You can still give anyone your own nickname for them; only you see it.
@@ -37,7 +37,7 @@ For **World of Warcraft: Forever**.
 
 ## Looks
 
-Who's Who uses the default game look. With EllesmereUI installed, its windows follow your EllesmereUI theme.
+*Coming*, with the windows: the default game look, and with EllesmereUI installed, your EllesmereUI theme.
 
 ## License
 
