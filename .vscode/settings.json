@@ -35,7 +35,15 @@
         "CreateSettingsButtonInitializer",
         "StaticPopup_Show",
         "SettingsPanel",
-        "InputBoxInstructions_OnTextChanged"
+        "InputBoxInstructions_OnTextChanged",
+        "PanelTemplates_TabResize",
+        "PanelTemplates_SetNumTabs",
+        "PanelTemplates_SetTab",
+        "ScrollUtil",
+        "CreateScrollBoxListLinearView",
+        "CreateDataProvider",
+        "FriendsFrame_GetLastOnline",
+        "UISpecialFrames"
     ],
     "Lua.type.weakUnionCheck": true
 }

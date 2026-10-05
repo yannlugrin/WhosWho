@@ -28,6 +28,7 @@ ignore:
   - .luacheckrc
   - .pkgmeta
   - .vscode
+  - Media/Source
   - README-Design.md
   - README-Technical.md
   - README-Testing.md

@@ -43,7 +43,14 @@ WhosWho/
 │   ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
 │   ├── Settings.xml               Settings list row template: a section's information text
 │   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Data
-│   └── Prompt.lua                 First-login dialogs: no identity yet, identity exists
+│   ├── Main/                      The main window
+│   │   ├── Window.lua             Window and tab bar
+│   │   └── MyIdentity.lua         My identity tab
+│   └── Dialogs/
+│       └── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
+├── Media/                         Textures shipped with the add-on
+│   ├── Icon.tga                   Add-on icon, 128×128
+│   └── Source/whoswho.png         Icon source, 1024×1024 (not packaged)
 ├── Tests/
 │   ├── Crypto-Test.lua            SHA-512 and Ed25519 against OpenSSL and RFC 8032 vectors, timing
 │   ├── Model-Test.lua             Name rules, Record, Identity, People, automatic changes, Resolver
@@ -65,7 +72,6 @@ Planned:
 │   └── Trust.lua                  Rank gate and the guild configuration sent by officers
 ├── Comm/
 └── UI/
-    ├── Main.lua                   Main window and its tabs
     ├── PersonEditor.lua           Create and edit a manual identity, add alts
     └── Decorations.lua            Chat filter, tooltip line, unit menu entries
 ```
@@ -90,7 +96,7 @@ Every file casts the add-on table with `---@cast ns WhosWho.Namespace`. That cla
 Implemented:
 
 - `ADDON_LOADED` (own name): AceDB.
-- `PLAYER_LOGIN`: keys created if missing; own character entry (name, ruleset, class ID, level, last seen); `Protocol.Start` (comm prefix, published revision, revision listener), then `Protocol.AnnounceLogin`; roster request (`C_GuildInfo.GuildRoster`); first-login prompt (`Prompt.AskToLink`, also opened by the settings button) when the character is not registered in the identity, linked or not (`Identity.IsRegistered`): `NewIdentity` while no character is linked, `LinkCharacter` otherwise. **Link** links the character (with `NewIdentity`, the nickname is set first; a refused one is printed and the dialog stays open), **Not this character** registers it unlinked (`linked = false`), closing leaves it unregistered (`linked = nil`).
+- `PLAYER_LOGIN`: keys created if missing; own character entry (name, ruleset, class ID, level, last seen); `Protocol.Start` (comm prefix, published revision, revision listener), then `Protocol.AnnounceLogin`; roster request (`C_GuildInfo.GuildRoster`); first-login prompt (`IdentityDialogs.AskToLink`, also opened by the settings button) when the character is not registered in the identity, linked or not (`Identity.IsRegistered`): `NewIdentity` while no character is linked, `LinkCharacter` otherwise. **Link** links the character (with `NewIdentity`, the nickname is set first; a refused one is printed and the dialog stays open), **Not this character** registers it unlinked (`linked = false`), closing leaves it unregistered (`linked = nil`).
 - `PLAYER_LOGOUT` (also on `/reload`): level and last seen time of the current character, saved right after; logout announcement.
 - `PLAYER_LEVEL_UP`: the same refresh, with the new level from the event (`UnitLevel` still returns the old one); announcement.
 - `GUILD_ROSTER_UPDATE`: my current character's guild in `Identity`, `guild` of the characters I hold (see Scopes); sends nothing.
@@ -337,7 +343,7 @@ tooltipOtherCharacters, debugMessages (every Who's Who message sent or received,
 
 Planned: `scopes.selected` and the list of selected players.
 
-`linked = nil` means the character is not registered in the identity yet, linked or not.
+`linked = nil` means the character is not registered in the identity yet, linked or not. `Identity.Unlink` on such a character registers it unlinked (`linked = false`, no new revision): **Not this character** answers this way.
 
 SavedVariables are written only on `/reload`, logout or quit. Nothing may depend on a save mid-session.
 
@@ -363,6 +369,8 @@ Every player-facing string goes through `L[...]` (AceLocale). `enUS` is the defa
 ## Look and Skinning
 
 Frames use Blizzard templates for the default Forever look. If EllesmereUI is loaded, `EllesmereUI.RegisterSkin("WhosWho", fn)` skins them (`Skin.Apply`; the TOC has `## OptionalDeps: EllesmereUI`); the `S` handed to the callback is kept for frames created later. Frames only use widget kinds its Skinning API covers (see README-Design).
+
+The add-on icon is `Media/Icon.tga`, 128×128: the TOC's `IconTexture`, also the main window's portrait. Its source, `Media/Source/whoswho.png` (1024×1024), stays in the repository and is left out of the package (`.pkgmeta` `ignore`).
 
 ## Open Questions
 

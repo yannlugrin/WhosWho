@@ -30,14 +30,14 @@ local function data()
     return ns.data.identity
 end
 
----@type fun()?
-local revisionListener
+---@type fun()[]
+local revisionListeners = {}
 
 local function nextRevision()
     local identity = data()
     identity.rev = identity.rev + 1
     identity.sig = nil
-    if revisionListener then revisionListener() end
+    for _, listener in ipairs(revisionListeners) do listener() end
 end
 
 -- Keys -------------------------------------------------------------------------------------------
@@ -159,6 +159,12 @@ function Identity.LinkedCount()
     return count
 end
 
+---Every character of this account, registered or not.
+---@return table<string, WhosWho.OwnCharacter> characters by GUID
+function Identity.Characters()
+    return data().chars
+end
+
 ---This account's linked characters, the main first, then by name.
 ---@return WhosWho.OwnCharacter[]
 function Identity.LinkedCharacters()
@@ -249,6 +255,12 @@ function Identity.SetMain(guid)
     return true
 end
 
+---Whether the identity has a nickname override; without one, it goes by its main character's name.
+---@return boolean
+function Identity.HasNickname()
+    return data().nickname ~= nil
+end
+
 ---The nickname override, or the main character's name.
 ---@return string? nickname nil while no character is linked
 function Identity.Nickname()
@@ -280,10 +292,10 @@ function Identity.Revision()
     return data().rev
 end
 
----Called after each change of revision.
+---Adds a function called after each change of revision.
 ---@param listener fun()
 function Identity.OnRevisionChanged(listener)
-    revisionListener = listener
+    revisionListeners[#revisionListeners + 1] = listener
 end
 
 ---The unsigned record of the current revision, with linked characters only. Past Record.MAX_CHARACTERS, the main

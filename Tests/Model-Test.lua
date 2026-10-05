@@ -672,7 +672,10 @@ do
     I.SetNickname("Yann")
     I.SetNickname("Yann")
     check(changes == 2, "each change of revision notified once")
-    I.OnRevisionChanged(function() end)
+    local otherChanges = 0
+    I.OnRevisionChanged(function() otherChanges = otherChanges + 1 end)
+    I.SetNickname(nil)
+    check(changes == 3 and otherChanges == 1, "every listener notified")
 
     I.Refresh(G2, "Never Linked", PVP, MAGE, 10)
     I.Unlink(G2)

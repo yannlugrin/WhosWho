@@ -39,7 +39,7 @@ addSectionText(L["Who's Who links your characters into one identity, so people r
 local linkInitializer = CreateSettingsButtonInitializer("", L["Link this character"],
     function()
         SettingsPanel:Close(true)
-        ns.Prompt.AskToLink()
+        ns.IdentityDialogs.AskToLink()
     end, nil, true)
 linkInitializer:AddModifyPredicate(function() return not ns.Identity.IsLinked(UnitGUID("player")) end)
 layout:AddInitializer(linkInitializer)
@@ -57,27 +57,12 @@ end
 addSectionHeader(L["Sharing"])
 addSectionText(L["Nothing is shared until a character is linked. Your identity is your nickname and your linked characters."])
 addScopeCheckbox("guild", L["Guild"], L["Guild members who use Who's Who see your identity."])
+addScopeCheckbox("friends", L["Friends"], L["Your friends who use Who's Who see your identity."])
 addScopeCheckbox("group", L["My party or raid"],
     L["Members of your current party or raid who use Who's Who see your identity."])
 addScopeCheckbox("whispers", L["People I whisper"], L["Anyone you whisper, or who whispers you, can ask for your identity."])
 
 -- Data -------------------------------------------------------------------------------------------
-
-StaticPopupDialogs.WHOSWHO_FORGET_ME = {
-    text = L["Forget your characters and your nickname?"] .. "\n\n"
-        .. L["Players who know you forget you too, once Who's Who reaches them; some may never be reached. This can't be undone."],
-    button1 = L["Forget"],
-    button2 = CANCEL,
-    OnAccept = function()
-        ns.Identity.Forget()
-        -- The settings list checks the button's predicate only when it builds the row.
-        local linkButtonRow = SettingsPanel.Container.SettingsList.ScrollBox:FindFrame(linkInitializer)
-        if linkButtonRow then linkButtonRow:EvaluateState() end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-}
 
 StaticPopupDialogs.WHOSWHO_FORGET_EVERYONE_ELSE = {
     text = L["Forget everyone else?"] .. "\n\n"
@@ -88,11 +73,19 @@ StaticPopupDialogs.WHOSWHO_FORGET_EVERYONE_ELSE = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
 }
 
 addSectionHeader(L["Data"])
 layout:AddInitializer(CreateSettingsButtonInitializer(L["Forget me"], L["Forget"],
-    function() StaticPopup_Show("WHOSWHO_FORGET_ME") end,
+    function()
+        -- The settings list checks the Link button's predicate only when it builds the row.
+        StaticPopup_Show("WHOSWHO_FORGET_ME", nil, nil, function()
+            local linkButtonRow = SettingsPanel.Container.SettingsList.ScrollBox:FindFrame(linkInitializer)
+            if linkButtonRow then linkButtonRow:EvaluateState() end
+        end)
+    end,
     L["Forgets your characters and your nickname. Players who know you forget you too, once Who's Who reaches them; some may never be reached."],
     true))
 layout:AddInitializer(CreateSettingsButtonInitializer(L["Forget everyone else"], L["Forget"],
@@ -102,6 +95,9 @@ layout:AddInitializer(CreateSettingsButtonInitializer(L["Forget everyone else"],
 -- Register & Slash commands ----------------------------------------------------------------------
 
 Settings.RegisterAddOnCategory(category)
+
+-- The settings offer their own way to link the character.
+SettingsPanel:HookScript("OnShow", function() ns.IdentityDialogs.HideLinkPrompts() end)
 
 ns.Commands.settings = function()
     Settings.OpenToCategory(category:GetID())

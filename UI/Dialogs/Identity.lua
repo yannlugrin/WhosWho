@@ -3,11 +3,11 @@ local _, ns = ...
 
 local L = ns.L
 
----@class WhosWho.Prompt
+---@class WhosWho.IdentityDialogs
 ---@field NewIdentity WhosWho.NewIdentityDialog the first-login dialog while no character is linked
 ---@field LinkCharacter WhosWho.LinkCharacterDialog the first-login dialog once an identity exists
-local Prompt = {}
-ns.Prompt = Prompt
+local IdentityDialogs = {}
+ns.IdentityDialogs = IdentityDialogs
 
 local WIDTH = 360
 local SIDE_PADDING = 16
@@ -58,7 +58,13 @@ local function createDialog()
     dialog:SetPoint("CENTER")
     dialog:SetFrameStrata("DIALOG")
     dialog:SetTitle(L["Who's Who"])
+    dialog:SetMovable(true)
+    dialog:SetClampedToScreen(true)
     dialog:Hide()
+    dialog.TitleContainer:EnableMouse(true)
+    dialog.TitleContainer:RegisterForDrag("LeftButton")
+    dialog.TitleContainer:SetScript("OnDragStart", function() dialog:StartMoving() end)
+    dialog.TitleContainer:SetScript("OnDragStop", function() dialog:StopMovingOrSizing() end)
     dialog.CloseButton = CreateFrame("Button", nil, dialog, "UIPanelCloseButtonDefaultAnchors")
     dialog.rows = {}
     return dialog
@@ -173,20 +179,22 @@ local function createLinkCharacterDialog()
     addText(dialog, "GameFontDisableSmall"):SetText(L["Nothing is shared until a character is linked."])
 
     dialog.LinkButton:SetScript("OnClick", function()
-        ns.Identity.Link(UnitGUID("player"))
+        ns.Identity.Link(dialog.characterGuid)
         dialog:Hide()
     end)
     -- Registers the character unlinked; closing the dialog leaves it unregistered.
     dialog.NotThisCharacterButton:SetScript("OnClick", function()
-        ns.Identity.Unlink(UnitGUID("player"))
+        ns.Identity.Unlink(dialog.characterGuid)
         dialog:Hide()
     end)
 
-    ---@param name string the character logged in, "First Surname"
+    ---@param characterGuid string the character to link
+    ---@param name string "First Surname"
     ---@param classID integer
     ---@param identityName string
     ---@param characters { name: string, classID: integer }[] the characters already linked, in the order shown
-    function dialog:SetCharacter(name, classID, identityName, characters)
+    function dialog:SetCharacter(characterGuid, name, classID, identityName, characters)
+        self.characterGuid = characterGuid
         local names = {}
         for i, character in ipairs(characters) do names[i] = classColoredName(character.name, character.classID) end
         local coloredIdentityName = NORMAL_FONT_COLOR:WrapTextInColorCode(identityName)
@@ -205,19 +213,81 @@ local function createLinkCharacterDialog()
     return dialog
 end
 
-Prompt.NewIdentity = createNewIdentityDialog()
-Prompt.LinkCharacter = createLinkCharacterDialog()
+IdentityDialogs.NewIdentity = createNewIdentityDialog()
+IdentityDialogs.LinkCharacter = createLinkCharacterDialog()
 
 ---Asks whether to link the character logged in. Without a main character, the identity starts with it.
-function Prompt.AskToLink()
+function IdentityDialogs.AskToLink()
     local name = ns.UnitWholeName("player")
     local _, _, classID = UnitClass("player")
     local _, main = ns.Identity.Main()
     if not main then
-        Prompt.NewIdentity:SetCharacter(name, classID)
-        Prompt.NewIdentity:Show()
+        IdentityDialogs.NewIdentity:SetCharacter(name, classID)
+        IdentityDialogs.NewIdentity:Show()
         return
     end
-    Prompt.LinkCharacter:SetCharacter(name, classID, ns.Identity.Nickname(), ns.Identity.LinkedCharacters())
-    Prompt.LinkCharacter:Show()
+    IdentityDialogs.LinkCharacter:SetCharacter(UnitGUID("player"), name, classID, ns.Identity.Nickname(),
+        ns.Identity.LinkedCharacters())
+    IdentityDialogs.LinkCharacter:Show()
 end
+
+---Closes both first-login dialogs, leaving the character unanswered.
+function IdentityDialogs.HideLinkPrompts()
+    IdentityDialogs.NewIdentity:Hide()
+    IdentityDialogs.LinkCharacter:Hide()
+end
+
+-- Confirmations ----------------------------------------------------------------------------------
+
+-- The character's name in class colour is the text argument of the main and unlink ones.
+
+StaticPopupDialogs.WHOSWHO_CHANGE_MAIN = {
+    text = L["Make %s your main character?"] .. "\n\n"
+        .. L["When you have no nickname, your identity is shown under this character's name. Players who know you see the change once Who's Who reaches them."],
+    button1 = L["Make main"],
+    button2 = CANCEL,
+    -- `characterGuid`, the popup's data: the new main; `onMainChanged`, its data2: called after the change.
+    OnAccept = function(_, characterGuid, onMainChanged)
+        ns.Identity.SetMain(characterGuid)
+        if onMainChanged then onMainChanged() end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
+}
+
+StaticPopupDialogs.WHOSWHO_UNLINK = {
+    text = L["Unlink %s from your identity?"] .. "\n\n"
+        .. L["Players who know you stop seeing this character as yours once Who's Who reaches them. You can link it again later."],
+    button1 = L["Unlink"],
+    button2 = CANCEL,
+    -- `characterGuid`, the popup's data: the character to unlink; `onUnlinked`, its data2: called after unlinking.
+    OnAccept = function(_, characterGuid, onUnlinked)
+        ns.Identity.Unlink(characterGuid)
+        if onUnlinked then onUnlinked() end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
+}
+
+StaticPopupDialogs.WHOSWHO_FORGET_ME = {
+    text = L["Forget your characters and your nickname?"] .. "\n\n"
+        .. L["Players who know you forget you too, once Who's Who reaches them; some may never be reached. This can't be undone."],
+    button1 = L["Forget"],
+    button2 = CANCEL,
+    -- `onForgotten`, the popup's data: called after forgetting.
+    OnAccept = function(_, onForgotten)
+        ns.Identity.Forget()
+        if onForgotten then onForgotten() end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
+}

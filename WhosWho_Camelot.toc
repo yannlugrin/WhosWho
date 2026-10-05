@@ -3,7 +3,7 @@
 ## Notes: Link your characters into one identity and recognise people across their alts.
 ## Author: Mr Caillou
 ## Version: @project-version@
-## IconTexture: Interface\Icons\INV_Misc_QuestionMark
+## IconTexture: Interface\AddOns\WhosWho\Media\Icon
 ## SavedVariables: WhosWhoDB
 ## OptionalDeps: EllesmereUI
 
@@ -30,4 +30,6 @@ Comm\Protocol.lua
 UI\Skin.lua
 UI\Settings.xml
 UI\Settings.lua
-UI\Prompt.lua
+UI\Dialogs\Identity.lua
+UI\Main\Window.lua
+UI\Main\MyIdentity.lua

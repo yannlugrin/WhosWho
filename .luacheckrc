@@ -8,7 +8,7 @@ ignore = {
 }
 
 globals = {
-    "SLASH_WHOSWHO1", "SLASH_WHOSWHO2", "SlashCmdList", "StaticPopupDialogs",
+    "SLASH_WHOSWHO1", "SLASH_WHOSWHO2", "SlashCmdList", "StaticPopupDialogs", "UISpecialFrames",
 }
 
 read_globals = {
@@ -17,7 +17,9 @@ read_globals = {
     "C_AddOns", "C_BattleNet", "C_ChatInfo", "C_Club", "C_CreatureInfo", "C_FriendList", "C_GameRules", "C_GuildInfo", "C_Timer",
     "ChatFrame_AddMessageEventFilter", "ChatFrameUtil", "ChatFontNormal", "NUM_CHAT_WINDOWS",
     "TooltipDataProcessor", "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer",
-    "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR",
+    "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR",
+    "PanelTemplates_TabResize", "PanelTemplates_SetNumTabs", "PanelTemplates_SetTab", "CreateScrollBoxListLinearView",
+    "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline",
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "BNET_CLIENT_WOW",
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
     "GetGuildRosterInfo", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumGuildMembers", "GetServerTime", "GetTime",
