@@ -153,10 +153,10 @@ function Scopes.Allows(name)
     -- An alt of a player my scopes allow: one of the person's confirmed characters has a guild one of my characters is
     -- in (Guild scope), or is the WoW friend of one of my characters (Friends scope).
     local ruleset = Identity.Ruleset(UnitGUID("player"))
-    local id = ruleset and People.FindConfirmedByName(name, ruleset)
-    if not id then return false end
+    local person = ruleset and People.FindConfirmedByName(name, ruleset)
+    if not person then return false end
 
-    for _, character in pairs(People.Get(id).chars) do
+    for _, character in pairs(person.chars) do
         if character.state == "confirmed" then
             if scopes.guild and character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset) then
                 return true

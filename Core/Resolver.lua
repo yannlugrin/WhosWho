@@ -22,10 +22,10 @@ function Resolver.Resolve(guid)
         return { id = Identity.Id(), nickname = Identity.Nickname(), mine = true, shared = true, state = "confirmed" }
     end
 
-    local id, character = People.Find(guid)
-    if not (id and character) then return nil end
-    local person, nickname = People.Get(id), People.Nickname(id)
-    if not (person and nickname) then return nil end
+    local person, character = People.Find(guid)
+    if not (person and character) then return nil end
+    local nickname = People.Nickname(person.id)
+    if not nickname then return nil end
 
-    return { id = id, nickname = nickname, mine = false, shared = person.signedRecord ~= nil, state = character.state }
+    return { id = person.id, nickname = nickname, mine = false, shared = person.signedRecord ~= nil, state = character.state }
 end

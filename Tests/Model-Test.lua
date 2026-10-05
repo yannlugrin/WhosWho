@@ -200,6 +200,12 @@ end
 local INFO = { name = "Tank Bob", ruleset = NORMAL, classID = WARRIOR }
 local G5 = "Player-70-0000000E"
 
+-- The ID of the person holding the character, nil when none does.
+local function holderId(guid)
+    local person = ns.People.Find(guid)
+    return person and person.id
+end
+
 local function state(guid)
     local _, c = ns.People.Find(guid)
     return c and c.state
@@ -208,10 +214,10 @@ end
 -- The index kept up to date change by change gives the same answers as one rebuilt from the saved data.
 local function indexMatchesSavedData(guids)
     local before = {}
-    for i, guid in ipairs(guids) do before[i] = ns.People.Find(guid) or false end
+    for i, guid in ipairs(guids) do before[i] = holderId(guid) or false end
     ns.People.Reset()
     for i, guid in ipairs(guids) do
-        if (ns.People.Find(guid) or false) ~= before[i] then return false end
+        if (holderId(guid) or false) ~= before[i] then return false end
     end
     return true
 end
@@ -224,7 +230,8 @@ do
     local Z = string.rep("f", 64)
     check(not P.Confirm(Z, G1, 10) and P.Get(Z) == nil, "a confirmation for an unknown identity leaves no data")
     check(P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann")) == "updated", "record accepted")
-    check(P.Find(G1) == A and state(G1) == "listed", "a listed character is trusted before any confirmation")
+    check(holderId(G1) == A and state(G1) == "listed", "a listed character is trusted before any confirmation")
+    check(P.Get(A).id == A, "a shared person carries its identity ID")
     check(P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann")) == "stale", "same revision is stale")
     check(P.Nickname(A) == "Ann", "the player's own nickname")
 
@@ -232,21 +239,21 @@ do
     check(P.Confirm(A, G2, 10) and state(G2) == "confirmed", "listed character confirmed")
 
     P.Accept(makeRecord(B, 1, { G2 }, "Bob"))
-    check(P.Find(G2) == A and P.Get(B).chars[G2] == nil, "a character another identity holds is not taken by a later record")
+    check(holderId(G2) == A and P.Get(B).chars[G2] == nil, "a character another identity holds is not taken by a later record")
     P.Confirm(B, G2, 10)
-    check(P.Find(G2) == B and P.Get(A).chars[G2] == nil, "a confirmation moves the character; the other identity no longer has it")
+    check(holderId(G2) == B and P.Get(A).chars[G2] == nil, "a confirmation moves the character; the other identity no longer has it")
 
     P.Accept(makeRecord(A, 2, { G2, G3 }, "Ann"))
-    check(P.Get(A).chars[G1] == nil and P.Find(G1) == nil, "a character dropped from the record is gone")
+    check(P.Get(A).chars[G1] == nil and not P.Exists(G1), "a character dropped from the record is gone")
     check(P.Get(A).chars[G2] == nil, "a new revision does not take back a character another identity holds")
     P.Confirm(A, G3, 10)
     P.Accept(makeRecord(A, 3, { G2, G3 }, "Ann"))
     check(state(G3) == "confirmed", "a confirmed character stays confirmed in a new revision")
 
     P.Reset()
-    check(P.Find(G3) == A and P.Find(G2) == B, "index rebuilt from saved data")
+    check(holderId(G3) == A and holderId(G2) == B, "index rebuilt from saved data")
     P.Forget(A)
-    check(P.Find(G3) == nil and P.Find(G2) == B, "forgetting an identity")
+    check(not P.Exists(G3) and holderId(G2) == B, "forgetting an identity")
 
     local C, D = string.rep("c", 64), string.rep("d", 64)
     clock = 30
@@ -267,9 +274,9 @@ do
 
     P.Accept(makeRecord(C, 1, { G5 }))
     P.Accept(makeRecord(D, 1, { G5 }))
-    check(P.Find(G5) == C and P.Get(D).chars[G5] == nil, "listed by two records: the first one keeps it")
+    check(holderId(G5) == C and P.Get(D).chars[G5] == nil, "listed by two records: the first one keeps it")
     P.Confirm(D, G5, 10)
-    check(P.Find(G5) == D and state(G5) == "confirmed" and P.Get(C).chars[G5] == nil,
+    check(holderId(G5) == D and state(G5) == "confirmed" and P.Get(C).chars[G5] == nil,
         "a confirmation takes a character the identity never held")
     check(indexMatchesSavedData({ G1, G2, G3, G4, G5 }), "index kept up to date: shared identities")
 end
@@ -283,11 +290,11 @@ do
     P.Accept(makeRecord(A, 1, { G1, G2 }))
     P.Accept(makeRecord(B, 1, { G3, G1 }))
     P.Confirm(B, G1, 10)
-    check(P.Find(G1) == B and P.Nickname(A) == "N1" and R.Resolve(G2) ~= nil,
+    check(holderId(G1) == B and P.Nickname(A) == "N1" and R.Resolve(G2) ~= nil,
         "an identity whose main another identity confirmed keeps its name and its other characters")
 
     P.Accept(makeRecord(C, 1, { G2, G4 }))
-    check(P.Find(G2) == A and P.Nickname(C) == "N1" and R.Resolve(G4) ~= nil,
+    check(holderId(G2) == A and P.Nickname(C) == "N1" and R.Resolve(G4) ~= nil,
         "a record whose main another identity holds still gives a name")
 end
 
@@ -303,8 +310,8 @@ do
     local manual = P.Create(G1, INFO)
     P.AddCharacter(manual, G4, INFO)
     P.Rename(manual, "Tanky")
-    check(P.Confirm(B, G1, 10) and P.Find(G1) == B and state(G1) == "confirmed", "the confirmed character moves to its player")
-    check(P.Get(manual) == nil and P.Find(G4) == B and state(G4) == "added" and P.Get(B).customNickname == "Tanky",
+    check(P.Confirm(B, G1, 10) and holderId(G1) == B and state(G1) == "confirmed", "the confirmed character moves to its player")
+    check(P.Get(manual) == nil and holderId(G4) == B and state(G4) == "added" and P.Get(B).customNickname == "Tanky",
         "my manual identity holding it merges into that player")
     local merge = ns.AutomaticChanges.List()[1]
     check(merge.kind == "merged" and merge.from.id == manual and merge.to.id == B and count(merge.chars) == 2,
@@ -319,7 +326,7 @@ do
     local P = ns.People
     local A, B = string.rep("a", 64), string.rep("b", 64)
     P.Accept(makeRecord(A, 1, { G1 }))
-    check(not P.Confirm(A, G2, 12) and P.Find(G2) == nil, "a new character's confirmation waits for the record")
+    check(not P.Confirm(A, G2, 12) and not P.Exists(G2), "a new character's confirmation waits for the record")
     P.Accept(makeRecord(A, 2, { G1, G2 }))
     check(state(G2) == "confirmed" and select(2, P.Find(G2)).level == 12, "it applies when the revision listing it arrives")
 
@@ -342,11 +349,11 @@ do
     P.AddCharacter(A, G3, INFO)
     P.Rename(A, "Annie")
     check(P.Accept(empty) == "forgotten", "a revision without characters forgets the person")
-    check(P.Get(A) == nil and P.Find(G1) == nil and P.Find(G3) == nil,
+    check(P.Get(A) == nil and not P.Exists(G1) and not P.Exists(G3),
         "its characters, my nickname and my added alts are gone")
     check(P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann")) == "stale" and P.Get(A) == nil,
         "an older copy relayed later does not bring the person back")
-    check(P.Accept(makeRecord(A, 3, { G1 }, "Ann")) == "updated" and P.Find(G1) == A and ns.data.forgotten[A] == nil,
+    check(P.Accept(makeRecord(A, 3, { G1 }, "Ann")) == "updated" and holderId(G1) == A and ns.data.forgotten[A] == nil,
         "a newer revision with characters brings the player back")
 end
 
@@ -363,13 +370,14 @@ do
     local m1 = P.Create(G2, { name = "Bob Main", ruleset = NORMAL, classID = WARRIOR, level = 30 })
     check(select(2, P.Find(G2)).level == 30 and select(2, P.Find(G2)).lastSeen == 2,
         "a character I can see when I add it gets its level and last seen")
-    check(m1 == "M1" and P.Find(G2) == m1 and state(G2) == "added", "manual person created from its first character")
+    check(m1 == "M1" and holderId(G2) == m1 and state(G2) == "added", "manual person created from its first character")
+    check(P.Get(m1).id == m1, "a manual person carries its ID")
     check(P.Get(m1).main == G2 and P.Nickname(m1) == "Bob Main", "first character is the main and gives the nickname")
     check(select(2, P.Create(G1, BOB)) == "taken", "a listed character cannot start a manual person")
     check(select(2, P.Create(G2, BOB)) == "taken", "a character of a manual person cannot start another one")
     check(select(2, P.Create("nope", BOB)) == "guid", "invalid GUID refused")
 
-    check(P.AddCharacter(m1, G4, INFO) and P.Find(G4) == m1, "character added to a manual person")
+    check(P.AddCharacter(m1, G4, INFO) and holderId(G4) == m1, "character added to a manual person")
     check(select(2, P.AddCharacter(m1, G1, INFO)) == "taken", "a listed character cannot be added elsewhere")
     check(select(2, P.AddCharacter(m1, G4, INFO)) == "taken", "a character already added cannot be added again")
     check(not P.Confirm(m1, G4, 10), "a manual person's character is never confirmed")
@@ -388,12 +396,12 @@ do
 
     check(select(2, P.RemoveCharacter(m1, G4)) == "main", "a manual person's main cannot be removed")
     P.SetMain(m1, G2)
-    check(P.RemoveCharacter(m1, G4) and P.Find(G4) == nil, "another character of a manual person removed")
-    check(P.AddCharacter(A, G3, INFO) and P.Find(G3) == A and state(G3) == "added", "alt added to a shared identity")
+    check(P.RemoveCharacter(m1, G4) and not P.Exists(G4), "another character of a manual person removed")
+    check(P.AddCharacter(A, G3, INFO) and holderId(G3) == A and state(G3) == "added", "alt added to a shared identity")
     check(select(2, P.RemoveCharacter(A, G1)) == "character", "a listed character cannot be removed by me")
     check(select(2, P.RemoveCharacter(m1, G2)) == "main", "a manual person's last character is its main: refused")
     P.Forget(m1)
-    check(P.Get(m1) == nil and P.Find(G2) == nil, "forgetting the manual person removes it")
+    check(P.Get(m1) == nil and not P.Exists(G2), "forgetting the manual person removes it")
 
     P.Accept(makeRecord(A, 2, { G1, G3 }, "Ann"))
     check(state(G3) == "listed", "an alt I added that the player now lists becomes listed")
@@ -406,8 +414,8 @@ do
     P.AddCharacter(m3, G6, INFO)
     P.Rename(m3, "Tanky")
     P.Accept(makeRecord(B, 1, { G4 }))
-    check(P.Find(G4) == B and state(G4) == "listed", "a manual person's character listed by its player")
-    check(P.Find(G6) == B and state(G6) == "added", "the manual person's other characters merge as added ones")
+    check(holderId(G4) == B and state(G4) == "listed", "a manual person's character listed by its player")
+    check(holderId(G6) == B and state(G6) == "added", "the manual person's other characters merge as added ones")
     check(P.Get(m3) == nil, "the merged manual person is removed")
     check(P.Get(B).customNickname == "Tanky", "my nickname for the manual person moves to the shared person")
 
@@ -420,7 +428,7 @@ do
 
     P.AddCharacter(A, G7, INFO)
     P.Accept(makeRecord(D, 1, { G7 }))
-    check(P.Find(G7) == D and P.Find(G3) == A, "an alt I added to another player's identity moves alone")
+    check(holderId(G7) == D and holderId(G3) == A, "an alt I added to another player's identity moves alone")
 
     local E = string.rep("e", 64)
     local G8, G9, G10 = "Player-70-00000011", "Player-70-00000012", "Player-70-00000013"
@@ -439,7 +447,7 @@ do
         "index kept up to date: manual identities, added alts, merges")
 
     P.Reset()
-    check(P.Find(G3) == A and P.Find(G4) == B, "index rebuilt from saved data")
+    check(holderId(G3) == A and holderId(G4) == B, "index rebuilt from saved data")
 end
 
 -- Automatic changes -------------------------------------------------------------------------------------------
@@ -555,7 +563,7 @@ do
 
     check(P.FindConfirmedByName("N1", NORMAL) == nil, "a listed character is not found by name")
     P.Confirm(A, G1, 10)
-    check(P.FindConfirmedByName("N1", NORMAL) == A, "a confirmed character found by whole name and ruleset")
+    check(P.FindConfirmedByName("N1", NORMAL) == P.Get(A), "a confirmed character found by whole name and ruleset")
     check(P.FindConfirmedByName("N1", PVP) == nil, "the same name in another ruleset is another character")
 end
 
@@ -570,12 +578,12 @@ do
     P.Accept(makeRecord(C, 1, { G3 }))
     P.Activity(G1, 10, 100)
     P.Activity(G2, 10, 300)
-    local recent = P.MostRecent(2)
+    local recent = P.MostRecentIds(2)
     check(#recent == 2 and recent[1] == B and recent[2] == A, "the most recently seen people first, cut to the count")
-    check(P.MostRecent(10)[3] == C, "a person never seen comes last")
+    check(P.MostRecentIds(10)[3] == C, "a person never seen comes last")
 
     P.Accept(makeRecord(B, 2, { G2, G4 }))
-    check(P.FindByCharacterName("n2")[1] == B and #P.FindByCharacterName("N2") == 1,
+    check(P.FindByCharacterName("n2")[1] == P.Get(B) and #P.FindByCharacterName("N2") == 1,
         "a person found by a character's whole name, letter case ignored")
     check(#P.FindByCharacterName("N1") == 3 and #P.FindByCharacterName("Nobody") == 0,
         "every person with a character of that name")
@@ -602,7 +610,7 @@ do
     P.SetGuild(G1, 8)
     check(character(G1).guild == 8, "a character's guild set from an announcement")
     P.SetGuild(G4, 8)
-    check(P.Find(G4) == nil, "a character I do not hold gets nothing")
+    check(not P.Exists(G4), "a character I do not hold gets nothing")
 
     P.UpdateFriends(ME1, { [G1] = true, [G3] = true })
     P.SetFriendOf(G1, ME2)
@@ -618,14 +626,14 @@ do
     P.UpdateGuildMembers(7, { [G3] = true })
     P.Accept(makeRecord(B, 1, { G3 }))
     P.Confirm(B, G3, 10)
-    check(P.Find(G3) == B and character(G3).guild == 7, "a character taken by another identity keeps what I saw of it")
+    check(holderId(G3) == B and character(G3).guild == 7, "a character taken by another identity keeps what I saw of it")
 
     local C = string.rep("c", 64)
     clock = 50
     P.AddCharacter(A, G4, { name = "Seen Alt", ruleset = NORMAL, classID = ROGUE, level = 33 })
     clock = 60
     P.Accept(makeRecord(C, 1, { G4 }))
-    check(P.Find(G4) == C and state(G4) == "listed" and character(G4).level == 33 and character(G4).lastSeen == 50,
+    check(holderId(G4) == C and state(G4) == "listed" and character(G4).level == 33 and character(G4).lastSeen == 50,
         "an alt I added, moving to the player who lists it, keeps its level and last seen")
 end
 

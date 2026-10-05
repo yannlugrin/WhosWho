@@ -161,10 +161,9 @@ end
 local PEOPLE_LISTED = 10
 local STATE_NAMES = { confirmed = L["confirmed"], listed = L["listed"], added = L["added by you"] }
 
-local function printPerson(id)
-    local person = ns.People.Get(id)
+local function printPerson(person)
     local origin = person.signedRecord and L["shared, revision %d"]:format(person.signedRecord.rev) or L["created by you"]
-    ns.Print(("%s (%s)"):format(ns.People.Nickname(id), origin))
+    ns.Print(("%s (%s)"):format(ns.People.Nickname(person.id), origin))
 
     local guids = {}
     for guid in pairs(person.chars) do guids[#guids + 1] = guid end
@@ -177,12 +176,17 @@ end
 
 ns.Commands.people = function(rest)
     local name = rest:match('^"(.*)"$') or rest
-    local ids = name == "" and ns.People.MostRecent(PEOPLE_LISTED) or ns.People.FindByCharacterName(name)
-    if not ids[1] then
+    local persons = {}
+    if name == "" then
+        for _, id in ipairs(ns.People.MostRecentIds(PEOPLE_LISTED)) do persons[#persons + 1] = ns.People.Get(id) end
+    else
+        persons = ns.People.FindByCharacterName(name)
+    end
+    if not persons[1] then
         ns.Print(name == "" and L["No one known yet."] or L["No one known with a character named %s."]:format(name))
         return
     end
-    for _, id in ipairs(ids) do printPerson(id) end
+    for _, person in ipairs(persons) do printPerson(person) end
 end
 
 ns.Commands.debug = function(rest)

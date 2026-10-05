@@ -13,6 +13,7 @@ ns.People = People
 
 ---Saved in ns.data.people, by identity ID.
 ---@class WhosWho.Person
+---@field id string identity ID, the same as its key in ns.data.people
 ---@field signedRecord WhosWho.SignedIdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
 ---@field nickname string? the player's own nickname, from the record
 ---@field customNickname string? my nickname for this person
@@ -80,23 +81,31 @@ end
 
 ---The person a character belongs to, and everything known about the character.
 ---@param guid string
----@return string? id
+---@return WhosWho.Person? person
 ---@return WhosWho.PersonCharacter? character
 function People.Find(guid)
     local id = index()[guid]
     if not id then return nil end
 
-    return id, ns.data.people[id].chars[guid]
+    local person = ns.data.people[id]
+    return person, person.chars[guid]
+end
+
+---Whether a person holds that character.
+---@param guid string
+---@return boolean
+function People.Exists(guid)
+    return index()[guid] ~= nil
 end
 
 ---The person holding a confirmed character with that whole name in that ruleset (the secondary key).
 ---@param name string "First Surname"
 ---@param ruleset WhosWho.Ruleset
----@return string? id
+---@return WhosWho.Person?
 function People.FindConfirmedByName(name, ruleset)
-    for id, person in pairs(ns.data.people) do
+    for _, person in pairs(ns.data.people) do
         for _, character in pairs(person.chars) do
-            if character.state == "confirmed" and character.name == name and character.ruleset == ruleset then return id end
+            if character.state == "confirmed" and character.name == name and character.ruleset == ruleset then return person end
         end
     end
     return nil
@@ -141,7 +150,7 @@ end
 ---The people whose characters were seen most recently (their latest lastSeen), most recent first.
 ---@param count integer
 ---@return string[] ids
-function People.MostRecent(count)
+function People.MostRecentIds(count)
     local lastSeenById, ids = {}, {}
     for id, person in pairs(ns.data.people) do
         local lastSeen = 0
@@ -159,21 +168,21 @@ function People.MostRecent(count)
     return ids
 end
 
----The people holding a character with that whole name, in any ruleset; letter case is ignored.
+---The people holding a character with that whole name, in any ruleset, sorted by ID; letter case is ignored.
 ---@param name string "First Surname"
----@return string[] ids
+---@return WhosWho.Person[]
 function People.FindByCharacterName(name)
-    local wanted, ids = name:lower(), {}
-    for id, person in pairs(ns.data.people) do
+    local wanted, persons = name:lower(), {}
+    for _, person in pairs(ns.data.people) do
         for _, character in pairs(person.chars) do
             if character.name:lower() == wanted then
-                ids[#ids + 1] = id
+                persons[#persons + 1] = person
                 break
             end
         end
     end
-    table.sort(ids)
-    return ids
+    table.sort(persons, function(a, b) return a.id < b.id end)
+    return persons
 end
 
 -- My changes -------------------------------------------------------------------------------------
@@ -192,12 +201,12 @@ end
 ---@return "guid"|"taken"? err taken when the character already belongs to a person
 function People.Create(guid, character)
     if not ns.Record.IsGuid(guid) then return nil, "guid" end
-    if People.Find(guid) then return nil, "taken" end
+    if People.Exists(guid) then return nil, "taken" end
 
     local data = ns.data
     local id = "M" .. data.nextManual
     data.nextManual = data.nextManual + 1
-    data.people[id] = { main = guid, chars = { [guid] = addedCharacter(character) } }
+    data.people[id] = { id = id, main = guid, chars = { [guid] = addedCharacter(character) } }
     indexCharacter(guid, id)
 
     return id
@@ -212,7 +221,7 @@ function People.AddCharacter(id, guid, character)
     local person = ns.data.people[id]
     if not person then return false, "missing" end
     if not ns.Record.IsGuid(guid) then return false, "guid" end
-    if People.Find(guid) then return false, "taken" end
+    if People.Exists(guid) then return false, "taken" end
 
     person.chars[guid] = addedCharacter(character)
     indexCharacter(guid, id)
@@ -280,33 +289,30 @@ end
 
 -- Received from players --------------------------------------------------------------------------
 
--- Puts one of a record's characters in identity `toPersonId`, and removes it from the person it no longer belongs to.
+-- Puts one of a record's characters in `toPerson`, and removes it from the person it no longer belongs to.
 -- `confirmedLevel` is given when a message from the character proved it (its level then); without it, another
 -- player's identity keeps the character.
-local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
-    local people = ns.data.people
-
+local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
     -- Another player keeps a character they declared, unless this is a confirmation.
     local fromPersonId = index()[guid]
-    local fromPerson = fromPersonId and fromPersonId ~= toPersonId and people[fromPersonId] or nil
+    local fromPerson = fromPersonId and fromPersonId ~= toPerson.id and ns.data.people[fromPersonId] or nil
     local fromCharacter
     if fromPerson and fromPerson.signedRecord then
         fromCharacter = fromPerson.chars[guid]
         if not confirmedLevel and fromCharacter.state ~= "added" then return false end
-        AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPersonId, toPersonId, { [guid] = true })
+        AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPersonId, toPerson.id, { [guid] = true })
         fromPerson.chars[guid] = nil
     end
 
     -- A manual identity I created for this player: merge it into this identity.
-    local toPerson = people[toPersonId]
-    if fromPersonId and fromPerson and not fromPerson.signedRecord then
-        AutomaticChanges.Record("merged", fromPersonId, toPersonId, fromPerson.chars)
+    if fromPerson and not fromPerson.signedRecord then
+        AutomaticChanges.Record("merged", fromPersonId, toPerson.id, fromPerson.chars)
         for movedGuid, movedCharacter in pairs(fromPerson.chars) do
             toPerson.chars[movedGuid] = movedCharacter
-            indexCharacter(movedGuid, toPersonId)
+            indexCharacter(movedGuid, toPerson.id)
         end
         toPerson.customNickname = toPerson.customNickname or fromPerson.customNickname
-        People.Forget(fromPersonId)
+        People.Forget(fromPerson.id)
     end
 
     -- The character itself, its entry moved from the identity it left, with the record's data: listed, or confirmed
@@ -316,7 +322,7 @@ local function storeCharacter(toPersonId, guid, recordCharacter, confirmedLevel)
     if character.state ~= "confirmed" then character.state = "listed" end
     if confirmedLevel then character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time() end
     toPerson.chars[guid] = character
-    indexCharacter(guid, toPersonId)
+    indexCharacter(guid, toPerson.id)
 
     return true
 end
@@ -341,7 +347,7 @@ function People.Accept(signedRecord)
     forgotten[signedRecord.id] = nil
 
     local originalIdentitySnapshot = sharedPerson and AutomaticChanges.IdentitySnapshot(signedRecord.id)
-    sharedPerson = sharedPerson or { chars = {} }
+    sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
     people[signedRecord.id] = sharedPerson
     sharedPerson.signedRecord, sharedPerson.nickname, sharedPerson.main = signedRecord, signedRecord.nickname, signedRecord.main
 
@@ -364,7 +370,7 @@ function People.Accept(signedRecord)
 
     -- Update or add the characters this revision lists.
     for guid, recordCharacter in pairs(signedRecord.chars) do
-        storeCharacter(signedRecord.id, guid, recordCharacter, pending[guid])
+        storeCharacter(sharedPerson, guid, recordCharacter, pending[guid])
     end
 
     return "updated"
@@ -394,7 +400,7 @@ function People.Confirm(id, guid, level)
         return true
     end
 
-    return storeCharacter(id, guid, recordCharacter, level)
+    return storeCharacter(person, guid, recordCharacter, level)
 end
 
 ---Activity of a character from any source, a relay included. Never confirms; kept only when more recent.

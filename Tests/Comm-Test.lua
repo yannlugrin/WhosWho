@@ -336,6 +336,12 @@ local function clearLog()
     world.log = {}
 end
 
+-- The ID of the person holding the character on that client, nil when none does.
+local function holderId(session, guid)
+    local person = session.ns.People.Find(guid)
+    return person and person.id
+end
+
 local function state(session, guid)
     local _, entry = session.ns.People.Find(guid)
     return entry and entry.state
@@ -464,7 +470,7 @@ check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0, "an unlinked character
 clearLog()
 slash(ann, "link")
 run(10)
-check(bob.ns.People.Find(annAlt.guid) == annId and state(bob, annAlt.guid) == "confirmed"
+check(holderId(bob, annAlt.guid) == annId and state(bob, annAlt.guid) == "confirmed"
     and select(2, bob.ns.People.Find(annAlt.guid)).level == annAlt.level,
     "an alt linked while played arrives confirmed, with its level: the announcement follows the REC")
 check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) > 0 and sent({ type = "GET" }) == 0,
@@ -586,11 +592,11 @@ slash(ann, "unlink")
 run(40)
 bob = login(bobAccount, bobMain)
 run(1)
-check(bob.ns.People.Find(annAlt.guid) == annId, "a player offline at the removal still lists the character")
+check(holderId(bob, annAlt.guid) == annId, "a player offline at the removal still lists the character")
 clearLog()
 levelUp(ann)
 run(10)
-check(sent({ from = "Bob Main", type = "GET" }) == 1 and bob.ns.People.Find(annAlt.guid) == nil
+check(sent({ from = "Bob Main", type = "GET" }) == 1 and not bob.ns.People.Exists(annAlt.guid)
     and bob.ns.People.Get(annId) ~= nil, "the removed character's announcement brings its removal")
 clearLog()
 levelUp(ann)
@@ -611,7 +617,7 @@ run(1)
 check(bob.ns.People.Get(annId) ~= nil, "a player offline at the last removal still holds the identity")
 login(annAccount, annMain)
 run(10)
-check(bob.ns.People.Get(annId) == nil and bob.ns.People.Find(annMain.guid) == nil,
+check(bob.ns.People.Get(annId) == nil and not bob.ns.People.Exists(annMain.guid),
     "the last removed character's announcement makes others forget the identity")
 
 -- Debug messages -----------------------------------------------------------------------------------------
