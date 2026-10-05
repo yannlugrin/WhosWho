@@ -475,12 +475,16 @@ do
         "the player's identity as it was, before my nickname moved to it")
     check(count(change.chars) == 2 and change.chars[G5].name == "Tank Bob" and change.chars[G5].state == "added",
         "every character of the manual identity")
+    check(change.chars[G4].stateAfter == "listed" and change.chars[G5].stateAfter == "added",
+        "a merged character's state after: declared by the player, or still mine")
+    check(change.toChars and next(change.toChars) == nil, "a new identity had no character before the merge")
 
     P.AddCharacter(A, G6, INFO)
     P.Accept(makeRecord(C, 1, { G6 }, "Cee"))
     change = latest()
     check(change.kind == "moved" and change.from.id == A and change.from.nickname == "Ann" and change.to.id == C
         and count(change.chars) == 1 and change.chars[G6].state == "added", "an alt I added moving away logged")
+    check(change.chars[G6].stateAfter == "listed", "the moved alt is declared by its player after the move")
 
     local before = #AC.List()
     P.Accept(makeRecord(D, 1, { G7, G1 }, "Dee"))
@@ -489,6 +493,8 @@ do
     change = latest()
     check(change.kind == "taken" and change.from.id == A and change.from.main == G1 and change.to.id == D
         and change.chars[G1].state == "listed", "a listed character taken by a confirmation logged, with the main it was")
+    check(change.chars[G1].stateAfter == "confirmed" and change.toChars[G7] and change.toChars[G7].state == "listed"
+        and change.toChars[G1] == nil, "taken: confirmed after, and the characters the identity already had")
 
     P.Rename(A, "Annie")
     P.Accept(makeRecord(A, 2, { G2 }, "Anna"))
@@ -517,7 +523,7 @@ do
 
     for i = 1, 105 do
         clock = 100 + i
-        AC.Add("dropped", { id = A, main = G1 }, nil, {})
+        AC.Record("dropped", P.Get(B), nil, {})
     end
     check(#AC.List() == 100 and AC.List()[1].time == 205 and AC.List()[100].time == 106,
         "only the 100 most recent changes kept, most recent first")
@@ -538,6 +544,9 @@ do
         and moved.chars[G4] ~= nil, "a revision dropping one character and taking my alt logs both")
     check(dropped.from.nickname == "Bob" and moved.from.id == A and moved.to.nickname == "Bobby",
         "dropped shows the identity before the revision, moved the identity the alt joins")
+    check(count(moved.toChars) == 1 and moved.toChars[G2] and moved.chars[G4].stateAfter == "listed",
+        "already there: the identity's characters after the dropped ones left")
+    check(dropped.toChars == nil and dropped.chars[G3].stateAfter == nil, "a dropped change has no after")
 
     P.Accept(makeRecord(C, 1, { G5 }, "Cee"))
     check(not P.Confirm(B, G5, 10), "a confirmation of a character the record does not list yet waits")

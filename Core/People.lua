@@ -300,13 +300,13 @@ local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
     if fromPerson and fromPerson.signedRecord then
         fromCharacter = fromPerson.chars[guid]
         if not confirmedLevel and fromCharacter.state ~= "added" then return false end
-        AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPersonId, toPerson.id, { [guid] = true })
+        AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPerson, toPerson, { [guid] = true })
         fromPerson.chars[guid] = nil
     end
 
     -- A manual identity I created for this player: merge it into this identity.
     if fromPerson and not fromPerson.signedRecord then
-        AutomaticChanges.Record("merged", fromPersonId, toPerson.id, fromPerson.chars)
+        AutomaticChanges.Record("merged", fromPerson, toPerson, fromPerson.chars)
         for movedGuid, movedCharacter in pairs(fromPerson.chars) do
             toPerson.chars[movedGuid] = movedCharacter
             indexCharacter(movedGuid, toPerson.id)
@@ -338,7 +338,7 @@ function People.Accept(signedRecord)
 
     if not signedRecord.main then
         if sharedPerson then
-            AutomaticChanges.Record("forgotten", signedRecord.id, nil, sharedPerson.chars)
+            AutomaticChanges.Record("forgotten", sharedPerson, nil, sharedPerson.chars)
             People.Forget(signedRecord.id)
         end
         forgotten[signedRecord.id] = signedRecord.rev
@@ -346,32 +346,33 @@ function People.Accept(signedRecord)
     end
     forgotten[signedRecord.id] = nil
 
-    local originalIdentitySnapshot = sharedPerson and AutomaticChanges.IdentitySnapshot(signedRecord.id)
-    sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
-    people[signedRecord.id] = sharedPerson
-    sharedPerson.signedRecord, sharedPerson.nickname, sharedPerson.main = signedRecord, signedRecord.nickname, signedRecord.main
-
-    -- Characters the player dropped leave; my added alts stay.
-    local droppedCharacterSnapshots = {}
-    for guid, character in pairs(sharedPerson.chars) do
-        if character.state ~= "added" and not signedRecord.chars[guid] then
-            droppedCharacterSnapshots[guid] = AutomaticChanges.CharacterSnapshot(character)
+    -- Characters the player dropped leave; my added alts stay. Recorded before the revision changes the person.
+    if sharedPerson then
+        local droppedGuids = {}
+        for guid, character in pairs(sharedPerson.chars) do
+            if character.state ~= "added" and not signedRecord.chars[guid] then droppedGuids[guid] = true end
+        end
+        if next(droppedGuids) then AutomaticChanges.Record("dropped", sharedPerson, nil, droppedGuids) end
+        for guid in pairs(droppedGuids) do
             sharedPerson.chars[guid] = nil
             unindexCharacter(guid, signedRecord.id)
         end
     end
-    if next(droppedCharacterSnapshots) then
-        AutomaticChanges.Add("dropped", originalIdentitySnapshot, nil, droppedCharacterSnapshots)
-    end
+
+    sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
+    people[signedRecord.id] = sharedPerson
+    sharedPerson.signedRecord, sharedPerson.nickname, sharedPerson.main = signedRecord, signedRecord.nickname, signedRecord.main
 
     -- Confirmations of characters this revision now lists, received before it arrived.
     local pending = pendingConfirmations[signedRecord.id] or {}
     pendingConfirmations[signedRecord.id] = nil
 
     -- Update or add the characters this revision lists.
+    AutomaticChanges.BeginOperation(sharedPerson)
     for guid, recordCharacter in pairs(signedRecord.chars) do
         storeCharacter(sharedPerson, guid, recordCharacter, pending[guid])
     end
+    AutomaticChanges.EndOperation()
 
     return "updated"
 end
@@ -400,7 +401,10 @@ function People.Confirm(id, guid, level)
         return true
     end
 
-    return storeCharacter(person, guid, recordCharacter, level)
+    AutomaticChanges.BeginOperation(person)
+    local stored = storeCharacter(person, guid, recordCharacter, level)
+    AutomaticChanges.EndOperation()
+    return stored
 end
 
 ---Activity of a character from any source, a relay included. Never confirms; kept only when more recent.

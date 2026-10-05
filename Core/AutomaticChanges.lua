@@ -26,6 +26,7 @@ local KEPT_CHANGES = 100
 ---A character as it was when the change happened.
 ---@class WhosWho.CharacterSnapshot: WhosWho.Character
 ---@field state WhosWho.CharacterState
+---@field stateAfter WhosWho.CharacterState? merged, moved and taken: its state in the identity it joined, once the change is complete
 
 ---Saved in ns.data.automaticChanges.
 ---@class WhosWho.AutomaticChange
@@ -34,45 +35,82 @@ local KEPT_CHANGES = 100
 ---@field from WhosWho.IdentitySnapshot the identity the characters left
 ---@field to WhosWho.IdentitySnapshot? the identity they joined: merged, moved and taken only
 ---@field chars table<string, WhosWho.CharacterSnapshot> by GUID
+---@field toChars table<string, WhosWho.CharacterSnapshot>? merged, moved and taken: the characters the identity they joined already had
 ---@field read boolean
 
----@param id string
----@return WhosWho.IdentitySnapshot
-function AutomaticChanges.IdentitySnapshot(id)
-    local person = ns.People.Get(id)
-    ---@cast person -nil
-    return { id = id, nickname = ns.People.IdentityNickname(id), customNickname = person.customNickname, main = person.main }
+---People storing characters into one identity: a revision's characters (People.Accept) or a confirmation
+---(People.Confirm). The changes that join characters to an identity happen inside one.
+---@class WhosWho.AutomaticChangesOperation
+---@field person WhosWho.Person the identity the characters join
+---@field characterSnapshotsBefore table<string, WhosWho.CharacterSnapshot> its characters when the operation began
+---@field pendingChanges WhosWho.AutomaticChange[] recorded during it, saved once complete, in the order recorded
+
+---@type WhosWho.AutomaticChangesOperation?
+local operation
+
+local function identitySnapshot(person)
+    return {
+        id = person.id, nickname = ns.People.IdentityNickname(person.id), customNickname = person.customNickname,
+        main = person.main,
+    }
 end
 
----@param character WhosWho.PersonCharacter
----@return WhosWho.CharacterSnapshot
-function AutomaticChanges.CharacterSnapshot(character)
+local function characterSnapshot(character)
     return { name = character.name, ruleset = character.ruleset, classID = character.classID, state = character.state }
 end
 
----Adds a change from snapshots already taken.
----@param kind WhosWho.AutomaticChangeKind
----@param from WhosWho.IdentitySnapshot
----@param to WhosWho.IdentitySnapshot?
----@param chars table<string, WhosWho.CharacterSnapshot>
-function AutomaticChanges.Add(kind, from, to, chars)
+-- A saved change is complete and never changed again (only its read flag).
+local function save(change)
     local changes = ns.data.automaticChanges
-    table.insert(changes, 1, { time = time(), kind = kind, from = from, to = to, chars = chars, read = false })
+    table.insert(changes, 1, change)
     changes[KEPT_CHANGES + 1] = nil
 end
 
----Adds a change about to happen, with the identities and characters as they are now.
+---Begins an operation on a person: its characters as they are now are the ones already there for every change that
+---joins it during the operation.
+---@param person WhosWho.Person
+function AutomaticChanges.BeginOperation(person)
+    local characterSnapshotsBefore = {}
+    for guid, character in pairs(person.chars) do characterSnapshotsBefore[guid] = characterSnapshot(character) end
+    operation = { person = person, characterSnapshotsBefore = characterSnapshotsBefore, pendingChanges = {} }
+end
+
+---Records a change about to happen, with the identities and characters as they are now. A change outside an operation
+---is saved at once; one joining an identity is saved when the operation ends, once complete.
 ---@param kind WhosWho.AutomaticChangeKind
----@param fromPersonId string
----@param toPersonId string?
----@param guids table<string, any> the changed characters of `fromPersonId`, as keys
-function AutomaticChanges.Record(kind, fromPersonId, toPersonId, guids)
-    local fromPerson = ns.People.Get(fromPersonId)
-    ---@cast fromPerson -nil
+---@param fromPerson WhosWho.Person the identity the characters leave
+---@param toPerson WhosWho.Person? the identity they join: merged, moved and taken, recorded inside an operation
+---@param guids table<string, any> the changed characters of `fromPerson`, as keys
+function AutomaticChanges.Record(kind, fromPerson, toPerson, guids)
     local characterSnapshots = {}
-    for guid in pairs(guids) do characterSnapshots[guid] = AutomaticChanges.CharacterSnapshot(fromPerson.chars[guid]) end
-    local toSnapshot = toPersonId and AutomaticChanges.IdentitySnapshot(toPersonId)
-    AutomaticChanges.Add(kind, AutomaticChanges.IdentitySnapshot(fromPersonId), toSnapshot, characterSnapshots)
+    for guid in pairs(guids) do characterSnapshots[guid] = characterSnapshot(fromPerson.chars[guid]) end
+
+    local change = {
+        time = time(), kind = kind, from = identitySnapshot(fromPerson), to = toPerson and identitySnapshot(toPerson),
+        chars = characterSnapshots, read = false,
+    }
+    if not toPerson then
+        save(change)
+        return
+    end
+    assert(operation, "a change joining an identity is recorded inside an operation")
+    table.insert(operation.pendingChanges, change)
+end
+
+---Ends the operation: each change recorded in it gets the characters the identity already had, and the state each of
+---its characters ended in there, then is saved. A merge's characters only get their final state once the whole
+---revision is applied.
+function AutomaticChanges.EndOperation()
+    assert(operation, "no operation to end")
+    for _, change in ipairs(operation.pendingChanges) do
+        change.toChars = operation.characterSnapshotsBefore
+        for guid, snapshot in pairs(change.chars) do
+            local character = operation.person.chars[guid]
+            snapshot.stateAfter = character and character.state
+        end
+        save(change)
+    end
+    operation = nil
 end
 
 ---@return WhosWho.AutomaticChange[] changes most recent first
