@@ -12,10 +12,10 @@ ns.Protocol = Protocol
 LibStub("AceComm-3.0"):Embed(Protocol)
 
 local PREFIX = "WhosWho"
-local SEND_WAIT_SECONDS = 5
-local REACHED_DELAY_SECONDS = 30
-local REQUEST_DELAY_SECONDS = 60
-local RETRY_LIMIT = 1
+local SEND_WAIT_SECONDS = 5 -- wait before sending RECs, gathering the GETs and changes that arrive meanwhile
+local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players it reached are ignored
+local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
+local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
 
 local issecretvalue = issecretvalue or function() return false end
 
@@ -39,6 +39,28 @@ local function traceReceived(text, distribution, sender)
     ns.Print(L["Received, %s: %s"]:format(distribution .. " " .. sender, describe(text)))
 end
 
+-- Announcements ----------------------------------------------------------------------------------
+
+local function announce(level, acceptsGet, send)
+    local revision = Identity.AnnouncedRevision(UnitGUID("player"))
+    if not revision then return end
+
+    local message = Codec.Announcement(Identity.Id(), revision, level, acceptsGet)
+    local audience = Scopes.BroadcastAudience()
+    for _, channel in ipairs(audience.memberChannels) do send(message, channel) end
+    for _, name in ipairs(audience.names) do send(message, "WHISPER", name) end
+end
+
+local function sendQueued(message, channel, name)
+    traceSent(message, channel, name)
+    Protocol:SendCommMessage(PREFIX, message, channel, name)
+end
+
+local function sendNow(message, channel, name)
+    traceSent(message, channel, name)
+    C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
+end
+
 -- Sending a record ------------------------------------------------------------------------------
 
 ---A REC sent: the revision it carried, and when its last part left (nil while queued).
@@ -53,7 +75,6 @@ local requesters = {}
 ---@type table<string, WhosWho.Delivery> by channel (GUILD, PARTY, RAID) or by name (WHISPER)
 local deliveries = {}
 local locked, waiting = false, false
-local sendRecords
 
 -- Whether a REC of my current revision that reaches that player is still queued, or was sent less than
 -- REACHED_DELAY_SECONDS ago: a GET from that player is then answered by that REC.
@@ -116,18 +137,12 @@ local function answerRequesters(recordUpdate)
     for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(), "WHISPER", name) end
 end
 
-local function scheduleRecordSending()
-    if waiting then return end
-    waiting = true
-    C_Timer.After(SEND_WAIT_SECONDS, sendRecords)
-end
-
-function sendRecords()
-    waiting = false
+local function sendRecords()
     if locked then
-        scheduleRecordSending()
+        C_Timer.After(SEND_WAIT_SECONDS, sendRecords)
         return
     end
+    waiting = false
 
     -- The REC text, built once for every REC this wait sends, and only when one goes out.
     local message
@@ -146,10 +161,17 @@ function sendRecords()
             if Scopes.BroadcastReaches(audience, name) then requesters[name] = nil end
         end
         publishedWithCharacters = withCharacters
+        announce(UnitLevel("player"), false, sendQueued)
     end
     publishedRevision = Identity.Revision()
 
     answerRequesters(recordUpdate)
+end
+
+local function scheduleRecordSending()
+    if waiting then return end
+    waiting = true
+    C_Timer.After(SEND_WAIT_SECONDS, sendRecords)
 end
 
 ---Held while the player edits their identity: RECs wait until it is released.
@@ -256,27 +278,7 @@ local function receive(_, text, distribution, sender)
     end
 end
 
--- Announcements ----------------------------------------------------------------------------------
-
-local function announce(level, acceptsGet, send)
-    local revision = Identity.AnnouncedRevision(UnitGUID("player"))
-    if not revision then return end
-
-    local message = Codec.Announcement(Identity.Id(), revision, level, acceptsGet)
-    local audience = Scopes.BroadcastAudience()
-    for _, channel in ipairs(audience.memberChannels) do send(message, channel) end
-    for _, name in ipairs(audience.names) do send(message, "WHISPER", name) end
-end
-
-local function sendQueued(message, channel, name)
-    traceSent(message, channel, name)
-    Protocol:SendCommMessage(PREFIX, message, channel, name)
-end
-
-local function sendNow(message, channel, name)
-    traceSent(message, channel, name)
-    C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
-end
+-- Game events ----------------------------------------------------------------------------------
 
 ---PLAYER_LOGIN, after the character refresh: registers the prefix, takes the current revision as published, sends
 ---a REC after each change of revision.

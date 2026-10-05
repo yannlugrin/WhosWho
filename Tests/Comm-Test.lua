@@ -461,12 +461,16 @@ logout(ann)
 ann = login(annAccount, annAlt)
 run(1)
 check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0, "an unlinked character does not announce")
+clearLog()
 slash(ann, "link")
 run(10)
-check(bob.ns.People.Find(annAlt.guid) == annId and state(bob, annAlt.guid) == "listed", "a new alt arrives listed")
+check(bob.ns.People.Find(annAlt.guid) == annId and state(bob, annAlt.guid) == "confirmed"
+    and select(2, bob.ns.People.Find(annAlt.guid)).level == annAlt.level,
+    "an alt linked while played arrives confirmed, with its level: the announcement follows the REC")
+check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) > 0 and sent({ type = "GET" }) == 0,
+    "that announcement asks for no GET: the REC is already on its way")
 logout(ann)
 run(1)
-check(state(bob, annAlt.guid) == "confirmed", "its logout announcement confirms it")
 
 -- Asking again --------------------------------------------------------------------------------------
 
