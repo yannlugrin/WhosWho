@@ -34,7 +34,8 @@
         "CANCEL",
         "CreateSettingsButtonInitializer",
         "StaticPopup_Show",
-        "SettingsPanel"
+        "SettingsPanel",
+        "InputBoxInstructions_OnTextChanged"
     ],
     "Lua.type.weakUnionCheck": true
 }

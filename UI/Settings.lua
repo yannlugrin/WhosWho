@@ -32,6 +32,18 @@ local function addSectionText(text)
     layout:AddInitializer(initializer)
 end
 
+-- Introduction -----------------------------------------------------------------------------------
+
+addSectionText(L["Who's Who links your characters into one identity, so people recognise you on each character you link, and lets you recognise others across theirs. Identities are shared between players who use Who's Who; for those who don't, you can link their characters yourself."])
+
+local linkInitializer = CreateSettingsButtonInitializer("", L["Link this character"],
+    function()
+        SettingsPanel:Close(true)
+        ns.Prompt.AskToLink()
+    end, nil, true)
+linkInitializer:AddModifyPredicate(function() return not ns.Identity.IsLinked(UnitGUID("player")) end)
+layout:AddInitializer(linkInitializer)
+
 -- Sharing ----------------------------------------------------------------------------------------
 
 local function addScopeCheckbox(scope, name, tooltip)
@@ -56,7 +68,12 @@ StaticPopupDialogs.WHOSWHO_FORGET_ME = {
         .. L["Players who know you forget you too, once Who's Who reaches them; some may never be reached. This can't be undone."],
     button1 = L["Forget"],
     button2 = CANCEL,
-    OnAccept = function() ns.Identity.Forget() end,
+    OnAccept = function()
+        ns.Identity.Forget()
+        -- The settings list checks the button's predicate only when it builds the row.
+        local linkButtonRow = SettingsPanel.Container.SettingsList.ScrollBox:FindFrame(linkInitializer)
+        if linkButtonRow then linkButtonRow:EvaluateState() end
+    end,
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,

@@ -42,6 +42,8 @@ L["Whispers"] = true
 L["Who's Who"] = true
 
 -- Settings
+L["Link this character"] = true
+L["Who's Who links your characters into one identity, so people recognise you on each character you link, and lets you recognise others across theirs. Identities are shared between players who use Who's Who; for those who don't, you can link their characters yourself."] = true
 L["Anyone you whisper, or who whispers you, can ask for your identity."] = true
 L["Data"] = true
 L["Forget"] = true
@@ -59,3 +61,13 @@ L["Forgets every person you know about."] = true
 L["Forgets your characters and your nickname. Players who know you forget you too, once Who's Who reaches them; some may never be reached."] = true
 L["Players who know you forget you too, once Who's Who reaches them; some may never be reached. This can't be undone."] = true
 L["Who's Who forgets every person you know about. This can't be undone."] = true
+
+-- First-login prompt
+L["%s already groups %s. People who see your identity will recognise this character too."] = true
+L["An identity groups the characters you link to it, so people recognise you on each of them. It is shown under your main character's name."] = true
+L["Link"] = true
+L["Link %s to %s?"] = true
+L["Not this character"] = true
+L["Nothing is shared until a character is linked."] = true
+L["Set %s as your identity's main character?"] = true
+L["Use a nickname for the whole identity instead"] = true

@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## IconTexture: Interface\Icons\INV_Misc_QuestionMark
 ## SavedVariables: WhosWhoDB
+## OptionalDeps: EllesmereUI
 
 Libs.xml
 
@@ -26,5 +27,7 @@ Comm\Codec.lua
 Comm\Scopes.lua
 Comm\Protocol.lua
 
+UI\Skin.lua
 UI\Settings.xml
 UI\Settings.lua
+UI\Prompt.lua

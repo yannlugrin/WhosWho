@@ -61,6 +61,15 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - B: `/ww people` follows the change.
 - After a `/reload` of A, A sends B nothing more: the list of players whispered with is kept for the session only.
 
+## First-Login Prompt
+
+With a test account whose characters are not registered yet (`/ww status`: "not asked yet").
+
+- First login, no linked character: "Set <Character> as your identity's main character?". Check the nickname box, type a nickname, **Link**: `/ww status` shows that nickname and "linked, main".
+- A nickname of one letter: the chat prints why it is refused, the dialog stays open.
+- Another character: "Link <Character> to <nickname>?", naming the linked characters in their class colours. **Not this character**: "not linked", and no prompt at the next login.
+- Closing the dialog with its close button: the prompt comes back at the next login.
+
 ## Still to Test
 
 - Inside an instance and during an encounter: add-on messages, secret values.

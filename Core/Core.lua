@@ -7,6 +7,7 @@ local addonName, ns = ...
 ---@field Version string
 ---@field Print fun(msg: string)
 ---@field UnitWholeName fun(unit: string): string?
+---@field NameErrorMessages table<WhosWho.ErrorCode, string>
 ---@field Commands table<string, fun(rest: string)>
 ---@field db table AceDB object
 ---@field data WhosWho.Data
@@ -22,6 +23,8 @@ local addonName, ns = ...
 ---@field Codec WhosWho.Codec
 ---@field Scopes WhosWho.Scopes
 ---@field Protocol WhosWho.Protocol
+---@field Skin WhosWho.Skin
+---@field Prompt WhosWho.Prompt
 
 -- Add-on -----------------------------------------------------------------------------------------
 
@@ -46,6 +49,13 @@ function ns.UnitWholeName(unit)
     local name, surname = UnitFullName(unit)
     return surname and (name .. " " .. surname) or name
 end
+
+---Why a name was refused, by error code.
+ns.NameErrorMessages = {
+    short = L["The name is too short."],
+    long = L["The name is too long."],
+    invalid = L["The name contains characters that are not allowed."],
+}
 
 -- Events -----------------------------------------------------------------------------------------
 
@@ -79,6 +89,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Protocol.Start()
         ns.Protocol.AnnounceLogin()
         if IsInGuild() then C_GuildInfo.GuildRoster() end
+        if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.Prompt.AskToLink() end
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
@@ -118,7 +129,7 @@ ns.Commands.status = function()
     elseif ns.Identity.IsLinked(guid) then
         state = L["linked"]
     else
-        state = ns.Identity.IsAsked(guid) and L["not linked"] or L["not asked yet"]
+        state = ns.Identity.IsRegistered(guid) and L["not linked"] or L["not asked yet"]
     end
     ns.Print(L["This character: %s"]:format(state))
     ns.Print(L["Linked characters: %d"]:format(ns.Identity.LinkedCount()))
@@ -200,16 +211,10 @@ ns.Commands.debug = function(rest)
     ns.Print(L["Debug messages: %s"]:format(ns.settings.debugMessages and L["on"] or L["off"]))
 end
 
-local REASONS = {
-    short = L["The name is too short."],
-    long = L["The name is too long."],
-    invalid = L["The name contains characters that are not allowed."],
-}
-
 ns.Commands.nick = function(rest)
     local ok, err = ns.Identity.SetNickname(rest ~= "" and rest or nil)
     if not ok then
-        ns.Print(REASONS[err] or err)
+        ns.Print(ns.NameErrorMessages[err] or err)
         return
     end
     ns.Print(L["Nickname: %s"]:format(ns.Identity.Nickname() or L["(no linked character)"]))

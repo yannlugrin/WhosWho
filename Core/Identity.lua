@@ -19,7 +19,7 @@ ns.Identity = Identity
 ---@field sig string? signature of the current revision
 
 ---@class WhosWho.OwnCharacter: WhosWho.Character
----@field linked boolean? nil until the player answers
+---@field linked boolean? nil until the character is registered in the identity, linked or not
 ---@field level integer at the end of the last session
 ---@field lastSeen number seconds, from time(): end of the last session (or its start, after a crash)
 ---@field guild integer? club ID of the character's guild (C_Club.GetGuildClubId)
@@ -99,10 +99,10 @@ function Identity.Seen(guid, level)
     character.level, character.lastSeen = level, time()
 end
 
----Whether the player already answered the link question on this character.
+---Whether the character is registered in the identity, linked or not.
 ---@param guid string
 ---@return boolean
-function Identity.IsAsked(guid)
+function Identity.IsRegistered(guid)
     local character = data().chars[guid]
     return character ~= nil and character.linked ~= nil
 end
@@ -159,6 +159,22 @@ function Identity.LinkedCount()
     return count
 end
 
+---This account's linked characters, the main first, then by name.
+---@return WhosWho.OwnCharacter[]
+function Identity.LinkedCharacters()
+    local identity = data()
+    local characters = { identity.chars[identity.main] }
+
+    local others = {}
+    for guid, character in pairs(identity.chars) do
+        if character.linked and guid ~= identity.main then others[#others + 1] = character end
+    end
+    table.sort(others, function(a, b) return a.name < b.name end)
+    for _, character in ipairs(others) do characters[#characters + 1] = character end
+
+    return characters
+end
+
 local function findFirstLinked(identity)
     local first
     for guid, character in pairs(identity.chars) do
@@ -196,15 +212,13 @@ function Identity.Unlink(guid)
 end
 
 ---Unlinks every character and removes the nickname, in one revision: players who hold the identity forget it once
----that revision reaches them.
+---that revision reaches them. Every character becomes unregistered, so each one is asked again at its next login.
 function Identity.Forget()
     local identity = data()
     local unlinked = {}
     for _, character in pairs(identity.chars) do
-        if character.linked then
-            character.linked = false
-            unlinked[#unlinked + 1] = character
-        end
+        if character.linked then unlinked[#unlinked + 1] = character end
+        character.linked = nil
     end
     if not unlinked[1] and not identity.nickname then return end
 

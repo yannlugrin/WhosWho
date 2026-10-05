@@ -77,7 +77,7 @@ do
 
     I.Refresh(G2, "Okrãg Sorn", NORMAL, WARRIOR, 10)
     I.Refresh(G1, "Alt Two", PVP, MAGE, 10)
-    check(not I.IsAsked(G1), "a new character is not asked yet")
+    check(not I.IsRegistered(G1), "a new character is not registered yet")
     check(I.Revision() == 1, "touching an unlinked character keeps the revision")
 
     check(I.Nickname() == nil, "no nickname while no character is linked")
@@ -147,6 +147,11 @@ do
     I.Unlink(G2)
     check(I.Nickname() == nil, "no nickname once nothing is linked, even with an override")
 
+    I.Link(G1)
+    I.Forget()
+    check(not I.IsRegistered(G1) and not I.IsRegistered(G2), "forgetting leaves every character unregistered, linked or not")
+    check(ns.data.identity.nickname == nil and I.Main() == nil, "forgetting removes the nickname and the main")
+    check(I.AnnouncedRevision(G1) == I.Revision(), "a character unlinked by forgetting announces that revision")
 end
 
 -- Record validation -------------------------------------------------------------------------------

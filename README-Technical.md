@@ -40,8 +40,10 @@ WhosWho/
 │   ├── Scopes.lua                 Who may receive what, channels, audiences, senders' GUIDs, guild and friendOf
 │   └── Protocol.lua               Announcements, GET, REC: waits, lock, requesters, own messages
 ├── UI/
+│   ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
 │   ├── Settings.xml               Settings list row template: a section's information text
-│   └── Settings.lua               AddOns settings category (native Settings API): Sharing, Data
+│   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Data
+│   └── Prompt.lua                 First-login dialogs: no identity yet, identity exists
 ├── Tests/
 │   ├── Crypto-Test.lua            SHA-512 and Ed25519 against OpenSSL and RFC 8032 vectors, timing
 │   ├── Model-Test.lua             Name rules, Record, Identity, People, automatic changes, Resolver
@@ -63,8 +65,6 @@ Planned:
 │   └── Trust.lua                  Rank gate and the guild configuration sent by officers
 ├── Comm/
 └── UI/
-    ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
-    ├── Prompt.lua                 First-login "link this character?" prompt
     ├── Main.lua                   Main window and its tabs
     ├── PersonEditor.lua           Create and edit a manual identity, add alts
     └── Decorations.lua            Chat filter, tooltip line, unit menu entries
@@ -90,7 +90,7 @@ Every file casts the add-on table with `---@cast ns WhosWho.Namespace`. That cla
 Implemented:
 
 - `ADDON_LOADED` (own name): AceDB.
-- `PLAYER_LOGIN`: keys created if missing; own character entry (name, ruleset, class ID, level, last seen); `Protocol.Start` (comm prefix, published revision, revision listener), then `Protocol.AnnounceLogin`; roster request (`C_GuildInfo.GuildRoster`).
+- `PLAYER_LOGIN`: keys created if missing; own character entry (name, ruleset, class ID, level, last seen); `Protocol.Start` (comm prefix, published revision, revision listener), then `Protocol.AnnounceLogin`; roster request (`C_GuildInfo.GuildRoster`); first-login prompt (`Prompt.AskToLink`, also opened by the settings button) when the character is not registered in the identity, linked or not (`Identity.IsRegistered`): `NewIdentity` while no character is linked, `LinkCharacter` otherwise. **Link** links the character (with `NewIdentity`, the nickname is set first; a refused one is printed and the dialog stays open), **Not this character** registers it unlinked (`linked = false`), closing leaves it unregistered (`linked = nil`).
 - `PLAYER_LOGOUT` (also on `/reload`): level and last seen time of the current character, saved right after; logout announcement.
 - `PLAYER_LEVEL_UP`: the same refresh, with the new level from the event (`UnitLevel` still returns the old one); announcement.
 - `GUILD_ROSTER_UPDATE`: my current character's guild in `Identity`, `guild` of the characters I hold (see Scopes); sends nothing.
@@ -100,7 +100,7 @@ Implemented:
 
 Planned:
 
-- `PLAYER_LOGIN`: first-login prompt, decorations, settings.
+- `PLAYER_LOGIN`: decorations, settings.
 - `PLAYER_ENTERING_WORLD` / `GROUP_ROSTER_UPDATE`: announcements to the other scopes and pruning, throttled.
 - `BN_CHAT_MSG_ADDON`: protocol over Battle.net.
 - `UPDATE_MOUSEOVER_UNIT`, tooltip post-call, whispers: lazy fetch on encounter.
@@ -210,7 +210,7 @@ A message for several players goes out on the cheapest channel that reaches them
 Confirming characters is the core of the system, so one message carries the confirmation, the activity and the revision, and every announcement carries the identity.
 
 - **Sent** at login, at level-up and at logout, and right after the `REC` sent to every audience for a change of revision (see Sending a Record), from a linked character or a character removed from the identity (see Removals), to the audiences of the enabled scopes (see Channels). After that `REC`, `acceptsGet` is `0`: the record is already on its way, and the confirmation waits for it on the receiver's side; without it, the character I play would stay listed, without level, until my next login. At logout it goes out directly through `C_ChatInfo.SendAddonMessage` (the throttled queue would not empty in time), with `acceptsGet` = `0`: the sender is leaving, so a `GET` would get no answer. The sender may set `0` for other reasons later (a raid or a battleground) without any change to receivers.
-- **Removals**: a character unlinked from my identity keeps the revision that removed it, the first one without it (`removedInRevision` in `Identity`), and announces that revision instead of the current one, indefinitely, until it is linked again. A removal must reach every player holding an older revision, and a linked character only announces when I play it; the character I removed is often the one I keep playing. A player holding that revision or a later one does not ask (`People.IsNewer`), so the announcement costs nothing once most players have it from my linked characters; a player holding an older revision, which still lists the character, sends a `GET` and receives my current `REC`, which does not list it either. Unlinking every character is the same case: each one announces the revision that removed it, the last one the revision without characters, which makes others forget the identity. **Forget me** (`Identity.Forget`) unlinks every character and removes the nickname in one revision, which every removed character then announces. Without a server, a player never online at the same time as one of my characters keeps the older revision.
+- **Removals**: a character unlinked from my identity keeps the revision that removed it, the first one without it (`removedInRevision` in `Identity`), and announces that revision instead of the current one, indefinitely, until it is linked again. A removal must reach every player holding an older revision, and a linked character only announces when I play it; the character I removed is often the one I keep playing. A player holding that revision or a later one does not ask (`People.IsNewer`), so the announcement costs nothing once most players have it from my linked characters; a player holding an older revision, which still lists the character, sends a `GET` and receives my current `REC`, which does not list it either. Unlinking every character is the same case: each one announces the revision that removed it, the last one the revision without characters, which makes others forget the identity. **Forget me** (`Identity.Forget`) unlinks every character and removes the nickname in one revision, which every removed character then announces; every character becomes unregistered (`linked = nil`), so each one is asked again at its next login. Without a server, a player never online at the same time as one of my characters keeps the older revision.
 - **Received**: my own identity ID is ignored. When the sender's GUID is known (see Senders), `People.Confirm(id, guid, level)`: the first one confirms the character, the next ones only update its level and last seen time. The sender found in my roster or friend list gets its `guild` or `friendOf` (`Scopes.SetRelationships`). When the revision is newer than what `People` holds (`People.IsNewer`: not held, or held at an older revision, and not forgotten at that revision or a later one) and `acceptsGet` is `1`, a `GET` (see Requesting a Record), only from a sender my scopes allow (see Receiving a Record).
 
 ### Senders
@@ -337,7 +337,7 @@ tooltipOtherCharacters, debugMessages (every Who's Who message sent or received,
 
 Planned: `scopes.selected` and the list of selected players.
 
-`linked = nil` means the player was not asked yet on that character.
+`linked = nil` means the character is not registered in the identity yet, linked or not.
 
 SavedVariables are written only on `/reload`, logout or quit. Nothing may depend on a save mid-session.
 
@@ -362,7 +362,7 @@ Every player-facing string goes through `L[...]` (AceLocale). `enUS` is the defa
 
 ## Look and Skinning
 
-Frames use Blizzard templates for the default Forever look. If EllesmereUI is loaded, `EllesmereUI.RegisterSkin("WhosWho", fn)` skins them (planned; the TOC gets `## OptionalDeps: EllesmereUI` with it); the `S` handed to the callback is kept for frames created later. Frames only use widget kinds its Skinning API covers (see README-Design).
+Frames use Blizzard templates for the default Forever look. If EllesmereUI is loaded, `EllesmereUI.RegisterSkin("WhosWho", fn)` skins them (`Skin.Apply`; the TOC has `## OptionalDeps: EllesmereUI`); the `S` handed to the callback is kept for frames created later. Frames only use widget kinds its Skinning API covers (see README-Design).
 
 ## Open Questions
 
