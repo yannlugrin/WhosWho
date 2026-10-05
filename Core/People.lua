@@ -287,6 +287,12 @@ function People.Forget(id)
     ns.data.people[id] = nil
 end
 
+---Forgets every person, shared and manual.
+function People.ForgetAll()
+    ns.data.people = {}
+    People.Reset()
+end
+
 -- Received from players --------------------------------------------------------------------------
 
 -- Puts one of a record's characters in `toPerson`, and removes it from the person it no longer belongs to.

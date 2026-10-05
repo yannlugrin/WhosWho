@@ -105,7 +105,7 @@ end)
 ns.Commands = {}
 
 local function help()
-    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww debug <on|off>"])
+    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww settings, /ww debug <on|off>"])
 end
 
 ns.Commands.status = function()

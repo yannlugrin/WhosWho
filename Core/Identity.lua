@@ -195,6 +195,24 @@ function Identity.Unlink(guid)
     setLinked(guid, false)
 end
 
+---Unlinks every character and removes the nickname, in one revision: players who hold the identity forget it once
+---that revision reaches them.
+function Identity.Forget()
+    local identity = data()
+    local unlinked = {}
+    for _, character in pairs(identity.chars) do
+        if character.linked then
+            character.linked = false
+            unlinked[#unlinked + 1] = character
+        end
+    end
+    if not unlinked[1] and not identity.nickname then return end
+
+    identity.main, identity.nickname = nil, nil
+    nextRevision()
+    for _, character in ipairs(unlinked) do character.removedInRevision = identity.rev end
+end
+
 -- Main and nickname ------------------------------------------------------------------------------
 
 ---@return string? guid nil while no character is linked

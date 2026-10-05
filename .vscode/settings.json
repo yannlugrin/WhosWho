@@ -28,7 +28,13 @@
         "Settings",
         "SlashCmdList",
         "TooltipDataProcessor",
-        "WOW_PROJECT_CAMELOT"
+        "WOW_PROJECT_CAMELOT",
+        "StaticPopupDialogs",
+        "CreateSettingsListSectionHeaderInitializer",
+        "CANCEL",
+        "CreateSettingsButtonInitializer",
+        "StaticPopup_Show",
+        "SettingsPanel"
     ],
     "Lua.type.weakUnionCheck": true
 }

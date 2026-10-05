@@ -25,3 +25,6 @@ Core\RecordVerification.lua
 Comm\Codec.lua
 Comm\Scopes.lua
 Comm\Protocol.lua
+
+UI\Settings.xml
+UI\Settings.lua

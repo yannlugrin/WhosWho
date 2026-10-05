@@ -119,11 +119,11 @@ Opened by **Pick characters** in the person editor, to add characters to the per
 
 ### 7. Settings (in the Game's Options → AddOns Tab)
 
-Vertical list of grouped options, standard settings look.
+The game's own settings list: its section headers and controls. Each setting is explained in its tooltip. A section that needs more information has one line of text under its header.
 
-- **Display**: show nicknames in chat (on other add-on users' messages and on characters I or my guild linked), nickname in tooltips (dropdown: After the name / On its own line / Hidden; its description warns that "After the name" changes the tooltip's first line, which other tooltip add-ons may also change), show other characters in tooltips (the "Also:" line).
-- **Sharing** (Guild and Friends on by default, the others off; nothing is shared until a character is linked; each with one line on who sees what): Guild, Friends (WoW and Battle.net), My party or raid, People I whisper, Selected people (the players I chose with **Share my identity** in the right-click menu; an alternative to sharing with everyone I whisper or group with).
-- **Data**: reset my identity, forget everyone I know about (each with a confirmation).
+- **Display**: show nicknames in chat (on other add-on users' messages and on characters I or my guild linked), nickname in tooltips (dropdown: After the name / On its own line / Hidden; its tooltip warns that "After the name" changes the tooltip's first line, which other tooltip add-ons may also change), show other characters in tooltips (the "Also:" line).
+- **Sharing**: under the header, "Nothing is shared until a character is linked. Your identity is your nickname and your linked characters." Guild, Friends (WoW and Battle.net), My party or raid, People I whisper, Selected people (the players I chose with **Share my identity** in the right-click menu; an alternative to sharing with everyone I whisper or group with); each tooltip says who sees what. Guild and Friends are on by default, the others off.
+- **Data**: **Forget me** (my characters and my nickname; players who know me forget me too once Who's Who reaches them, which some never are) and **Forget everyone else** (every person I know about), each with a **Forget** button and a confirmation whose button is **Forget**.
 
 **Guild** subcategory (Options → AddOns → Who's Who → Guild), shown only in a guild and only to officers and above, who are the only ones who can change it:
 
