@@ -237,6 +237,56 @@ function IdentityDialogs.HideLinkPrompts()
     IdentityDialogs.LinkCharacter:Hide()
 end
 
+-- Nickname ---------------------------------------------------------------------------------------
+
+local NICKNAME_TEXT = L["Your nickname"] .. "\n\n" .. L["Other players see it instead of your main character's name."]
+
+-- Saves the typed nickname; a refused one keeps the popup open with the reason. The popup's data2, when set, is
+-- called after a change.
+local function saveNickname(popup)
+    local typed = popup:GetEditBox():GetText()
+    local ok, err = ns.Identity.SetNickname(typed ~= "" and typed or nil)
+    if not ok then
+        popup:SetText(NICKNAME_TEXT .. "\n\n" .. RED_FONT_COLOR:WrapTextInColorCode(ns.NameErrorMessages[err] or err))
+        popup:Resize()
+        return false
+    end
+    if popup.data2 then popup.data2() end
+    return true
+end
+
+StaticPopupDialogs.WHOSWHO_EDIT_NICKNAME = {
+    text = NICKNAME_TEXT,
+    hasEditBox = true,
+    maxLetters = ns.Record.MAX_NAME_LENGTH,
+    button1 = L["Save"],
+    button2 = CANCEL,
+    button3 = L["Use main's name"],
+    DisplayButton3 = function() return ns.Identity.HasNickname() end,
+    OnShow = function(popup)
+        local _, main = ns.Identity.Main()
+        local editBox = popup:GetEditBox()
+        editBox.Instructions:SetText(main and main.name or "")
+        editBox:SetText(ns.Identity.HasNickname() and ns.Identity.Nickname() or "")
+        editBox:SetFocus()
+    end,
+    OnAccept = function(popup) return not saveNickname(popup) end,
+    OnAlt = function(popup)
+        ns.Identity.SetNickname(nil)
+        if popup.data2 then popup.data2() end
+    end,
+    EditBoxOnEnterPressed = function(editBox)
+        local popup = editBox:GetParent()
+        if saveNickname(popup) then popup:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(editBox) editBox:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
+}
+
 -- Confirmations ----------------------------------------------------------------------------------
 
 -- The character's name in class colour is the text argument of the main and unlink ones.

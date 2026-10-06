@@ -16,6 +16,7 @@ local CHECKBOX_SIZE = 24
 local SCROLL_BAR_WIDTH = 16
 
 local CROWN_TEXTURE = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
+local EDIT_TEXTURE = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
 -- The crown on linked characters other than the main.
 local DIM_CROWN_ALPHA = 0.4
 
@@ -49,6 +50,20 @@ panel.MainCrown = panel:CreateTexture(nil, "OVERLAY")
 panel.MainCrown:SetTexture(CROWN_TEXTURE)
 panel.MainCrown:SetSize(GLYPH_SIZE, GLYPH_SIZE)
 panel.MainCrown:SetPoint("LEFT", panel.IdentityName, "RIGHT", 6, 0)
+
+panel.EditNicknameButton = CreateFrame("Button", nil, panel)
+panel.EditNicknameButton:SetSize(GLYPH_SIZE, GLYPH_SIZE)
+panel.EditNicknameButton:SetNormalTexture(EDIT_TEXTURE)
+panel.EditNicknameButton:SetScript("OnClick", function()
+    local popup = StaticPopup_Show("WHOSWHO_EDIT_NICKNAME")
+    if popup then popup.data2 = function() panel:Refresh() end end
+end)
+panel.EditNicknameButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(L["Edit nickname"], HIGHLIGHT_FONT_COLOR:GetRGB())
+    GameTooltip:Show()
+end)
+panel.EditNicknameButton:SetScript("OnLeave", GameTooltip_Hide)
 
 panel.SharingStatus = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 panel.SharingStatus:SetPoint("TOPRIGHT", -SIDE_PADDING, -38)
@@ -290,7 +305,7 @@ panel.Empty.LinkButton:SetScript("OnClick", function() ns.IdentityDialogs.AskToL
 
 -- Shown while the identity has a linked character, in place of the empty state.
 local identityRegions = {
-    panel.IdentityName, panel.MainCrown, panel.SharingStatus, panel.CharactersHeading, panel.LinkedCount,
+    panel.IdentityName, panel.MainCrown, panel.EditNicknameButton, panel.SharingStatus, panel.CharactersHeading, panel.LinkedCount,
     header, scrollBox, scrollBar, panel.NicknameNote,
 }
 
@@ -301,6 +316,7 @@ local identityRegions = {
 function panel:SetIdentityName(name, isMainName)
     self.IdentityName:SetText(name)
     self.MainCrown:SetShown(isMainName)
+    self.EditNicknameButton:SetPoint("LEFT", isMainName and self.MainCrown or self.IdentityName, "RIGHT", 6, 0)
 end
 
 ---@param scopeNames string[] the scopes the identity is shared on; empty when it is not shared

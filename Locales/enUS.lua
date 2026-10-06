@@ -74,6 +74,11 @@ L["Set %s as your identity's main character?"] = true
 L["Use a nickname for the whole identity instead"] = true
 
 -- Main window
+L["Edit nickname"] = true
+L["Other players see it instead of your main character's name."] = true
+L["Save"] = true
+L["Use main's name"] = true
+L["Your nickname"] = true
 L["Alt character"] = true
 L["Click to link this character to your identity."] = true
 L["Click to unlink this character from your identity."] = true
