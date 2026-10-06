@@ -106,12 +106,13 @@ Implemented:
 - `FRIENDLIST_UPDATE`: `friendOf` of the characters I hold, for my current character (see Scopes); sends nothing.
 - `PLAYER_GUILD_UPDATE` (player): a guild left clears my current character's guild; a guild joined requests the roster.
 - `CHAT_MSG_WHISPER`: the sender's name and GUID, for the senders' GUIDs only.
-- `CHAT_MSG_WHISPER_INFORM`: the receiver's name and GUID, for the senders' GUIDs and the Whispers scope (see Scopes).
+- `CHAT_MSG_WHISPER_INFORM`: the receiver's name and GUID, for the senders' GUIDs and the Whispers scope (see Scopes); then `Protocol.Whispered`, the announcement to that player (see Announcements).
+- `GROUP_ROSTER_UPDATE`: `Protocol.GroupChanged`, the announcement on joining a group (see Announcements).
 
 Planned:
 
 - `PLAYER_LOGIN`: decorations, settings.
-- `PLAYER_ENTERING_WORLD` / `GROUP_ROSTER_UPDATE`: announcements to the other scopes and pruning, throttled.
+- `PLAYER_ENTERING_WORLD`: pruning, throttled.
 - `BN_CHAT_MSG_ADDON`: protocol over Battle.net.
 - `UPDATE_MOUSEOVER_UNIT`, tooltip post-call, whispers: lazy fetch on encounter.
 
@@ -205,7 +206,7 @@ Measured on build 1.60.1. In instances, still *to verify in game*: whether add-o
 
 | Type | Content | Sent |
 |---|---|---|
-| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now | At login, level-up and logout, and right after the `REC` of a change of revision, from a linked or removed character, to the audiences of the enabled scopes |
+| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement | At login, level-up and logout, and right after the `REC` of a change of revision, from a linked or removed character, to the audiences of the enabled scopes; on joining a group, to the group; to a player I whisper; in answer to an announcement that wants one (see Announcements) |
 | `GET` | identity ID | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend); planned: on encounter (whisper, group, tooltip) |
 | `REC` | the signed identity record | After a change of revision, or in answer to `GET`s (see Sending a Record) |
 
@@ -217,13 +218,31 @@ A message for several players goes out on the cheapest channel that reaches them
 
 ### Announcements
 
-`1 ANNOUNCE <id> <rev> <level> <acceptsGet>`, `acceptsGet` being `1` or `0`; about 90 bytes, one message.
+`1 ANNOUNCE <id> <rev> <level> <acceptsGet> <wantsAnnouncement>`, each flag being `1` or `0`; about 92 bytes, one message.
 
 Confirming characters is the core of the system, so one message carries the confirmation, the activity and the revision, and every announcement carries the identity.
 
 - **Sent** at login, at level-up and at logout, and right after the `REC` sent to every audience for a change of revision (see Sending a Record), from a linked character or a character removed from the identity (see Removals), to the audiences of the enabled scopes (see Channels). After that `REC`, `acceptsGet` is `0`: the record is already on its way, and the confirmation waits for it on the receiver's side; without it, the character I play would stay listed, without level, until my next login. At logout it goes out directly through `C_ChatInfo.SendAddonMessage` (the throttled queue would not empty in time), with `acceptsGet` = `0`: the sender is leaving, so a `GET` would get no answer. The sender may set `0` for other reasons later (a raid or a battleground) without any change to receivers.
+- **Reaching players who come later**: a broadcast only reaches the players online and in my audiences when it leaves. The others get my announcement in three more cases, from a linked or removed character, each to a player `Scopes.Allows`:
+  - **Joining a group** (`Protocol.GroupChanged`, from not in a group to in a group; in a group at login, the login announcement already reaches it), with the Group scope: one announcement on `PARTY` or `RAID`, sent right away.
+  - **Whispering a player** (`Protocol.Whispered`), with the Whispers scope: one announcement to that player, sent right away, unless an announcement of my current revision already reached them this session. The player answers it like a login if their scopes allow me, which for the Whispers scope means they whispered me, in this session or an earlier one. A whisper received sends nothing: I share with the players I whisper, so a player gets my announcement once I answer them.
+  - **Answering an announcement** that wants one (`wantsAnnouncement` = `1`): mine goes back to its sender, every time. A player logging in may have missed everything I sent before, even a broadcast that left just as they logged in or a message that arrived just after they logged out, so a login is always answered; a group join is answered the same way, being rare.
+
+  `wantsAnnouncement` is `1` on the login, group join and whisper announcements only. Every other announcement, answers included, has `0`, so an answer never brings another one. The receiver answers only a sender `Scopes.Allows`, so a player I whisper who never whispered me sends me nothing. `wantsAnnouncement` = `1` always comes with `acceptsGet` = `1`.
+
+  | Sent at | `acceptsGet` | `wantsAnnouncement` |
+  |---|---|---|
+  | Login | `1` | `1` |
+  | Joining a group | `1` | `1` |
+  | Level-up | `1` | `0` |
+  | Answer to an announcement | `1` | `0` |
+  | Whispering a player | `1` | `1` |
+  | After the `REC` of a change of revision | `0` | `0` |
+  | Logout | `0` | `0` |
+
+  The answers wait together, like the requesters of a `REC` (see Sending a Record): a player goes in a queue of pending names, once, and one wait of 5 seconds sends to them all, in the fewest messages: one on `GUILD` reaches every pending name in my current guild, one on `PARTY` or `RAID` every pending name in my group, each other name gets its own whisper, with the same order at equal count. The wait starts with the first pending name and is never pushed back. A pending name `Scopes.Allows` no longer is dropped; an announcement with `acceptsGet` = `0` from a pending name (the player left) removes it. Each player an answer or a whisper announcement reached counts as reached by my current revision this session (`announcedRevisions`), for the whisper rule above; broadcasts do not count, since a player may log in just as one leaves.
 - **Removals**: a character unlinked from my identity keeps the revision that removed it, the first one without it (`removedInRevision` in `Identity`), and announces that revision instead of the current one, indefinitely, until it is linked again. A removal must reach every player holding an older revision, and a linked character only announces when I play it; the character I removed is often the one I keep playing. A player holding that revision or a later one does not ask (`People.IsNewer`), so the announcement costs nothing once most players have it from my linked characters; a player holding an older revision, which still lists the character, sends a `GET` and receives my current `REC`, which does not list it either. Unlinking every character is the same case: each one announces the revision that removed it, the last one the revision without characters, which makes others forget the identity. **Forget me** (`Identity.Forget`) unlinks every character and removes the nickname in one revision, which every removed character then announces; every character becomes unregistered (`linked = nil`), so each one is asked again at its next login. Without a server, a player never online at the same time as one of my characters keeps the older revision.
-- **Received**: my own identity ID is ignored. When the sender's GUID is known (see Senders), `People.Confirm(id, guid, level)`: the first one confirms the character, the next ones only update its level and last seen time. The sender found in my roster or friend list gets its `guild` or `friendOf` (`Scopes.SetRelationships`). When the revision is newer than what `People` holds (`People.IsNewer`: not held, or held at an older revision, and not forgotten at that revision or a later one) and `acceptsGet` is `1`, a `GET` (see Requesting a Record), only from a sender my scopes allow (see Receiving a Record).
+- **Received**: my own identity ID is ignored. When the sender's GUID is known (see Senders), `People.Confirm(id, guid, level)`: the first one confirms the character, the next ones only update its level and last seen time. The sender found in my roster or friend list gets its `guild` or `friendOf` (`Scopes.SetRelationships`). When the revision is newer than what `People` holds (`People.IsNewer`: not held, or held at an older revision, and not forgotten at that revision or a later one) and `acceptsGet` is `1`, a `GET` (see Requesting a Record), only from a sender my scopes allow (see Receiving a Record). When `wantsAnnouncement` is `1` and my scopes allow the sender, my answer joins the pending names (see above).
 
 ### Senders
 

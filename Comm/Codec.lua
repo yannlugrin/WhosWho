@@ -18,6 +18,7 @@ local VERSION = "1"
 ---@field rev integer
 ---@field level integer the sending character's level
 ---@field acceptsGet boolean whether the sender answers a GET now
+---@field wantsAnnouncement boolean whether the sender wants the receiver's announcement
 
 ---@class WhosWho.RecordRequest
 ---@field type "GET"
@@ -35,9 +36,11 @@ local VERSION = "1"
 ---@param rev integer
 ---@param level integer
 ---@param acceptsGet boolean
+---@param wantsAnnouncement boolean
 ---@return string
-function Codec.Announcement(id, rev, level, acceptsGet)
-    return ("%s ANNOUNCE %s %d %d %d"):format(VERSION, id, rev, level, acceptsGet and 1 or 0)
+function Codec.Announcement(id, rev, level, acceptsGet, wantsAnnouncement)
+    return ("%s ANNOUNCE %s %d %d %d %d"):format(VERSION, id, rev, level, acceptsGet and 1 or 0,
+        wantsAnnouncement and 1 or 0)
 end
 
 ---@param id string
@@ -61,9 +64,12 @@ local function revision(s)
 end
 
 local function decodeAnnouncement(fields)
-    local id, rev, level, acceptsGet = fields:match("^(%x+) (%d+) (%d%d?%d?) ([01])$")
+    local id, rev, level, acceptsGet, wantsAnnouncement = fields:match("^(%x+) (%d+) (%d%d?%d?) ([01]) ([01])$")
     if not (Record.IsId(id) and revision(rev) and tonumber(level) >= 1) then return nil end
-    return { type = "ANNOUNCE", id = id, rev = revision(rev), level = tonumber(level), acceptsGet = acceptsGet == "1" }
+    return {
+        type = "ANNOUNCE", id = id, rev = revision(rev), level = tonumber(level),
+        acceptsGet = acceptsGet == "1", wantsAnnouncement = wantsAnnouncement == "1",
+    }
 end
 
 local function decodeRecordRequest(fields)

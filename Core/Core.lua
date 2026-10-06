@@ -80,6 +80,7 @@ frame:RegisterEvent("GUILD_ROSTER_UPDATE")
 frame:RegisterEvent("FRIENDLIST_UPDATE")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
+frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 frame:SetScript("OnEvent", function(_, event, ...)
     local arg1 = ...
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -112,7 +113,11 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Scopes.WhisperReceived(select(2, ...), select(12, ...))
     elseif event == "CHAT_MSG_WHISPER_INFORM" then
         -- The receiver's name and GUID.
-        ns.Scopes.WhisperSent(select(2, ...), select(12, ...))
+        local name = select(2, ...)
+        ns.Scopes.WhisperSent(name, select(12, ...))
+        ns.Protocol.Whispered(name)
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        ns.Protocol.GroupChanged()
     end
 end)
 

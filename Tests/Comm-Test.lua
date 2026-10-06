@@ -733,6 +733,102 @@ slash(dan, "nick Danny")
 run(10)
 check(sent({ from = "Dan Main" }) == 0, "a change while nothing was ever linked sends nothing")
 
+-- Reaching players who come later ------------------------------------------------------------------------
+
+ann = annMain.session
+slash(ann, "link")
+slash(bob, "link")
+run(30)
+
+clearLog()
+logout(bob)
+bob = login(bobAccount, bobMain)
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0, "an answer to a login waits")
+run(5)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 1, "a login is answered with an announcement")
+check(sent({ from = "Bob Main", type = "ANNOUNCE", distribution = "WHISPER" }) == 0, "an answer is not answered")
+
+clearLog()
+logout(bob)
+bob = login(bobAccount, bobMain)
+run(1)
+logout(bob)
+run(10)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 0,
+    "a logout cancels the answer waiting for that player")
+bob = login(bobAccount, bobMain)
+run(10)
+
+world.group = { annMain, bobMain }
+ann.ns.settings.scopes.group, bob.ns.settings.scopes.group = true, true
+clearLog()
+fire(bob, "GROUP_ROSTER_UPDATE")
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1, "joining a group announces to it")
+run(5)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 1, "a member answers")
+clearLog()
+fire(bob, "GROUP_ROSTER_UPDATE")
+run(6)
+check(sent({ type = "ANNOUNCE" }) == 0, "a change in a group I am already in announces nothing")
+world.group = {}
+fire(bob, "GROUP_ROSTER_UPDATE")
+world.group = { annMain, bobMain }
+fire(bob, "GROUP_ROSTER_UPDATE")
+run(6)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1
+    and sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 1,
+    "a group joined again is announced and answered again")
+
+world.group = {}
+fire(bob, "GROUP_ROSTER_UPDATE")
+world.group = { annMain, bobMain, eveMain }
+eve.ns.settings.scopes.group = true
+clearLog()
+fire(bob, "GROUP_ROSTER_UPDATE")
+fire(eve, "GROUP_ROSTER_UPDATE")
+run(6)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1
+    and sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "WHISPER" }) == 0,
+    "two members joining at once: one answer on PARTY")
+world.group = {}
+ann.ns.settings.scopes.group, bob.ns.settings.scopes.group, eve.ns.settings.scopes.group = false, false, false
+
+-- A new session: Bob answered Eve joining the group, which already reached her with his revision.
+logout(bob)
+bob = login(bobAccount, bobMain)
+run(10)
+bob.ns.settings.scopes.whispers = true
+clearLog()
+whisper(bob, eveMain)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
+    "whispering a player sends my announcement right away")
+run(6)
+check(sent({ from = "Eve Main", type = "ANNOUNCE", target = "Bob Main" }) == 0,
+    "the player I whisper does not answer while they do not allow me")
+whisper(bob, eveMain)
+run(6)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1, "once per revision")
+slash(bob, "nick Bobby")
+run(30)
+eve.ns.settings.scopes.whispers = true
+clearLog()
+whisper(bob, eveMain)
+run(6)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1, "a new revision is announced again")
+check(sent({ from = "Eve Main", type = "ANNOUNCE", target = "Bob Main" }) == 1,
+    "the player I whisper answers once they allow me (they whispered me before)")
+whisper(eve, bobMain)
+run(6)
+check(sent({ from = "Eve Main", type = "ANNOUNCE", target = "Bob Main" }) == 1,
+    "their answer already reached me: whispering me sends nothing more")
+eve.ns.settings.scopes.whispers = false
+clearLog()
+whisper(cat, bobMain)
+run(6)
+check(sent({ from = "Bob Main", target = "Cat Main" }) == 0, "a whisper received sends nothing")
+
 if failures > 0 then
     print(("%d of %d checks FAILED"):format(failures, checks))
     os.exit(1)

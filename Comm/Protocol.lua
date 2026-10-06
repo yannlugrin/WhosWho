@@ -19,6 +19,7 @@ local LOCK_WAIT_SECONDS = 5 -- between two tries while record sending is locked
 local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players it reached are ignored
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
+local ANNOUNCEMENT_WAIT_SECONDS = 5 -- before answering announcements, gathering the ones that follow
 
 local issecretvalue = issecretvalue or function() return false end
 
@@ -44,11 +45,16 @@ end
 
 -- Announcements ----------------------------------------------------------------------------------
 
-local function announce(level, acceptsGet, send)
+-- My announcement from the character I play, nil while it never was linked.
+local function announcementText(level, acceptsGet, wantsAnnouncement)
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
-    if not revision then return end
+    return revision and Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement)
+end
 
-    local message = Codec.Announcement(Identity.Id(), revision, level, acceptsGet)
+local function announce(level, acceptsGet, wantsAnnouncement, send)
+    local message = announcementText(level, acceptsGet, wantsAnnouncement)
+    if not message then return end
+
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do send(message, channel) end
     for _, name in ipairs(audience.names) do send(message, "WHISPER", name) end
@@ -114,18 +120,17 @@ local MEMBER_CHANNEL_CHOICES = {
     { guild = true, group = true },
 }
 
--- Requesters left after any broadcast: the fewest messages reaching them all, a member channel reaching every requester
--- on it and one whisper to each requester left.
-local function answerRequesters(recordUpdate)
-    local names, reachedByGuild, reachedByGroup = {}, {}, {}
-    for name in pairs(requesters) do
-        if Scopes.Allows(name) then
-            names[#names + 1] = name
-            reachedByGuild[name] = Scopes.GuildReaches(name)
-            reachedByGroup[name] = Scopes.GroupReaches(name)
-        end
+-- The fewest messages reaching every one of those players: a member channel reaching every player on it, and one whisper
+-- to each player left.
+---@param names string[]
+---@return { guild: true?, group: true? } memberChannels
+---@return string[] whispered
+local function fewestMessages(names)
+    local reachedByGuild, reachedByGroup = {}, {}
+    for _, name in ipairs(names) do
+        reachedByGuild[name] = Scopes.GuildReaches(name)
+        reachedByGroup[name] = Scopes.GroupReaches(name)
     end
-    requesters = {}
 
     local bestChoice, bestWhispered, bestCount
     for _, choice in ipairs(MEMBER_CHANNEL_CHOICES) do
@@ -138,7 +143,18 @@ local function answerRequesters(recordUpdate)
         local count = #whispered + (choice.guild and 1 or 0) + (choice.group and 1 or 0)
         if not bestCount or count < bestCount then bestChoice, bestWhispered, bestCount = choice, whispered, count end
     end
+    return bestChoice, bestWhispered
+end
 
+-- Requesters left after any broadcast, in the fewest messages.
+local function answerRequesters(recordUpdate)
+    local names = {}
+    for name in pairs(requesters) do
+        if Scopes.Allows(name) then names[#names + 1] = name end
+    end
+    requesters = {}
+
+    local bestChoice, bestWhispered = fewestMessages(names)
     if bestChoice.guild then sendRecord(recordUpdate(), "GUILD") end
     if bestChoice.group then sendRecord(recordUpdate(), Scopes.GroupChannel()) end
     for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(), "WHISPER", name) end
@@ -173,7 +189,7 @@ local function sendRecords()
             if Scopes.BroadcastReaches(audience, name) then requesters[name] = nil end
         end
         publishedWithCharacters = withCharacters
-        announce(UnitLevel("player"), false, sendQueued)
+        announce(UnitLevel("player"), false, false, sendQueued)
     end
     publishedRevision = Identity.Revision()
 
@@ -200,6 +216,42 @@ end
 
 function Protocol.UnlockRecordSending()
     locked = false
+end
+
+-- Answering announcements ---------------------------------------------------------------------------
+
+---@type table<string, true> names of the players waiting for my announcement in answer to theirs
+local announcementRecipients = {}
+---@type table<string, integer> by name, the revision my last announcement to that player carried this session
+local announcedRevisions = {}
+local announcementWaiting = false
+
+local function sendAnnouncements()
+    announcementWaiting = false
+    local names = {}
+    for name in pairs(announcementRecipients) do
+        if Scopes.Allows(name) then names[#names + 1] = name end
+    end
+    announcementRecipients = {}
+
+    local message = announcementText(UnitLevel("player"), true, false)
+    if not (message and names[1]) then return end
+
+    local bestChoice, bestWhispered = fewestMessages(names)
+    if bestChoice.guild then sendQueued(message, "GUILD") end
+    if bestChoice.group then sendQueued(message, Scopes.GroupChannel()) end
+    for _, name in ipairs(bestWhispered) do sendQueued(message, "WHISPER", name) end
+
+    local revision = Identity.AnnouncedRevision(UnitGUID("player"))
+    for _, name in ipairs(names) do announcedRevisions[name] = revision end
+end
+
+-- One wait for every player waiting for my answer, from the first one.
+local function queueAnnouncement(name)
+    announcementRecipients[name] = true
+    if announcementWaiting then return end
+    announcementWaiting = true
+    C_Timer.After(ANNOUNCEMENT_WAIT_SECONDS, sendAnnouncements)
 end
 
 -- Requesting a record ---------------------------------------------------------------------------
@@ -248,11 +300,14 @@ local function receiveAnnouncement(announcement, distribution, sender)
     end
 
     if not announcement.acceptsGet then
-        -- The owner left: a GET would get no answer.
+        -- The owner left: a GET would get no answer, and my announcement would not reach them.
         requests[id] = nil
+        announcementRecipients[sender] = nil
     elseif People.IsNewer(id, announcement.rev) and Scopes.Allows(sender) then
         requestRecord(id, sender)
     end
+
+    if announcement.wantsAnnouncement and Scopes.Allows(sender) then queueAnnouncement(sender) end
 end
 
 ---@param request WhosWho.RecordRequest
@@ -302,6 +357,9 @@ end
 
 -- Game events ----------------------------------------------------------------------------------
 
+---@type boolean? nil until Protocol.Start
+local wasInGroup
+
 ---PLAYER_LOGIN, after the character refresh: registers the prefix, takes the current revision as published, sends
 ---a REC after each change of revision.
 function Protocol.Start()
@@ -309,20 +367,48 @@ function Protocol.Start()
     -- A change found at login reaches online players through the login announcement and their GETs.
     publishedRevision, publishedWithCharacters = Identity.Revision(), Identity.Main() ~= nil
     Identity.OnRevisionChanged(function() scheduleRecordSending(REVISION_WAIT_SECONDS) end)
+    -- The login announcement already reaches a group I am in.
+    wasInGroup = IsInGroup()
 end
 
----PLAYER_LOGIN, after Protocol.Start.
+---PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement.
 function Protocol.AnnounceLogin()
-    announce(UnitLevel("player"), true, sendQueued)
+    announce(UnitLevel("player"), true, true, sendQueued)
 end
 
 ---PLAYER_LEVEL_UP.
 ---@param level integer the new level
 function Protocol.AnnounceLevel(level)
-    announce(level, true, sendQueued)
+    announce(level, true, false, sendQueued)
 end
 
 ---PLAYER_LOGOUT: sent directly, since the throttled queue would not empty in time; a GET would get no answer.
 function Protocol.AnnounceLogout()
-    announce(UnitLevel("player"), false, sendNow)
+    announce(UnitLevel("player"), false, false, sendNow)
+end
+
+---GROUP_ROSTER_UPDATE: on joining a group, my announcement to the group, which every member answers with theirs.
+function Protocol.GroupChanged()
+    -- The roster can arrive during the loading screen, before PLAYER_LOGIN.
+    if wasInGroup == nil then return end
+    local inGroup = IsInGroup()
+    local joined = inGroup and not wasInGroup
+    wasInGroup = inGroup
+    if not (joined and ns.settings.scopes.group) then return end
+
+    local message = announcementText(UnitLevel("player"), true, true)
+    if message then sendQueued(message, Scopes.GroupChannel()) end
+end
+
+---CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, once per revision this
+---session, sent right away. The player answers with theirs if they allow me.
+---@param name any
+function Protocol.Whispered(name)
+    if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
+    if not (ns.settings.scopes.whispers and Scopes.Allows(name)) then return end
+    local revision = Identity.AnnouncedRevision(UnitGUID("player"))
+    if not revision or announcedRevisions[name] == revision then return end
+
+    sendQueued(announcementText(UnitLevel("player"), true, true), "WHISPER", name)
+    announcedRevisions[name] = revision
 end
