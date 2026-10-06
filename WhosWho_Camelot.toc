@@ -1,6 +1,7 @@
 ## Interface: 16001
 ## Title: Who's Who
 ## Notes: Link your characters into one identity and recognise people across their alts.
+## Notes-frFR: Liez vos personnages en une identité et reconnaissez les gens sur tous leurs personnages.
 ## Author: Mr Caillou
 ## Version: @project-version@
 ## IconTexture: Interface\AddOns\WhosWho\Media\Icon
@@ -10,6 +11,7 @@
 Libs.xml
 
 Locales\enUS.lua
+Locales\frFR.lua
 
 Crypto\SHA512.lua
 Crypto\Ed25519.lua
