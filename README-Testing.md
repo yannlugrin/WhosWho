@@ -70,6 +70,14 @@ With a test account whose characters are not registered yet (`/ww status`: "not 
 - Another character: "Link <Character> to <nickname>?", naming the linked characters in their class colours. **Not this character**: "not linked", and no prompt at the next login.
 - Closing the dialog with its close button: the prompt comes back at the next login.
 
+## Chat Nicknames
+
+With A and B knowing each other (see Group), B sets a nickname (`/ww nick Bee`).
+
+- A, B says something in the group: `[B's character (Bee)]: …`, the nickname in light grey; clicking the name still opens a whisper to B's character.
+- `/ww nick` on B (back to the main's name), B speaks from its main: no nickname on A's side.
+- A's own lines: never a nickname.
+
 ## Still to Test
 
 - Inside an instance and during an encounter: add-on messages, secret values.

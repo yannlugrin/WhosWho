@@ -47,8 +47,10 @@ WhosWho/
 │   ├── Main/                      The main window
 │   │   ├── Window.lua             Window and tab bar
 │   │   └── MyIdentity.lua         My identity tab
-│   └── Dialogs/
-│       └── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
+│   ├── Dialogs/
+│   │   └── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
+│   └── Decorations/               Nicknames added to the game's own frames
+│       └── Chat.lua               Sender names in chat lines
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
 │   └── Source/whoswho.png         Icon source, 1024×1024 (not packaged)
@@ -74,7 +76,7 @@ Planned:
 ├── Comm/
 └── UI/
     ├── PersonEditor.lua           Create and edit a manual identity, add alts
-    └── Decorations.lua            Chat filter, tooltip line, unit menu entries
+    └── Decorations/               Tooltip line, unit menu entries
 ```
 
 ## Architecture
@@ -181,6 +183,8 @@ For a character GUID:
 The nickname shown, for me: my nickname, otherwise the identity's own (the player's for a shared identity, the guild's for a guild identity, planned), otherwise the main character's name. `People.IdentityNickname` gives the identity's own nickname whatever overrides it (the player's, otherwise the main character's name). `Identity.Nickname` applies the same rule to my own identity: my nickname, otherwise my main's name. `Resolver.Resolve` returns the identity ID, that nickname, `mine` (this account's own identity) and what the glyphs need: `shared` (the player shares this identity) and `state` (`confirmed`, `listed` or `added`).
 
 Nicknames are shown by the receiving add-on only, in the lines, tooltips and lists it decorates; outgoing chat is never modified.
+
+In chat, `ChatFrameUtil.AddSenderNameFilter` gets each line's decorated sender name with the event's arguments; the filter adds the nickname, in light grey and round brackets, after the name, and the game puts the result inside the player link: `[Ann Main (Annie)]: hello`. It adds nothing when the `chatNicknames` setting is off, when the sender's name or GUID is secret (the game already skips the filter when the decorated name is), for my own characters, for a character no identity holds, or when the nickname is the character's name.
 
 ## Protocol
 

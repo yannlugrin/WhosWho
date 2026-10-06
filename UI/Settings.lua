@@ -65,6 +65,11 @@ addScopeCheckbox("whispers", L["People I whisper"], L["Anyone you whisper, or wh
 -- Display ----------------------------------------------------------------------------------------
 
 addSectionHeader(L["Display"])
+Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_ChatNicknames",
+    Settings.VarType.Boolean, L["Show nicknames in chat"], ns.Store.DEFAULTS.profile.chatNicknames,
+    function() return ns.settings.chatNicknames end,
+    function(value) ns.settings.chatNicknames = value end),
+    L["Adds the nickname after the name, for every player you know."])
 Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_MinimapButton",
     Settings.VarType.Boolean, L["Show minimap button"], true,
     function() return not ns.settings.launcher.hide end,

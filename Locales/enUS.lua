@@ -116,6 +116,8 @@ L["Shared with: %s"] = true
 L["Sharing settings"] = true
 
 -- Launcher
+L["Adds the nickname after the name, for every player you know."] = true
+L["Show nicknames in chat"] = true
 L["A button on the edge of the minimap: click to open your identity, right-click for a menu."] = true
 L["Click: open your identity"] = true
 L["Display"] = true

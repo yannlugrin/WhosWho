@@ -10,7 +10,7 @@ For **World of Warcraft: Forever**.
 
 - **One identity for all your characters.** Link the character you're playing with `/ww link`. Pick your main character: you're shown under its name, or under a nickname if you set one. *Coming:* the first time you log in on a character, Who's Who asks whether to link it.
 - **You decide who sees it.** Share with your guild, your friends, or the people you whisper and group with. Guild and friends are on by default, and nothing is shared until you link a character.
-- **Recognise people across their alts.** When someone shares their identity with you, `/ww people` lists them with their characters. *Coming:* their nickname next to their messages in chat and in their tooltip, on every character they linked.
+- **Recognise people across their alts.** When someone shares their identity with you, `/ww people` lists them with their characters. Their nickname shows next to their name in chat, on every character they linked. *Coming:* in their tooltip too.
 - *Coming:* **Link players who don't use the add-on.** Group someone's characters and give them a nickname, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
 
 ## Privacy

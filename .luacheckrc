@@ -15,7 +15,7 @@ read_globals = {
     "bit", "date", "geterrorhandler", "time", "debugprofilestop", "fastrandom", "issecretvalue", "strlenutf8",
     "LibStub", "CreateFrame", "UIParent", "hooksecurefunc", "Enum", "Menu",
     "C_AddOns", "C_BattleNet", "C_ChatInfo", "C_Club", "C_CreatureInfo", "C_FriendList", "C_GameRules", "C_GuildInfo", "C_Timer",
-    "ChatFrame_AddMessageEventFilter", "ChatFrameUtil", "ChatFontNormal", "NUM_CHAT_WINDOWS",
+    "ChatFrame_AddMessageEventFilter", "ChatFrameUtil", "LIGHTGRAY_FONT_COLOR", "ChatFontNormal", "NUM_CHAT_WINDOWS",
     "TooltipDataProcessor", "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer",
     "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR",
     "PanelTemplates_TabResize", "PanelTemplates_SetNumTabs", "PanelTemplates_SetTab", "CreateScrollBoxListLinearView",
