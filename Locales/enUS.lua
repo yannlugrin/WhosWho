@@ -74,6 +74,15 @@ L["Set %s as your identity's main character?"] = true
 L["Use a nickname for the whole identity instead"] = true
 
 -- Main window
+L["Alt character"] = true
+L["Click to link this character to your identity."] = true
+L["Click to unlink this character from your identity."] = true
+L["Linked character"] = true
+L["Main character"] = true
+L["Make this character your main."] = true
+L["Not linked character"] = true
+L["To change it, click the crown of another linked character."] = true
+L["Your main character can't be unlinked. Make another character your main first."] = true
 L["An identity groups the characters you link to it, so people who use Who's Who recognise you on each of them. Link the character you are playing to start yours."] = true
 L["No identity yet"] = true
 L["Make %s your main character?"] = true

@@ -134,6 +134,14 @@ local skin
 ---@field MainButton Button
 ---@field LinkedCheckbox CheckButton
 
+-- The tooltip of a row's crown or Linked checkbox: what a click does, set when the row is filled.
+local function showControlTooltip(control)
+    GameTooltip:SetOwner(control, "ANCHOR_RIGHT")
+    GameTooltip:SetText(control.tooltipTitle, HIGHLIGHT_FONT_COLOR:GetRGB())
+    GameTooltip:AddLine(control.tooltipText, GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b, true)
+    GameTooltip:Show()
+end
+
 ---@param row WhosWho.MyIdentityRow
 local function createRow(row)
     local iconFrame = CreateFrame("Frame", nil, row)
@@ -164,10 +172,17 @@ local function createRow(row)
     row.MainButton:SetSize(GLYPH_SIZE, GLYPH_SIZE)
     row.MainButton:SetNormalTexture(CROWN_TEXTURE)
     placeInColumn(row.MainButton, row, columnByKey.Main, true)
+    -- The main's crown and checkbox are disabled but still explain why.
+    row.MainButton:SetMotionScriptsWhileDisabled(true)
+    row.MainButton:SetScript("OnEnter", showControlTooltip)
+    row.MainButton:SetScript("OnLeave", GameTooltip_Hide)
 
     row.LinkedCheckbox = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     row.LinkedCheckbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
     placeInColumn(row.LinkedCheckbox, row, columnByKey.Linked, true)
+    row.LinkedCheckbox:SetMotionScriptsWhileDisabled(true)
+    row.LinkedCheckbox:SetScript("OnEnter", showControlTooltip)
+    row.LinkedCheckbox:SetScript("OnLeave", GameTooltip_Hide)
 
     if skin then
         skin.SquareIcon(row.ClassIcon, iconFrame)
@@ -193,6 +208,13 @@ local function initRow(row, character)
     row.MainButton:GetNormalTexture():SetDesaturated(not character.main)
     row.MainButton:SetAlpha(character.main and 1 or DIM_CROWN_ALPHA)
     row.MainButton:SetEnabled(not character.main)
+    if character.main then
+        row.MainButton.tooltipTitle = L["Main character"]
+        row.MainButton.tooltipText = L["To change it, click the crown of another linked character."]
+    else
+        row.MainButton.tooltipTitle = L["Alt character"]
+        row.MainButton.tooltipText = L["Make this character your main."]
+    end
     row.MainButton:SetScript("OnClick", function()
         local popup = StaticPopup_Show("WHOSWHO_CHANGE_MAIN", coloredName, nil, character.guid)
         if popup then popup.data2 = function() panel:Refresh() end end
@@ -200,6 +222,16 @@ local function initRow(row, character)
 
     row.LinkedCheckbox:SetChecked(character.linked)
     row.LinkedCheckbox:SetEnabled(not character.main)
+    if character.main then
+        row.LinkedCheckbox.tooltipTitle = L["Linked character"]
+        row.LinkedCheckbox.tooltipText = L["Your main character can't be unlinked. Make another character your main first."]
+    elseif character.linked then
+        row.LinkedCheckbox.tooltipTitle = L["Linked character"]
+        row.LinkedCheckbox.tooltipText = L["Click to unlink this character from your identity."]
+    else
+        row.LinkedCheckbox.tooltipTitle = L["Not linked character"]
+        row.LinkedCheckbox.tooltipText = L["Click to link this character to your identity."]
+    end
     -- The checkbox keeps the character's state until the player confirms the change.
     row.LinkedCheckbox:SetScript("OnClick", function(self)
         self:SetChecked(character.linked)
