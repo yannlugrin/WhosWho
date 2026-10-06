@@ -265,8 +265,8 @@ Never transmitted: BattleTags, account IDs, Battle.net presence or game account 
 ### Sending a Record
 
 - `Identity` notifies each change of revision. A `GET` for my identity puts its sender (name, or Battle.net game account) in a queue of requesters, once per sender, with no lookup yet.
-- Either one starts a wait of a few seconds, unless one is running. When it ends:
-  - locked: the wait starts again;
+- One wait covers every pending `REC`. A change of revision sets it to end 15 seconds later, a `GET` 5 seconds later; neither brings forward a wait already running, and each pushes it back when its own end is later. Whatever keeps pushing it, it ends at the latest 300 seconds after it started, so a flood of `GET`s or a long editing session still gets an answer. When it ends:
+  - locked: it tries again 5 seconds later;
   - the revision changed since the last one published this session: a `REC` to the audiences of every enabled scope (see Channels), and every requester they reach leaves the queue;
   - then each remaining requester: dropped unless `Scopes.Allows` it. The `REC` reaches the ones kept in the fewest messages: one on `GUILD` reaches every requester in my current guild, one on `PARTY` or `RAID` every requester in my group, and each requester neither reaches gets its own message. A requester reached by a member channel gets no other copy. At equal count: fewer member channels first (a requester alone on its channel gets its own message), then `GUILD` before the group.
 
@@ -275,7 +275,7 @@ Never transmitted: BattleTags, account IDs, Battle.net presence or game account 
     Example: A in my guild, A, B and C in my group, D a friend. A is alone on `GUILD`, A, B and C on `PARTY`, D on its own message: one `REC` on `PARTY`, one whisper to D.
 
     Example: A and B in my guild, A, B and C in my group. One `REC` on `PARTY` reaches all three: one message, where `GUILD` would need a whisper to C as well.
-- `Protocol.LockRecordSending()` and `Protocol.UnlockRecordSending()` only set and clear the lock. The UI holds it while the player edits their own identity, so a `REC` goes out once they are done, at the end of the next wait; a `GET` received meanwhile waits too.
+- `Protocol.LockRecordSending()` and `Protocol.UnlockRecordSending()` only set and clear the lock. The UI holds it while the player edits their own identity, so a `REC` goes out once they are done, when the wait has ended; a `GET` received meanwhile waits too.
 - The published revision starts, each session, at the current revision: a change found at login (a renamed character) reaches online players through the login announcement and their `GET`s.
 - The record is signed once per change of revision (`Identity.SignedRecord`, about 120 ms), whatever the number of changes it holds or of `REC`s sent.
 - For about 30 seconds after a `REC` has left (AceComm's send callback, after its last part), `GET`s from the requesters it reached are ignored: a `REC` can wait in the throttled queue, and the `GET`s that crossed it must not send it again.

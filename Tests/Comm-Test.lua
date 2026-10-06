@@ -371,8 +371,8 @@ run(1)
 check(sent({ from = "Ann Main" }) == 0, "nothing goes out before a character is linked")
 slash(ann, "link")
 run(1)
-check(sent({ type = "REC" }) == 0, "a REC waits a few seconds after a change")
-run(5)
+check(sent({ type = "REC" }) == 0, "a REC waits after a change")
+run(30)
 check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1, "a new revision goes to the guild")
 check(sent({ from = "Ann Main", type = "REC", target = "Dan Main" }) == 1, "and to an online friend outside the guild")
 check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 0, "a friend in the guild gets no copy of their own")
@@ -425,7 +425,7 @@ local cat = login(catAccount, catMain)
 run(1)
 slash(ann, "nick Annie")
 -- The revision change reaches both; the next ones come from GETs.
-run(10)
+run(30)
 check(bob.ns.People.Nickname(annId) == "Annie" and cat.ns.People.Nickname(annId) == "Annie",
     "a change of revision reaches every guild member online")
 
@@ -444,7 +444,7 @@ levelUp(ann)
 run(1)
 check(sent({ type = "GET", target = "Ann Main" }) == 2, "both guild members ask for the new revision")
 ann.ns.Protocol.UnlockRecordSending()
-run(10)
+run(20)
 check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1, "the change goes to the guild once unlocked")
 check(sent({ from = "Ann Main", type = "REC", distribution = "WHISPER", target = "Bob Main" }) == 0,
     "requesters reached by that REC leave the queue")
@@ -462,6 +462,45 @@ check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
     and sent({ from = "Ann Main", type = "REC", distribution = "WHISPER" }) == 0,
     "two requesters on the guild get one REC there")
 
+-- One wait for every REC ----------------------------------------------------------------------------
+
+local function getFromBob()
+    bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+end
+
+run(40)
+clearLog()
+slash(ann, "nick Ann Waits")
+run(5)
+getFromBob()
+run(5)
+check(sent({ from = "Ann Main", type = "REC" }) == 0, "a GET does not bring forward the wait of a change")
+run(6)
+check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
+    and sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 0,
+    "the change goes out 15 seconds after it, and its guild REC answers the GET")
+
+run(40)
+clearLog()
+slash(ann, "nick Ann Waits More")
+run(13)
+getFromBob()
+run(3)
+check(sent({ from = "Ann Main", type = "REC" }) == 0, "a GET with less than 5 seconds left pushes the send back")
+run(3)
+check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1, "then everything goes out")
+
+run(40)
+clearLog()
+getFromBob()
+for _ = 1, 75 do
+    run(4)
+    getFromBob()
+end
+run(1)
+check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1,
+    "GETs that keep coming delay the answer by 300 seconds at most")
+
 -- An alt ---------------------------------------------------------------------------------------------
 
 logout(ann)
@@ -470,7 +509,7 @@ run(1)
 check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0, "an unlinked character does not announce")
 clearLog()
 slash(ann, "link")
-run(10)
+run(30)
 check(holderId(bob, annAlt.guid) == annId and state(bob, annAlt.guid) == "confirmed"
     and select(2, bob.ns.People.Find(annAlt.guid)).level == annAlt.level,
     "an alt linked while played arrives confirmed, with its level: the announcement follows the REC")
@@ -589,8 +628,9 @@ logout(bob)
 logout(ann)
 ann = login(annAccount, annAlt)
 slash(ann, "unlink")
--- Past the 30 seconds in which a GET from a guild member is taken as answered by the guild REC of that change.
-run(40)
+-- Past the change's wait, then the 30 seconds in which a GET from a guild member is taken as answered by the guild
+-- REC of that change.
+run(70)
 bob = login(bobAccount, bobMain)
 run(1)
 check(holderId(bob, annAlt.guid) == annId, "a player offline at the removal still lists the character")

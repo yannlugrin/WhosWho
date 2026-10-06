@@ -27,12 +27,12 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Linking while grouped.** On A, link another character while playing it.
 
-- A: `Sent, PARTY: 1 REC …`, then `Sent, PARTY: 1 ANNOUNCE … 0`.
+- A, after 15 s: `Sent, PARTY: 1 REC …`, then `Sent, PARTY: 1 ANNOUNCE … 0`.
 - B: no `GET`; `/ww people` lists the new character as **confirmed**, with its level.
 
 **Unlinking while grouped.** On A, `/ww unlink` on a linked character.
 
-- A: `Sent, PARTY: 1 REC …` (and `GUILD` if A is in a guild).
+- A, after 15 s: `Sent, PARTY: 1 REC …` (and `GUILD` if A is in a guild).
 - B: `/ww people` no longer lists that character.
 
 ## Removal While Offline

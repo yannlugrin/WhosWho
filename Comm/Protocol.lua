@@ -12,7 +12,10 @@ ns.Protocol = Protocol
 LibStub("AceComm-3.0"):Embed(Protocol)
 
 local PREFIX = "WhosWho"
-local SEND_WAIT_SECONDS = 5 -- wait before sending RECs, gathering the GETs and changes that arrive meanwhile
+local REVISION_WAIT_SECONDS = 15 -- wait before sending a new revision, gathering the changes that follow
+local REQUEST_WAIT_SECONDS = 5 -- wait before answering GETs, gathering the GETs that follow
+local MAX_WAIT_SECONDS = 300 -- longest wait from its start, however often it is pushed back
+local LOCK_WAIT_SECONDS = 5 -- between two tries while record sending is locked
 local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players it reached are ignored
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
@@ -74,7 +77,11 @@ local publishedRevision, publishedWithCharacters
 local requesters = {}
 ---@type table<string, WhosWho.Delivery> by channel (GUILD, PARTY, RAID) or by name (WHISPER)
 local deliveries = {}
-local locked, waiting = false, false
+local locked = false
+---@type number? when the pending RECs go out (GetTime), nil while none is pending
+local sendAt
+---@type number? when the pending wait started (GetTime)
+local waitStartedAt
 
 -- Whether a REC of my current revision that reaches that player is still queued, or was sent less than
 -- REACHED_DELAY_SECONDS ago: a GET from that player is then answered by that REC.
@@ -138,11 +145,16 @@ local function answerRequesters(recordUpdate)
 end
 
 local function sendRecords()
-    if locked then
-        C_Timer.After(SEND_WAIT_SECONDS, sendRecords)
+    -- Pushed back by a later change or GET.
+    if GetTime() < sendAt then
+        C_Timer.After(sendAt - GetTime(), sendRecords)
         return
     end
-    waiting = false
+    if locked then
+        C_Timer.After(LOCK_WAIT_SECONDS, sendRecords)
+        return
+    end
+    sendAt, waitStartedAt = nil, nil
 
     -- The REC text, built once for every REC this wait sends, and only when one goes out.
     local message
@@ -168,10 +180,17 @@ local function sendRecords()
     answerRequesters(recordUpdate)
 end
 
-local function scheduleRecordSending()
-    if waiting then return end
-    waiting = true
-    C_Timer.After(SEND_WAIT_SECONDS, sendRecords)
+-- One wait for every pending REC: a call never brings the send forward, and pushes it back to waitSeconds from now, up
+-- to MAX_WAIT_SECONDS after the wait started.
+---@param waitSeconds number
+local function scheduleRecordSending(waitSeconds)
+    local now = GetTime()
+    if not sendAt then
+        sendAt, waitStartedAt = now + waitSeconds, now
+        C_Timer.After(waitSeconds, sendRecords)
+        return
+    end
+    sendAt = math.min(math.max(sendAt, now + waitSeconds), waitStartedAt + MAX_WAIT_SECONDS)
 end
 
 ---Held while the player edits their identity: RECs wait until it is released.
@@ -240,7 +259,7 @@ end
 local function receiveRecordRequest(request, sender)
     if request.id ~= Identity.Id() or reachedRecently(sender) then return end
     requesters[sender] = true
-    scheduleRecordSending()
+    scheduleRecordSending(REQUEST_WAIT_SECONDS)
 end
 
 -- A REC is used only from a channel I share on, so strangers cannot fill my saved data.
@@ -286,7 +305,7 @@ function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
     publishedRevision, publishedWithCharacters = Identity.Revision(), Identity.Main() ~= nil
-    Identity.OnRevisionChanged(scheduleRecordSending)
+    Identity.OnRevisionChanged(function() scheduleRecordSending(REVISION_WAIT_SECONDS) end)
 end
 
 ---PLAYER_LOGIN, after Protocol.Start.
