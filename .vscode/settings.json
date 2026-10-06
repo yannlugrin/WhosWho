@@ -45,7 +45,15 @@
         "FriendsFrame_GetLastOnline",
         "UISpecialFrames",
         "GameTooltip_Hide",
-        "ScrollBoxConstants"
+        "ScrollBoxConstants",
+        "RaidNotice_AddMessage",
+        "SOUNDKIT",
+        "ChatTypeInfo",
+        "RaidWarningFrame",
+        "RaidBossEmoteFrame",
+        "UIErrorsFrame",
+        "GetUnitName",
+        "WorldMapFrame"
     ],
     "Lua.type.weakUnionCheck": true
 }

@@ -1,0 +1,83 @@
+name: Bug report
+description: Something in Who's Who doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The more precise the steps, the faster it gets fixed.
+
+  - type: input
+    id: version
+    attributes:
+      label: Who's Who version
+      description: The first line of `/ww status`.
+      placeholder: 0.1.0-beta.1
+    validations:
+      required: true
+
+  - type: input
+    id: build
+    attributes:
+      label: Game build
+      description: "Paste the result of `/dump GetBuildInfo()`."
+      placeholder: version, build, date, interface
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you did, step by step. Say if another player was involved and what they did.
+      placeholder: |
+        1. Link a character with `/ww link`
+        2. Group with a friend who also uses Who's Who
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: lua-error
+    attributes:
+      label: Lua error
+      description: The whole error, with its stack, from BugSack or the game's error window (`/console scriptErrors 1` shows them).
+      render: text
+
+  - type: textarea
+    id: debug
+    attributes:
+      label: Debug messages
+      description: For a problem between players, run `/ww debug on` on both sides, reproduce it, and paste the lines Who's Who printed on each side.
+      render: text
+
+  - type: input
+    id: scopes
+    attributes:
+      label: Sharing settings
+      description: The result of `/ww scope`, if the problem is about sharing.
+
+  - type: dropdown
+    id: alone
+    attributes:
+      label: With only Who's Who enabled
+      description: Disable every other add-on in the AddOns list at the character selection screen, then try again.
+      options:
+        - Not tested
+        - It still happens with only Who's Who enabled
+        - It doesn't happen with only Who's Who enabled
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: addons
+    attributes:
+      label: Other add-ons
+      description: The add-ons you use that change the interface or chat (for example EllesmereUI or a chat add-on).

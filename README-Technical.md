@@ -10,8 +10,10 @@ Current files, then the planned ones.
 
 ```
 WhosWho/
+├── .github/ISSUE_TEMPLATE/
+│   └── bug_report.yml             Bug report form: version, game build, steps, Lua error, debug messages
 ├── .github/workflows/
-│   ├── package.yml                BigWigs packager on tag push (CurseForge, Wago)
+│   ├── package.yml                BigWigs packager on tag push: CurseForge, and the GitHub release with this version's changelog
 │   └── checks.yml                 luacheck and the offline suites on every push
 ├── .vscode/
 │   ├── settings.json              Lua language server: Lua 5.1, Ketho WoW API annotations, globals they lack
@@ -70,6 +72,8 @@ WhosWho/
 ├── README-Design.md               The frames: structure, functional and visual description
 ├── README-Technical.md            This file
 ├── README-Testing.md              In-game test plan between two clients
+├── CHANGELOG.md                   Changes per version (Keep a Changelog), packaged and used as release notes
+├── CONTRIBUTING.md                Setup, checks, documents to update, releasing (not packaged)
 └── LICENSE                        MIT
 ```
 

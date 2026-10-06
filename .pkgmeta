@@ -1,6 +1,10 @@
 package-as: WhosWho
 enable-nolib-creation: no
 
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
 externals:
   Libs/LibStub:
     url: https://repos.curseforge.com/wow/libstub/trunk/
@@ -12,10 +16,6 @@ externals:
     url: https://repos.curseforge.com/wow/ace3/trunk/AceComm-3.0/
   Libs/AceLocale-3.0:
     url: https://repos.curseforge.com/wow/ace3/trunk/AceLocale-3.0/
-  Libs/AceGUI-3.0:
-    url: https://repos.curseforge.com/wow/ace3/trunk/AceGUI-3.0/
-  Libs/AceConfig-3.0:
-    url: https://repos.curseforge.com/wow/ace3/trunk/AceConfig-3.0/
   Libs/LibSerialize:
     url: https://github.com/rossnichols/LibSerialize
   Libs/LibDeflate:
@@ -31,6 +31,7 @@ ignore:
   - .luacheckrc
   - .pkgmeta
   - .vscode
+  - CONTRIBUTING.md
   - Media/Source
   - README-Design.md
   - README-Technical.md

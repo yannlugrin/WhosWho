@@ -2,11 +2,17 @@
 ## Title: Who's Who
 ## Notes: Link your characters into one identity and recognise people across their alts.
 ## Notes-frFR: Liez vos personnages en une identité et reconnaissez les gens sur tous leurs personnages.
+## Category: Chat
+## Category-frFR: Discussion
 ## Author: Mr Caillou
 ## Version: @project-version@
 ## IconTexture: Interface\AddOns\WhosWho\Media\Icon
 ## SavedVariables: WhosWhoDB
 ## OptionalDeps: EllesmereUI
+## X-Website: https://github.com/yannlugrin/WhosWho
+## X-Github: https://github.com/yannlugrin/WhosWho
+## X-License: MIT
+## X-Curse-Project-ID: 1728250
 
 Libs.xml
 
