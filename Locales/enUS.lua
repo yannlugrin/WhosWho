@@ -6,7 +6,7 @@ L["%s(%d bytes)"] = true
 L["(no linked character)"] = true
 L["- %s: %s, level %s"] = true
 L["added by you"] = true
-L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww identity, /ww settings, /ww debug <on|off>"] = true
+L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww open, /ww settings, /ww debug <on|off>"] = true
 L["confirmed"] = true
 L["created by you"] = true
 L["Debug messages: %s"] = true
@@ -100,3 +100,13 @@ L["RP"] = true
 L["Ruleset"] = true
 L["Shared with: %s"] = true
 L["Sharing settings"] = true
+
+-- Launcher
+L["A button on the edge of the minimap: click to open your identity, right-click for a menu."] = true
+L["Click: open your identity"] = true
+L["Display"] = true
+L["Right-click: menu"] = true
+L["Settings"] = true
+L["Show in the add-on compartment"] = true
+L["Show minimap button"] = true
+L["Who's Who in the add-on compartment next to the minimap: click to open your identity, right-click for a menu."] = true

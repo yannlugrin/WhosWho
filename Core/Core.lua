@@ -26,6 +26,7 @@ local addonName, ns = ...
 ---@field Skin WhosWho.Skin
 ---@field IdentityDialogs WhosWho.IdentityDialogs
 ---@field Main WhosWho.Main
+---@field Launcher WhosWho.Launcher
 
 -- Add-on -----------------------------------------------------------------------------------------
 
@@ -91,6 +92,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Protocol.AnnounceLogin()
         if IsInGuild() then C_GuildInfo.GuildRoster() end
         if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.IdentityDialogs.AskToLink() end
+        ns.Launcher.Register()
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
@@ -117,7 +119,7 @@ end)
 ns.Commands = {}
 
 local function help()
-    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww identity, /ww settings, /ww debug <on|off>"])
+    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww open, /ww settings, /ww debug <on|off>"])
 end
 
 ns.Commands.status = function()

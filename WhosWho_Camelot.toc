@@ -33,3 +33,4 @@ UI\Settings.lua
 UI\Dialogs\Identity.lua
 UI\Main\Window.lua
 UI\Main\MyIdentity.lua
+UI\Launcher.lua

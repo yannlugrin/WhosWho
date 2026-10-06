@@ -20,6 +20,7 @@ ns.Store = Store
 ---@field tooltipNickname "afterName"|"ownLine"|"hidden"
 ---@field tooltipOtherCharacters boolean the "Also:" line
 ---@field debugMessages boolean every Who's Who message sent or received, printed in chat
+---@field launcher { hide: boolean, showInCompartment: boolean, minimapPos: number? } LibDBIcon's own format: the minimap button and the add-on compartment entry
 
 Store.DEFAULTS = {
     global = {
@@ -35,6 +36,7 @@ Store.DEFAULTS = {
         tooltipNickname = "ownLine",
         tooltipOtherCharacters = true,
         debugMessages = false,
+        launcher = { hide = false, showInCompartment = true },
     },
 }
 

@@ -19,7 +19,7 @@ read_globals = {
     "TooltipDataProcessor", "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer",
     "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR",
     "PanelTemplates_TabResize", "PanelTemplates_SetNumTabs", "PanelTemplates_SetTab", "CreateScrollBoxListLinearView",
-    "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline",
+    "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline", "MenuUtil",
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "BNET_CLIENT_WOW",
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
     "GetGuildRosterInfo", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumGuildMembers", "GetServerTime", "GetTime",

@@ -354,6 +354,6 @@ end)
 
 -- Slash command ----------------------------------------------------------------------------------
 
-ns.Commands.identity = function()
+ns.Commands.open = function()
     window:Show()
 end

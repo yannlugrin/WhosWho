@@ -288,7 +288,7 @@ end
 local function login(acc, c)
     assert(not online(c.name), c.name .. " is already online")
     -- The UI files are not loaded: no first-login prompt.
-    local session = { account = acc, character = c, frames = {}, online = true, ns = { IdentityDialogs = { AskToLink = function() end } } }
+    local session = { account = acc, character = c, frames = {}, online = true, ns = { IdentityDialogs = { AskToLink = function() end }, Launcher = { Register = function() end } } }
     c.session = session
     session.env = newEnvironment(session)
     for _, chunk in ipairs(chunks) do

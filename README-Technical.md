@@ -43,6 +43,7 @@ WhosWho/
 │   ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
 │   ├── Settings.xml               Settings list row template: a section's information text
 │   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Data
+│   ├── Launcher.lua               Minimap button and add-on compartment entry (LibDBIcon)
 │   ├── Main/                      The main window
 │   │   ├── Window.lua             Window and tab bar
 │   │   └── MyIdentity.lua         My identity tab
@@ -338,7 +339,8 @@ Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared b
 
 ```
 scopes = { guild, friends, whispers, group }, chatNicknames, tooltipNickname ("afterName" | "ownLine" | "hidden"),
-tooltipOtherCharacters, debugMessages (every Who's Who message sent or received, printed in chat)
+tooltipOtherCharacters, debugMessages (every Who's Who message sent or received, printed in chat),
+launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the minimap button and the add-on compartment entry)
 ```
 
 Planned: `scopes.selected` and the list of selected players.
