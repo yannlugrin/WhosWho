@@ -20,12 +20,14 @@ local dataObject = LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
     type = "launcher",
     label = L["Who's Who"],
     icon = C_AddOns.GetAddOnMetadata(addonName, "IconTexture"),
-    OnClick = function(owner, button)
+    OnClick = function(_, button)
         if button ~= "RightButton" then
             toggleWindow()
             return
         end
-        MenuUtil.CreateContextMenu(owner, function(_, root)
+        -- Not owned by the clicked button: a menu closes with its owner, and EllesmereUI's minimap button bar hides
+        -- on the press that picks an option, before the option's click lands.
+        MenuUtil.CreateContextMenu(nil, function(_, root)
             root:CreateButton(L["My identity"], function() ns.Commands.open("") end)
             root:CreateButton(L["Settings"], function() ns.Commands.settings("") end)
         end)
