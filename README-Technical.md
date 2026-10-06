@@ -44,15 +44,19 @@ WhosWho/
 │   ├── Settings.xml               Settings list row template: a section's information text
 │   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Data
 │   ├── Launcher.lua               Minimap button and add-on compartment entry (LibDBIcon)
+│   ├── Glyphs.lua                 Glyph images, colours, labels and tooltips
 │   ├── Main/                      The main window
 │   │   ├── Window.lua             Window and tab bar
-│   │   └── MyIdentity.lua         My identity tab
+│   │   ├── Lists.lua              Shared by the tabs' lists: columns, sortable headers, class names and icons
+│   │   ├── MyIdentity.lua         My identity tab
+│   │   └── People.lua             People tab
 │   ├── Dialogs/
 │   │   └── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
 │   └── Decorations/               Nicknames added to the game's own frames
 │       └── Chat.lua               Sender names in chat lines
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
+│   ├── Glyphs/                    Person, Pencil, Banner, Question, Hourglass: white 32×32, tinted in code
 │   └── Source/whoswho.png         Icon source, 1024×1024 (not packaged)
 ├── Tests/
 │   ├── Crypto-Test.lua            SHA-512 and Ed25519 against OpenSSL and RFC 8032 vectors, timing

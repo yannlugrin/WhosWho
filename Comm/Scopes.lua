@@ -48,19 +48,20 @@ local function guildMemberGuid(name)
     return nil
 end
 
+-- The units of the other members of my group (in a raid, mine too).
+local function groupUnits()
+    local units = {}
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do units[i] = "raid" .. i end
+    elseif IsInGroup() then
+        for i = 1, GetNumSubgroupMembers() do units[i] = "party" .. i end
+    end
+    return units
+end
+
 -- Another member of my group, from the group units; stops at the name.
 local function groupMemberGuid(name)
-    local unitPrefix, unitCount
-    if IsInRaid() then
-        unitPrefix, unitCount = "raid", GetNumGroupMembers()
-    elseif IsInGroup() then
-        unitPrefix, unitCount = "party", GetNumSubgroupMembers()
-    else
-        return nil
-    end
-
-    for i = 1, unitCount do
-        local unit = unitPrefix .. i
+    for _, unit in ipairs(groupUnits()) do
         local unitName, guid = ns.UnitWholeName(unit), UnitGUID(unit)
         if unitName and guid and notSecret(unitName, guid) and unitName == name and guid ~= UnitGUID("player") then
             return guid
@@ -85,6 +86,25 @@ function Scopes.SenderGuid(name, distribution)
     if distribution == "PARTY" or distribution == "RAID" then return groupMemberGuid(name) end
     if distribution == "WHISPER" then return friendGuid(name) or (whispers[name] and whispers[name].guid) end
     return nil
+end
+
+---The characters the game shows me online now: guild members from the roster, friends and group members.
+---@return table<string, true> by GUID
+function Scopes.OnlineGuids()
+    local guids = {}
+    for i = 1, GetNumGuildMembers() do
+        local online, guid = select(9, GetGuildRosterInfo(i)), select(17, GetGuildRosterInfo(i))
+        if online and guid and notSecret(online, guid) then guids[guid] = true end
+    end
+    for i = 1, C_FriendList.GetNumFriends() do
+        local info = C_FriendList.GetFriendInfoByIndex(i)
+        if info and info.connected and info.guid and notSecret(info.connected, info.guid) then guids[info.guid] = true end
+    end
+    for _, unit in ipairs(groupUnits()) do
+        local online, guid = UnitIsConnected(unit), UnitGUID(unit)
+        if online and guid and notSecret(online, guid) then guids[guid] = true end
+    end
+    return guids
 end
 
 ---A whisper received (CHAT_MSG_WHISPER: arguments 2 and 12): the sender's GUID, for confirmations only.

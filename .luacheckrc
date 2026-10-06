@@ -19,12 +19,12 @@ read_globals = {
     "TooltipDataProcessor", "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer",
     "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR",
     "PanelTemplates_TabResize", "PanelTemplates_SetNumTabs", "PanelTemplates_SetTab", "CreateScrollBoxListLinearView",
-    "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline", "MenuUtil", "GameTooltip", "GameTooltip_Hide", "HIGHLIGHT_FONT_COLOR", "GRAY_FONT_COLOR", "RED_FONT_COLOR",
+    "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline", "MenuUtil", "GameTooltip", "GameTooltip_Hide", "HIGHLIGHT_FONT_COLOR", "GRAY_FONT_COLOR", "RED_FONT_COLOR", "CreateColor", "Mixin", "ScrollBoxConstants",
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "BNET_CLIENT_WOW",
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
     "GetGuildRosterInfo", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumGuildMembers", "GetServerTime", "GetTime",
     "GuildControlGetNumRanks", "GuildControlGetRankName", "GuildRoster", "IsInGroup", "IsInGuild", "IsInInstance", "IsInRaid",
-    "UnitClass", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
+    "UnitClass", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsConnected", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
     "WOW_PROJECT_ID", "WOW_PROJECT_CAMELOT", "WOW_PROJECT_MAINLINE",
 }
 

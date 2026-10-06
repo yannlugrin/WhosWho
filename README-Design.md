@@ -28,7 +28,7 @@ My own characters are always confirmed for me: an alt joins my identity by loggi
 
 **Which nickname wins.** A nickname I set replaces, for me only, the one the person has (the player's own for a shared identity, the guild's for a person created in the guild); removing mine brings it back. Where mine replaces another one, that other nickname is shown small and grey next to mine (no source), so I see what would come back.
 
-**Glyphs.** There is no separate word for these cases in the interface. A small glyph before each nickname tells where it comes from; hovering it explains it in one line, including who set it when it came from the guild.
+**Glyphs.** There is no separate word for these cases in the interface. A small glyph before each nickname tells where it comes from; hovering it shows its label and explains it in one line.
 
 Each glyph has one short label, used in the keys, the filter and the hover text:
 
@@ -36,12 +36,12 @@ Each glyph has one short label, used in the keys, the filter and the hover text:
 |---|---|---|---|
 | Person | **Confirmed** | A nickname | Identity shared by the player and confirmed |
 | Pencil | **Renamed** | A nickname | Confirmed identity whose nickname I overrode |
-| Banner | **Guild** | A nickname | Identity not confirmed, set by a guild member |
-| Question mark | **Unconfirmed** | A nickname or character name | Identity shared by the player but none of its characters seen yet, or no identity received from the player (a person I created, or a guild member's character not linked to any identity) |
+| Banner | **Guild** | A nickname | Identity shared by the guild, not by the player |
+| Question mark | **Unconfirmed** | A nickname or character name | Identity added by me: the player doesn't use the add-on, or never confirmed anything to me (shared but none of its characters seen yet); also a guild member's character not linked to any identity |
 | Person | **Confirmed** | A character (state) | Declared by the player and seen |
 | Hourglass | **Listed** | A character (state) | Declared by the player, not seen yet |
-| Question mark | **Added by me** | A character (state) | Attached by me, never shared by the player |
-| Banner | **Guild** | A character (state) | Attached by a guild member (a person created in the guild); its main always is |
+| Question mark | **Added by me** | A character (state) | Not listed by the player: I added it myself |
+| Banner | **Guild** | A character (state) | Listed by the guild: a character of an identity the guild shared (its main always is), or an alt the guild linked to a player's confirmed identity that the player doesn't list |
 | Crown | **Main** | A character | The person's main character |
 
 The People and Guild tabs show a key of all these glyphs under both panels, full width, in this order: Main, Renamed, Confirmed, Listed, Guild, Unconfirmed / Added by me. The Listed glyph is shown on character names wherever other players' characters are listed (People detail panel, person editor, tooltip "Also:" line); never in My identity.
@@ -50,7 +50,7 @@ The People and Guild tabs show a key of all these glyphs under both panels, full
 
 - **Look**: the default WoW Forever window style (Blizzard frames: title bar with close button, dark inset panels, gold headings, white body text, standard buttons). If the EllesmereUI add-on is installed, the same frames get a flat dark theme with an accent color, so layouts must not depend on decoration.
 - **Widgets allowed** (the only ones the theme can restyle): window shell, panel, inset panel, tabs, buttons, text inputs, checkboxes, dropdowns, scroll lists with a scroll bar, close button, prev/next page arrows, square icons, sortable column headers.
-- **Size**: main window about 640×460 px at default UI scale, movable. Dialogs about 360 px wide.
+- **Size**: main window about 700×460 px at default UI scale, movable. Dialogs about 360 px wide.
 - **Text**: everything is translated; allow texts to be 30% longer than English.
 - **Names**: characters are shown as "First Surname" (WoW: Forever has no realms), in their class color, with a class icon where there is room.
 - **Glyphs**: small (about the text height), next to the name, never replacing it. Small actions on a nickname (edit, clear) are glyph buttons next to it; actions on a whole person (Edit, Forget) are text buttons at the bottom of its panel.
@@ -85,6 +85,7 @@ Everyone I know about, one row per person.
   - under the nickname, small and grey: the nickname that applies without mine, if any;
   - characters, two lines each: the name (class color) with the main crown and, right after, "Online" (green) or the last seen time; under it, small and grey, a glyph for the character's state, without text (Confirmed, Listed, Guild or Added by me), then level · ruleset.
   - **Edit** (frame 5) and **Forget** (with confirmation) at the bottom of the panel, aligned right, Edit on the left of Forget.
+  - With no row selected, the panel shows "Select a person to see their characters."
 - Empty state: how to start (right-click a player, or pick from recent contacts, the group or the guild), with one **Pick characters** button (frame 6; the picked character starts a new person in the editor).
 
 ### 4. Main Window — Tab "Guild"

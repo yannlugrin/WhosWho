@@ -57,6 +57,14 @@ local function indexCharacter(guid, id)
     index()[guid] = id
 end
 
+---@type fun()[]
+local changeListeners = {}
+
+-- Called once at the end of each public change, so listeners never see a change half done.
+local function changed()
+    for _, listener in ipairs(changeListeners) do listener() end
+end
+
 local function unindexCharacter(guid, id)
     if index()[guid] == id then index()[guid] = nil end
 end
@@ -78,6 +86,18 @@ end
 ---@return WhosWho.Person?
 function People.Get(id)
     return ns.data.people[id]
+end
+
+---Every person I hold.
+---@return table<string, WhosWho.Person> by identity ID
+function People.All()
+    return ns.data.people
+end
+
+---Adds a function called after each change to the people I hold: a person, a character, a nickname or an activity.
+---@param listener fun()
+function People.OnChanged(listener)
+    changeListeners[#changeListeners + 1] = listener
 end
 
 ---The person a character belongs to, and everything known about the character.
@@ -209,6 +229,7 @@ function People.Create(guid, character)
     data.nextManual = data.nextManual + 1
     data.people[id] = { id = id, main = guid, chars = { [guid] = addedCharacter(character) } }
     indexCharacter(guid, id)
+    changed()
 
     return id
 end
@@ -226,6 +247,7 @@ function People.AddCharacter(id, guid, character)
 
     person.chars[guid] = addedCharacter(character)
     indexCharacter(guid, id)
+    changed()
 
     return true
 end
@@ -243,6 +265,7 @@ function People.RemoveCharacter(id, guid)
 
     person.chars[guid] = nil
     unindexCharacter(guid, id)
+    changed()
 
     return true
 end
@@ -259,6 +282,7 @@ function People.Rename(id, nickname)
     local clean, err = ns.Record.CleanName(nickname)
     if err then return false, err end
     person.customNickname = clean
+    changed()
 
     return true
 end
@@ -275,12 +299,12 @@ function People.SetMain(id, guid)
     if not person.chars[guid] then return false, "character" end
 
     person.main = guid
+    changed()
 
     return true
 end
 
----@param id string
-function People.Forget(id)
+local function forget(id)
     local person = ns.data.people[id]
     if not person then return end
 
@@ -288,10 +312,18 @@ function People.Forget(id)
     ns.data.people[id] = nil
 end
 
+---@param id string
+function People.Forget(id)
+    if not ns.data.people[id] then return end
+    forget(id)
+    changed()
+end
+
 ---Forgets every person, shared and manual.
 function People.ForgetAll()
     ns.data.people = {}
     People.Reset()
+    changed()
 end
 
 -- Received from players --------------------------------------------------------------------------
@@ -319,7 +351,7 @@ local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
             indexCharacter(movedGuid, toPerson.id)
         end
         toPerson.customNickname = toPerson.customNickname or fromPerson.customNickname
-        People.Forget(fromPerson.id)
+        forget(fromPerson.id)
     end
 
     -- The character itself, its entry moved from the identity it left, with the record's data: listed, or confirmed
@@ -346,7 +378,8 @@ function People.Accept(signedRecord)
     if not signedRecord.main then
         if sharedPerson then
             AutomaticChanges.Record("forgotten", sharedPerson, nil, sharedPerson.chars)
-            People.Forget(signedRecord.id)
+            forget(signedRecord.id)
+            changed()
         end
         forgotten[signedRecord.id] = signedRecord.rev
         return "forgotten"
@@ -380,6 +413,7 @@ function People.Accept(signedRecord)
         storeCharacter(sharedPerson, guid, recordCharacter, pending[guid])
     end
     AutomaticChanges.EndOperation()
+    changed()
 
     return "updated"
 end
@@ -405,12 +439,14 @@ function People.Confirm(id, guid, level)
     local personCharacter = person.chars[guid]
     if personCharacter and personCharacter.state == "confirmed" then
         personCharacter.level, personCharacter.lastSeen = level, time()
+        changed()
         return true
     end
 
     AutomaticChanges.BeginOperation(person)
     local stored = storeCharacter(person, guid, recordCharacter, level)
     AutomaticChanges.EndOperation()
+    if stored then changed() end
     return stored
 end
 
@@ -424,6 +460,7 @@ function People.Activity(guid, level, lastSeen)
     if not character or (character.lastSeen and character.lastSeen >= lastSeen) then return false end
 
     character.level, character.lastSeen = level, lastSeen
+    changed()
 
     return true
 end

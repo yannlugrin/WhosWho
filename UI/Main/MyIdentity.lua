@@ -2,8 +2,8 @@ local _, ns = ...
 ---@cast ns WhosWho.Namespace
 
 local L = ns.L
-local RULESET = ns.Record.RULESET
 local Main = ns.Main
+local Lists = ns.Lists
 local window = Main.Window
 
 local SIDE_PADDING = 14
@@ -15,7 +15,7 @@ local GLYPH_SIZE = 14
 local CHECKBOX_SIZE = 24
 local SCROLL_BAR_WIDTH = 16
 
-local CROWN_TEXTURE = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
+local CROWN_TEXTURE = ns.Glyphs.CROWN_TEXTURE
 local EDIT_TEXTURE = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
 -- The crown on linked characters other than the main.
 local DIM_CROWN_ALPHA = 0.4
@@ -26,13 +26,6 @@ local SCOPES = {
     { key = "friends", name = L["Friends"] },
     { key = "whispers", name = L["Whispers"] },
     { key = "group", name = L["Group"] },
-}
-
-local RULESET_NAMES = {
-    [RULESET.Normal] = L["Normal"],
-    [RULESET.PvP] = L["PvP"],
-    [RULESET.RP] = L["RP"],
-    [RULESET.Hardcore] = L["Hardcore"],
 }
 
 -- My identity: header ----------------------------------------------------------------------------
@@ -81,49 +74,21 @@ local inset = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
 inset:SetPoint("TOPLEFT", 8, -88)
 inset:SetPoint("BOTTOMRIGHT", -6, 34)
 
--- Columns from the right edge of a row; the name takes the space left of them.
 local COLUMNS = {
-    { key = "Linked", width = 50, label = L["Linked"] },
-    { key = "Main", width = 40, label = L["Main"] },
-    { key = "LastPlayed", width = 100, label = L["Last played"] },
-    { key = "Level", width = 40, label = L["Level"] },
+    { key = "Linked", width = 50, label = L["Linked"], justify = "CENTER" },
+    { key = "Main", width = 40, label = L["Main"], justify = "CENTER" },
+    { key = "LastPlayed", width = 100, label = L["Last played"], sortable = true },
+    { key = "Level", width = 40, label = L["Level"], sortable = true },
     { key = "Ruleset", width = 80, label = L["Ruleset"] },
 }
+local columnsWidth = Lists.LayOut(COLUMNS)
 local NAME_LEFT = 6 + CLASS_ICON_SIZE + 8
 
-local columnsWidth = 0
-for _, column in ipairs(COLUMNS) do
-    column.right = -columnsWidth
-    columnsWidth = columnsWidth + column.width
-end
-
--- Places a region in a column of a row: centred, or across it for text.
-local function placeInColumn(region, row, column, centred)
-    if centred then
-        region:SetPoint("CENTER", row, "RIGHT", column.right - column.width / 2, 0)
-    else
-        region:SetPoint("LEFT", row, "RIGHT", column.right - column.width, 0)
-        region:SetPoint("RIGHT", row, "RIGHT", column.right, 0)
-    end
-end
-
-local header = CreateFrame("Frame", nil, inset)
+panel.ListHeader = Lists.CreateHeader(inset, { key = "Name", label = L["Name"], left = NAME_LEFT, sortable = true },
+    COLUMNS, columnsWidth)
+local header = panel.ListHeader
 header:SetPoint("TOPLEFT", 4, -4)
 header:SetPoint("TOPRIGHT", -4 - SCROLL_BAR_WIDTH, -4)
-header:SetHeight(18)
-
-local nameHeader = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-nameHeader:SetPoint("LEFT", NAME_LEFT, 0)
-nameHeader:SetPoint("RIGHT", header, "RIGHT", -columnsWidth, 0)
-nameHeader:SetJustifyH("LEFT")
-nameHeader:SetText(L["Name"])
-
-for _, column in ipairs(COLUMNS) do
-    local label = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    placeInColumn(label, header, column)
-    label:SetJustifyH((column.key == "Main" or column.key == "Linked") and "CENTER" or "LEFT")
-    label:SetText(column.label)
-end
 
 local scrollBox = CreateFrame("Frame", nil, inset, "WowScrollBoxList")
 scrollBox:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
@@ -141,6 +106,7 @@ local skin
 
 ---A character row of the list; createRow adds its regions the first time the row is used.
 ---@class WhosWho.MyIdentityRow: Frame
+---@field Online Texture the gold bar behind the character logged in
 ---@field ClassIcon Texture
 ---@field Name FontString
 ---@field Ruleset FontString
@@ -159,6 +125,8 @@ end
 
 ---@param row WhosWho.MyIdentityRow
 local function createRow(row)
+    row.Online = Lists.CreateRowHighlight(row)
+
     local iconFrame = CreateFrame("Frame", nil, row)
     iconFrame:SetSize(CLASS_ICON_SIZE, CLASS_ICON_SIZE)
     iconFrame:SetPoint("LEFT", 6, 0)
@@ -172,21 +140,18 @@ local function createRow(row)
     row.Name:SetWordWrap(false)
 
     row.Ruleset = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-    placeInColumn(row.Ruleset, row, columnByKey.Ruleset)
-    row.Ruleset:SetJustifyH("LEFT")
+    Lists.Place(row.Ruleset, row, columnByKey.Ruleset)
 
     row.Level = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    placeInColumn(row.Level, row, columnByKey.Level)
-    row.Level:SetJustifyH("LEFT")
+    Lists.Place(row.Level, row, columnByKey.Level)
 
     row.LastPlayed = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-    placeInColumn(row.LastPlayed, row, columnByKey.LastPlayed)
-    row.LastPlayed:SetJustifyH("LEFT")
+    Lists.Place(row.LastPlayed, row, columnByKey.LastPlayed)
 
     row.MainButton = CreateFrame("Button", nil, row)
     row.MainButton:SetSize(GLYPH_SIZE, GLYPH_SIZE)
     row.MainButton:SetNormalTexture(CROWN_TEXTURE)
-    placeInColumn(row.MainButton, row, columnByKey.Main, true)
+    Lists.Place(row.MainButton, row, columnByKey.Main)
     -- The main's crown and checkbox are disabled but still explain why.
     row.MainButton:SetMotionScriptsWhileDisabled(true)
     row.MainButton:SetScript("OnEnter", showControlTooltip)
@@ -194,7 +159,7 @@ local function createRow(row)
 
     row.LinkedCheckbox = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     row.LinkedCheckbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
-    placeInColumn(row.LinkedCheckbox, row, columnByKey.Linked, true)
+    Lists.Place(row.LinkedCheckbox, row, columnByKey.Linked)
     row.LinkedCheckbox:SetMotionScriptsWhileDisabled(true)
     row.LinkedCheckbox:SetScript("OnEnter", showControlTooltip)
     row.LinkedCheckbox:SetScript("OnLeave", GameTooltip_Hide)
@@ -210,11 +175,14 @@ end
 local function initRow(row, character)
     if not row.Name then createRow(row) end
 
-    local _, classFile = GetClassInfo(character.classID)
-    local coloredName = C_ClassColor.GetClassColor(classFile):WrapTextInColorCode(character.name)
-    row.ClassIcon:SetAtlas("classicon-" .. classFile:lower())
+    local coloredName = Lists.ClassColoredName(character.name, character.classID)
+    Lists.SetClassIcon(row.ClassIcon, character.classID)
     row.Name:SetText(coloredName)
-    row.Ruleset:SetText(RULESET_NAMES[character.ruleset])
+    row.Online:SetShown(character.online)
+    -- The grey texts are hard to read on the gold bar: they turn white there.
+    row.Ruleset:SetFontObject(character.online and "GameFontHighlight" or "GameFontDisable")
+    row.LastPlayed:SetFontObject(character.online and "GameFontHighlight" or "GameFontDisable")
+    row.Ruleset:SetText(Lists.RulesetName(character.ruleset))
     row.Level:SetText(tostring(character.level))
     row.LastPlayed:SetText(character.online and GREEN_FONT_COLOR:WrapTextInColorCode(L["Online"])
         or FriendsFrame_GetLastOnline(character.lastSeen))

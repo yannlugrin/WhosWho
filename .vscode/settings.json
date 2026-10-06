@@ -44,7 +44,8 @@
         "CreateDataProvider",
         "FriendsFrame_GetLastOnline",
         "UISpecialFrames",
-        "GameTooltip_Hide"
+        "GameTooltip_Hide",
+        "ScrollBoxConstants"
     ],
     "Lua.type.weakUnionCheck": true
 }

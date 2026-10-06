@@ -324,6 +324,28 @@ do
     check(indexMatchesSavedData({ G1, G2, G3, G4 }), "index kept up to date: confirmation merge")
 end
 
+-- People: change notifications ------------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A = string.rep("a", 64)
+    local changes = 0
+    P.OnChanged(function() changes = changes + 1 end)
+    P.Confirm(A, G1, 10)
+    check(changes == 0, "a confirmation waiting for its record changes nothing")
+    P.Accept(makeRecord(A, 1, { G1, G2 }))
+    check(changes == 1, "a record stored, with the confirmation waiting for it: one notification")
+    P.Accept(makeRecord(A, 1, { G1, G2 }))
+    check(changes == 1, "a stale record: none")
+    local manual = P.Create(G3, INFO)
+    P.Rename(manual, "Tanky")
+    P.Activity(G1, 11, 100)
+    check(changes == 4, "each change of mine and each activity notified once")
+    P.Accept(makeRecord(A, 2, { G1, G2, G3 }))
+    check(changes == 5 and P.Get(manual) == nil, "a record merging my manual person: one notification")
+end
+
 -- People: a confirmation before the record listing the character ----------------------------------------
 
 fresh()

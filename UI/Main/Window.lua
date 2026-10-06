@@ -6,10 +6,11 @@ local L = ns.L
 ---@class WhosWho.Main
 ---@field Window Frame the main window
 ---@field MyIdentity Frame the My identity tab
+---@field People Frame the People tab
 local Main = {}
 ns.Main = Main
 
-local WIDTH, HEIGHT = 640, 460
+local WIDTH, HEIGHT = 700, 460
 local TAB_SPACING = 3
 
 -- Window -----------------------------------------------------------------------------------------

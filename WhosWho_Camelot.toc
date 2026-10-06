@@ -31,7 +31,10 @@ UI\Skin.lua
 UI\Settings.xml
 UI\Settings.lua
 UI\Dialogs\Identity.lua
+UI\Glyphs.lua
 UI\Main\Window.lua
+UI\Main\Lists.lua
 UI\Main\MyIdentity.lua
+UI\Main\People.lua
 UI\Launcher.lua
 UI\Decorations\Chat.lua
