@@ -60,7 +60,7 @@ addScopeCheckbox("guild", L["Guild"], L["Guild members who use Who's Who see you
 addScopeCheckbox("friends", L["Friends"], L["Your friends who use Who's Who see your identity."])
 addScopeCheckbox("group", L["My party or raid"],
     L["Members of your current party or raid who use Who's Who see your identity."])
-addScopeCheckbox("whispers", L["People I whisper"], L["Anyone you whisper, or who whispers you, can ask for your identity."])
+addScopeCheckbox("whispers", L["People I whisper"], L["Anyone you whisper can ask for your identity."])
 
 -- Display ----------------------------------------------------------------------------------------
 

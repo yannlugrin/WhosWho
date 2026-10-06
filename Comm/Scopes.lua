@@ -3,7 +3,7 @@ local _, ns = ...
 local Identity, People = ns.Identity, ns.People
 
 -- Who my record goes to and through which channel, the GUIDs the game gives for the players I share with, and the
--- relationships kept on confirmed characters (guild, friendOf).
+-- relationships kept on confirmed characters (guild, friendOf, whisperedAt).
 
 ---@class WhosWho.Scopes
 local Scopes = {}
@@ -20,8 +20,12 @@ local issecretvalue = issecretvalue or function() return false end
 
 -- Sources ----------------------------------------------------------------------------------------
 
----@type table<string, string> whole name -> GUID, players whispered with this session (sent or received)
-local whisperGuids = {}
+---@class WhosWho.Whisper
+---@field guid string
+---@field sentAt number? seconds, from time(): my last whisper to that player this session, nil while I only received
+
+---@type table<string, WhosWho.Whisper> whole name -> players whispered with this session (sent or received)
+local whispers = {}
 
 ---Whether no value read from the game is secret. A secret value (Midnight-era API) may only be displayed: never
 ---compared, stored or used as a key.
@@ -79,15 +83,28 @@ end
 function Scopes.SenderGuid(name, distribution)
     if distribution == "GUILD" then return guildMemberGuid(name) end
     if distribution == "PARTY" or distribution == "RAID" then return groupMemberGuid(name) end
-    if distribution == "WHISPER" then return friendGuid(name) or whisperGuids[name] end
+    if distribution == "WHISPER" then return friendGuid(name) or (whispers[name] and whispers[name].guid) end
     return nil
 end
 
----A whisper sent or received (CHAT_MSG_WHISPER, CHAT_MSG_WHISPER_INFORM: arguments 2 and 12).
+---A whisper received (CHAT_MSG_WHISPER: arguments 2 and 12): the sender's GUID, for confirmations only.
 ---@param name any
 ---@param guid any
-function Scopes.Whispered(name, guid)
-    if name and guid and notSecret(name, guid) then whisperGuids[name] = guid end
+function Scopes.WhisperReceived(name, guid)
+    if not (name and guid and notSecret(name, guid)) then return end
+    -- An answer keeps my whisper to that character.
+    if whispers[name] and whispers[name].guid == guid then return end
+    whispers[name] = { guid = guid }
+end
+
+---A whisper sent (CHAT_MSG_WHISPER_INFORM: arguments 2 and 12): the receiver's GUID, and the Whispers scope.
+---@param name any
+---@param guid any
+function Scopes.WhisperSent(name, guid)
+    if not (name and guid and notSecret(name, guid)) then return end
+    local now = time()
+    whispers[name] = { guid = guid, sentAt = now }
+    People.SetWhisperedAt(guid, now)
 end
 
 -- Relationships ----------------------------------------------------------------------------------
@@ -137,6 +154,13 @@ function Scopes.SetRelationships(guid, name)
     if friendGuid(name) == guid then People.SetFriendOf(guid, UnitGUID("player")) end
 end
 
+---After a record is stored: whisperedAt of the characters I whispered this session that I now hold.
+function Scopes.KeepSentWhispers()
+    for _, whisper in pairs(whispers) do
+        if whisper.sentAt then People.SetWhisperedAt(whisper.guid, whisper.sentAt) end
+    end
+end
+
 -- Sharing ----------------------------------------------------------------------------------------
 
 ---Whether my scopes allow sharing identities with that player, both ways: sending my record, and using or asking
@@ -148,10 +172,11 @@ function Scopes.Allows(name)
     if scopes.guild and C_GuildInfo.MemberExistsByName(name) then return true end
     if scopes.friends and C_FriendList.GetFriendInfo(name) then return true end
     if scopes.group and groupMemberGuid(name) then return true end
-    if scopes.whispers and whisperGuids[name] then return true end
+    if scopes.whispers and whispers[name] and whispers[name].sentAt then return true end
 
     -- An alt of a player my scopes allow: one of the person's confirmed characters has a guild one of my characters is
-    -- in (Guild scope), or is the WoW friend of one of my characters (Friends scope).
+    -- in (Guild scope), is the WoW friend of one of my characters (Friends scope), or was whispered by one of my
+    -- characters (Whispers scope).
     local ruleset = Identity.Ruleset(UnitGUID("player"))
     local person = ruleset and People.FindConfirmedByName(name, ruleset)
     if not person then return false end
@@ -162,6 +187,7 @@ function Scopes.Allows(name)
                 return true
             end
             if scopes.friends and character.friendOf then return true end
+            if scopes.whispers and character.whisperedAt then return true end
         end
     end
 
@@ -189,7 +215,7 @@ function Scopes.GroupReaches(name)
 end
 
 ---Every player my enabled scopes reach, each once: the member channels (GUILD, PARTY or RAID), and one message to
----each online friend or player whispered with this session that no member channel reaches.
+---each online friend or player I whispered this session that no member channel reaches.
 ---@return WhosWho.Audience
 function Scopes.BroadcastAudience()
     local scopes = ns.settings.scopes
@@ -210,7 +236,9 @@ function Scopes.BroadcastAudience()
         end
     end
     if scopes.whispers then
-        for name in pairs(whisperGuids) do add(name) end
+        for name, whisper in pairs(whispers) do
+            if whisper.sentAt then add(name) end
+        end
     end
 
     return { memberChannels = memberChannels, names = names }

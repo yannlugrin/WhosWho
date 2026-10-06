@@ -55,11 +55,11 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - A: `Sent, PARTY: 1 REC …`.
 - B: `Received, PARTY <A>: 1 REC …`, but `/ww people` does not change.
 
-**Whispers.** On both, `/ww scope whispers on`; leave the group. A and B whisper each other once. On A, link or unlink a character.
+**Whispers.** On both, `/ww scope whispers on`; leave the group; A and B don't know each other (`/ww people`).
 
-- A: `Sent, WHISPER <B>: 1 REC …`.
-- B: `/ww people` follows the change.
-- After a `/reload` of A, A sends B nothing more: the list of players whispered with is kept for the session only.
+- B whispers A; A doesn't answer. On A, link or unlink a character: nothing goes to B. On B, link or unlink a character: A gets `Received, WHISPER <B>: 1 REC …` and the announcement, but `/ww people` does not change: a whisper received allows nothing.
+- A whispers B. On A, link or unlink a character: A sends `Sent, WHISPER <B>: 1 REC …`; B: `/ww people` follows the change. On B, link or unlink a character: A's `/ww people` shows B's character, confirmed.
+- A: `/reload`. On B, link or unlink a character: A's `/ww people` follows the change (B is allowed from the saved whisper). On A, link or unlink a character: nothing goes to B (only the players whispered this session are in the audience).
 
 ## First-Login Prompt
 

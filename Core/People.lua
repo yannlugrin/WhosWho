@@ -31,6 +31,7 @@ ns.People = People
 ---@field lastSeen number? seconds, from time()
 ---@field guild integer? club ID of the guild in which one of my characters saw it
 ---@field friendOf table<string, true>? GUIDs of my characters that have it as a WoW friend
+---@field whisperedAt number? seconds, from time(): when one of my characters last whispered it
 
 ---A character I add, as I know it.
 ---@class WhosWho.NewCharacter: WhosWho.Character
@@ -481,4 +482,12 @@ function People.UpdateFriends(ownCharacterGuid, friendGuids)
             end
         end
     end
+end
+
+---A character one of my characters whispered.
+---@param guid string
+---@param whisperedAt number seconds, from time()
+function People.SetWhisperedAt(guid, whisperedAt)
+    local _, character = People.Find(guid)
+    if character then character.whisperedAt = whisperedAt end
 end

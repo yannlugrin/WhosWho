@@ -278,7 +278,10 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     if not People.IsNewer(signedRecord.id, signedRecord.rev) then return end
 
     RecordVerification.Queue(signedRecord, function(verified)
-        if People.Accept(verified) ~= "stale" then requests[verified.id] = nil end
+        if People.Accept(verified) ~= "stale" then
+            requests[verified.id] = nil
+            Scopes.KeepSentWhispers()
+        end
     end)
 end
 

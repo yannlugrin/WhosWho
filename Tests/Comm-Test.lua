@@ -321,6 +321,17 @@ local function levelUp(session)
     fire(session, "PLAYER_LEVEL_UP", session.character.level)
 end
 
+-- A chat whisper: CHAT_MSG_WHISPER_INFORM on the sender's client, CHAT_MSG_WHISPER on the receiver's (name and GUID of
+-- the other player in arguments 2 and 12).
+local function whisper(session, c)
+    fire(session, "CHAT_MSG_WHISPER_INFORM", "hi", c.name, nil, nil, nil, nil, nil, nil, nil, nil, nil, c.guid)
+    local receiver = online(c.name)
+    if receiver then
+        local from = session.character
+        fire(receiver, "CHAT_MSG_WHISPER", "hi", from.name, nil, nil, nil, nil, nil, nil, nil, nil, nil, from.guid)
+    end
+end
+
 local function sent(filter)
     local n = 0
     for _, entry in ipairs(world.log) do
@@ -620,6 +631,44 @@ do
     annMainEntry.state = "confirmed"
     annAlt.guild = GUILD
     check(not Scopes.Allows("Eve Main"), "a stranger is not allowed")
+end
+
+-- Whispers ----------------------------------------------------------------------------------------------
+
+do
+    local function eveSends(text) eve.ns.Protocol:SendCommMessage("WhosWho", text, "WHISPER", "Bob Main") end
+    local function eveAnnouncement() return eve.ns.Codec.Announcement(eveId, eve.ns.Identity.Revision(), eveMain.level, true) end
+    local function eveRecord() return eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord()) end
+
+    bob.ns.settings.scopes.whispers = true
+    clearLog()
+    whisper(eve, bobMain)
+    eveSends(eveAnnouncement())
+    eveSends(eveRecord())
+    run(1)
+    check(sent({ from = "Bob Main", type = "GET" }) == 0 and bob.ns.People.Get(eveId) == nil,
+        "a player who only whispered me is not asked for their record, and their REC is ignored")
+    check(not bob.ns.Scopes.BroadcastAudience().names[1], "nor is in my audience")
+
+    local whisperedAt = world.clock
+    whisper(bob, eveMain)
+    -- Their answer keeps my whisper.
+    whisper(eve, bobMain)
+    eveSends(eveAnnouncement())
+    eveSends(eveRecord())
+    run(1)
+    check(sent({ from = "Bob Main", type = "GET" }) == 1 and state(bob, eveMain.guid) == "confirmed",
+        "once I whisper them, they are asked and their REC is stored")
+    check(select(2, bob.ns.People.Find(eveMain.guid)).whisperedAt == whisperedAt,
+        "the stored character keeps when I whispered it")
+    check(bob.ns.Scopes.BroadcastAudience().names[1] == "Eve Main", "and they are in my audience")
+
+    logout(bob)
+    bob = login(bobAccount, bobMain)
+    run(1)
+    check(bob.ns.Scopes.Allows("Eve Main"), "after a reload, the saved whisper still allows the player")
+    bob.ns.settings.scopes.whispers = false
+    check(not bob.ns.Scopes.Allows("Eve Main"), "not once the Whispers scope is off")
 end
 
 -- Removing a character while a holder is offline -------------------------------------------------------

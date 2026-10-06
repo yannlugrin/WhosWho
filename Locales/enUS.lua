@@ -44,7 +44,7 @@ L["Who's Who"] = true
 -- Settings
 L["Link this character"] = true
 L["Who's Who links your characters into one identity, so people recognise you on each character you link, and lets you recognise others across theirs. Identities are shared between players who use Who's Who; for those who don't, you can link their characters yourself."] = true
-L["Anyone you whisper, or who whispers you, can ask for your identity."] = true
+L["Anyone you whisper can ask for your identity."] = true
 L["Data"] = true
 L["Forget"] = true
 L["Guild members who use Who's Who see your identity."] = true

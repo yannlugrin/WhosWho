@@ -636,6 +636,12 @@ do
     P.UpdateFriends(ME2, {})
     check(character(G1).friendOf == nil, "no friendOf once no character of mine has it as a friend")
 
+    P.SetWhisperedAt(G1, 40)
+    P.SetWhisperedAt(G1, 45)
+    check(character(G1).whisperedAt == 45, "whisperedAt keeps the last whisper")
+    P.SetWhisperedAt(G4, 45)
+    check(not P.Exists(G4), "a character I do not hold gets no whisperedAt")
+
     local B = string.rep("b", 64)
     P.UpdateGuildMembers(7, { [G3] = true })
     P.Accept(makeRecord(B, 1, { G3 }))

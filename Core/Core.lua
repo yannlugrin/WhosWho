@@ -107,10 +107,12 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Scopes.ReadGuildRoster()
     elseif event == "FRIENDLIST_UPDATE" then
         ns.Scopes.ReadFriends()
-    elseif event == "CHAT_MSG_WHISPER" or event == "CHAT_MSG_WHISPER_INFORM" then
-        -- The other player's name and GUID.
-        local name, guid = select(2, ...), select(12, ...)
-        ns.Scopes.Whispered(name, guid)
+    elseif event == "CHAT_MSG_WHISPER" then
+        -- The sender's name and GUID.
+        ns.Scopes.WhisperReceived(select(2, ...), select(12, ...))
+    elseif event == "CHAT_MSG_WHISPER_INFORM" then
+        -- The receiver's name and GUID.
+        ns.Scopes.WhisperSent(select(2, ...), select(12, ...))
     end
 end)
 

@@ -105,7 +105,8 @@ Implemented:
 - `GUILD_ROSTER_UPDATE`: my current character's guild in `Identity`, `guild` of the characters I hold (see Scopes); sends nothing.
 - `FRIENDLIST_UPDATE`: `friendOf` of the characters I hold, for my current character (see Scopes); sends nothing.
 - `PLAYER_GUILD_UPDATE` (player): a guild left clears my current character's guild; a guild joined requests the roster.
-- `CHAT_MSG_WHISPER`, `CHAT_MSG_WHISPER_INFORM`: the other player's name and GUID, for the Whispers scope and the senders' GUIDs.
+- `CHAT_MSG_WHISPER`: the sender's name and GUID, for the senders' GUIDs only.
+- `CHAT_MSG_WHISPER_INFORM`: the receiver's name and GUID, for the senders' GUIDs and the Whispers scope (see Scopes).
 
 Planned:
 
@@ -233,7 +234,7 @@ The sender of an add-on message is its whole name, authenticated by the server; 
 | Guild | the guild roster (`GetGuildRosterInfo`, name and GUID of every member, offline ones included) |
 | Friends | `C_FriendList.GetFriendInfo(name).guid` (*to verify in game*) |
 | Battle.net friends | `C_BattleNet.GetGameAccountInfoByID(id).playerGuid` (*to verify in game*) |
-| Whispers | the whisper chat events of the session (sender and GUID, arguments 2 and 12) |
+| Whispers | the whisper chat events of the session, sent or received (other player's name and GUID, arguments 2 and 12) |
 | Group | the group's units: whole name from `UnitFullName`, GUID from `UnitGUID` (checked in game) |
 
 Names match exactly, never by spelling variants; the roster spells them exactly like the add-on sender (checked in game). Without a match there is no confirmation; the record is still fetched.
@@ -246,13 +247,14 @@ Guild and Friends are on by default, Whispers and Group off; nothing goes out un
 
 Two separate questions, for each player asking for my record:
 
-1. **Whether my scopes allow sharing with that person**, `Scopes.Allows`. The requesting character is allowed when it is, for my current character, a guild member (`C_GuildInfo.MemberExistsByName`, callable by add-ons, checked in game) with the Guild scope, a WoW friend (`C_FriendList.GetFriendInfo`) or Battle.net friend with the Friends scope, a group member with the Group scope, or someone whispered with this session with the Whispers scope. It is also allowed when it is a confirmed character of a person whose confirmed characters include one with a `guild` among my characters' guilds (Guild scope) or a non-empty `friendOf` (Friends scope). Sharing is about people: an alt of a player my scopes allow gets my record, and their account already holds it anyway.
+1. **Whether my scopes allow sharing with that person**, `Scopes.Allows`. The requesting character is allowed when it is, for my current character, a guild member (`C_GuildInfo.MemberExistsByName`, callable by add-ons, checked in game) with the Guild scope, a WoW friend (`C_FriendList.GetFriendInfo`) or Battle.net friend with the Friends scope, a group member with the Group scope, or a player I whispered this session with the Whispers scope. A whisper received never allows a player: anyone can whisper me, and their record, nickname included, would land in my people list. It is also allowed when it is a confirmed character of a person whose confirmed characters include one with a `guild` among my characters' guilds (Guild scope), a non-empty `friendOf` (Friends scope) or a `whisperedAt` (Whispers scope). Sharing is about people: an alt of a player my scopes allow gets my record, and their account already holds it anyway.
 2. **The channel**, from the requesting character and my current character only (see Channels): `GUILD` if it is in my current guild, `PARTY` or `RAID` if it is in my group, otherwise one message to it.
 
 The relationships behind the first question are stored, since a character only sees its own guild roster and friend list. They are what my characters saw themselves, never sent by the other player, so they are kept on any character I hold, and move with it to another identity. Only **confirmed characters** count for sharing, so a record listing a character never makes it count:
 
 - `guild`: the guild in which one of my characters saw this character, written from that character's roster: set for each character in it, cleared for a character with that `guild` no longer in it, also set when an announcement comes from a character found in the roster. It counts only while one of my characters of the same ruleset is in that guild; `Identity` keeps each of my characters' guild. The guild is its club ID (`C_Club.GetGuildClubId()`, a number on Forever although the API documentation says a string; checked in game; that two characters of one guild get the same value is *to verify in game*). Nothing says club IDs are unique across rulesets, so a guild is its club ID and the ruleset of the characters in it.
 - `friendOf`: which of my characters has this character as a WoW friend, each of my characters writing only its own entry from its friend list, also set when an announcement comes from a character found in that list. Battle.net friends are account-wide and checked live.
+- `whisperedAt`: when one of my characters last whispered this character (`time()`), set on each whisper I send to a character I hold, and, for a character I did not hold yet, when a stored record brings it (`Scopes.KeepSentWhispers`, from the whispers sent this session). Kept for clearing old ones later, by age or by hand.
 
 A requesting character found only through a person is recognised by its whole name and my current character's ruleset among confirmed characters (the secondary key, see Data Model): whispers never cross rulesets, so that pair names one character. The risk is limited to sending a `REC`: a confirmed alt deleted or renamed, whose name someone else takes, would get my record. Confirmations never use names alone.
 
@@ -260,7 +262,7 @@ Audiences per scope:
 
 - **Guild**: `GUILD` channel.
 - **Friends**: `WHISPER` to online WoW friends; `BNSendGameData` to Battle.net friends in Forever (*to verify in game*). Battle.net IDs are used only locally to address the message and are never part of a payload.
-- **Whispers**: `WHISPER` to people the player whispered with (sent or received) this session (see Open Questions).
+- **Whispers**: `WHISPER` to the players I whispered this session. A player whispered in an earlier session is allowed (`whisperedAt`) but not in this audience.
 - **Group**: `PARTY` or `RAID` channel, whichever the player is in (checked in game).
 - **Selected** (planned, not a priority): `WHISPER` to players I choose one by one; an alternative to Whispers and Group.
 
@@ -329,8 +331,8 @@ identity    id (public key, hex), seed (private key, hex), rev, nickname (overri
             sig (signature of the current revision)
 people      { [identityID or "M<n>"] = { id (the same as the key), signedRecord (shared only), nickname (the player's own), customNickname, main,
                                    chars = { [guid] = { name, ruleset, classID, state, level, lastSeen,
-                                                        guild, friendOf = { [my character's GUID] = true } } } } }
-            guild (club ID) and friendOf: what my characters saw; only confirmed characters count (see Scopes)
+                                                        guild, friendOf = { [my character's GUID] = true }, whisperedAt } } } }
+            guild (club ID), friendOf and whisperedAt: what my characters saw; only confirmed characters count (see Scopes)
 nextManual  number of the next manual identity ("M<n>")
 forgotten   { [identityID] = revision in which the player unlinked every character }
 automaticChanges  { { time, kind = "merged" | "moved" | "taken" | "dropped" | "forgotten",
@@ -383,8 +385,6 @@ The add-on icon is `Media/Icon.tga`, 128×128: the TOC's `IconTexture`, also the
 - **Purging old people**: identities received through groups and whispers pile up in `people` over time. Remove the people not seen for a long time (no activity on any of their characters) who are neither in my guild nor among my friends. To decide: how (a button in the settings, or automatic), whether people I created or renamed are kept, and whether the age is fixed or chosen.
 
 - **False claims**: a modified client can list in its record a character that isn't the player's, for example a friend or guild member who doesn't use the add-on, to show it under its own identity. Covered: the character stays listed (unconfirmed), and a message from that character confirming another identity moves it there. A player who uses the add-on is safe, since their own identity is already known. Not handled yet: what to do once a false claim is detected; it matters if the add-on becomes popular.
-
-- **Whispers scope**: the players whispered with are kept for the session only, so a `/reload` empties the list. To decide: keeping it across reloads (cleared at login), and using a `REC` from a whisper only once I have whispered that player myself.
 
 ## Common Pitfalls
 
