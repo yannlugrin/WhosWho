@@ -18,7 +18,6 @@ externals:
     url: https://repos.curseforge.com/wow/ace3/trunk/AceConfig-3.0/
   Libs/LibSerialize:
     url: https://github.com/rossnichols/LibSerialize
-    tag: v1.2.1
   Libs/LibDeflate:
     url: https://github.com/SafeteeWoW/LibDeflate
   Libs/LibDataBroker-1.1:
