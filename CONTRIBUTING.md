@@ -62,5 +62,13 @@ Update the documents your change touches, in the same pull request:
 ## Releasing (maintainers)
 
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and date, `## [0.1.0-beta.1] - 2026-10-07`, add an empty `## [Unreleased]` above it, and update the links at the bottom.
-2. Commit, then tag the commit with the version itself (`0.1.0-beta.1`) and push the branch and the tag. A tag containing `alpha` or `beta` makes an alpha or beta release; any other tag, a full release.
+2. Commit, then tag the commit with the version itself (`0.1.0-beta.1`, no `v`), as an annotated tag whose message is that version's section of the changelog, the same text the release notes get. From the repository root (Git Bash):
+   ```
+   version=0.1.0-beta.1
+   { echo "Who's Who $version"; awk -v heading="## [$version]" '
+       index($0, heading) == 1 { found = 1; next }
+       found && (/^## \[/ || /^\[[^]]*\]: /) { exit }
+       found { print }' CHANGELOG.md | tr -d '\r'; } | git tag -a "$version" --cleanup=verbatim -F -
+   ```
+   Then push the branch and the tag. A tag containing `alpha` or `beta` makes an alpha or beta release; any other tag, a full release.
 3. `.github/workflows/package.yml` packages the add-on and uploads it to CurseForge, then creates the GitHub release (a pre-release for alpha and beta) with that version's section of the changelog. It stops if the changelog has no section for the tag.
