@@ -21,6 +21,11 @@ Record.MAX_REVISION = 2 ^ 31 - 1
 ---@field nickname string? override of the main character's name
 ---@field main string? GUID of the main character, one of chars; nil when the player unlinked every character
 ---@field chars table<string, WhosWho.Character> by GUID
+---@field guild WhosWho.GuildSharing
+
+---What the owner allows within the guilds of their characters.
+---@class WhosWho.GuildSharing
+---@field consent boolean the record may be passed on to the members of those guilds: the owner's Guild scope
 
 ---An identity record with its signature.
 ---@class WhosWho.SignedIdentityRecord: WhosWho.IdentityRecord
@@ -110,8 +115,9 @@ local function isClassID(n)
 end
 
 -- The signature covers these fields only, so a record holding any other key has been changed.
-local RECORD_FIELDS = { v = true, id = true, rev = true, nickname = true, main = true, chars = true, sig = true }
+local RECORD_FIELDS = { v = true, id = true, rev = true, nickname = true, main = true, chars = true, guild = true, sig = true }
 local CHARACTER_FIELDS = { name = true, ruleset = true, classID = true }
+local GUILD_FIELDS = { consent = true }
 
 local function hasOnlyFields(t, fields)
     for key in pairs(t) do
@@ -141,6 +147,10 @@ function Record.Validate(record)
     if record.nickname ~= nil and not isName(record.nickname) then return false, "nickname" end
     if record.sig ~= nil and not isHex(record.sig, 128) then return false, "sig" end
     if type(record.chars) ~= "table" then return false, "chars" end
+    if type(record.guild) ~= "table" or not hasOnlyFields(record.guild, GUILD_FIELDS)
+        or type(record.guild.consent) ~= "boolean" then
+        return false, "guild"
+    end
 
     local count = 0
     for guid, character in pairs(record.chars) do
@@ -180,7 +190,7 @@ function Record.Canonical(record)
 
     return table.concat({
         "WW" .. record.v, record.id, tostring(record.rev), record.nickname or "", record.main or "",
-        table.concat(chars, SEP_CHAR),
+        table.concat(chars, SEP_CHAR), record.guild.consent and "1" or "0",
     }, SEP_FIELD)
 end
 

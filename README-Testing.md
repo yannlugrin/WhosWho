@@ -17,10 +17,10 @@ Useful commands: `/ww status` (my identity), `/ww people` (the identities I hold
 
 | A's chat | B's chat |
 |---|---|
-| `Sent, PARTY: 1 ANNOUNCE <A's ID> <rev> <level> 1 1` | `Received, PARTY <A>: 1 ANNOUNCE …` |
+| `Sent, PARTY: 1 ANNOUNCE <A's ID> <rev> <level> 1 1 0` | `Received, PARTY <A>: 1 ANNOUNCE …` |
 | `Received, WHISPER <B>: 1 GET <A's ID>` | `Sent, WHISPER <A>: 1 GET …` |
 | after about 5 s: `Sent, WHISPER <B>: 1 REC (… bytes)` | `Received, WHISPER <A>: 1 REC (… bytes)` |
-| after about 5 s: `Received, WHISPER <B>: 1 ANNOUNCE … 1 0` | `Sent, WHISPER <A>: 1 ANNOUNCE <B's ID> <rev> <level> 1 0` (B's answer to the login) |
+| after about 5 s: `Received, WHISPER <B>: 1 ANNOUNCE … 1 0 0` | `Sent, WHISPER <A>: 1 ANNOUNCE <B's ID> <rev> <level> 1 0 0` (B's answer to the login) |
 
 On B, `/ww people` lists A's character as **confirmed**, with its level. Then `/reload` B: the same on the other side.
 
@@ -28,7 +28,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Linking while grouped.** On A, link another character while playing it.
 
-- A, after 15 s: `Sent, PARTY: 1 REC …`, then `Sent, PARTY: 1 ANNOUNCE … 0 0`.
+- A, after 15 s: `Sent, PARTY: 1 REC …`, then `Sent, PARTY: 1 ANNOUNCE … 0 0 0`.
 - B: no `GET`; `/ww people` lists the new character as **confirmed**, with its level.
 
 **Unlinking while grouped.** On A, `/ww unlink` on a linked character.
@@ -66,21 +66,21 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Joining a group.** On both, `/ww scope group on`; A and B not grouped. Invite B into A's group.
 
-- B (the one joining): `Sent, PARTY: 1 ANNOUNCE … 1 1`. A, the group's only other member, has also just joined, so the same from A.
-- Each, after about 5 s: `Sent, WHISPER <other>: 1 ANNOUNCE … 1 0`, and nothing more: an answer is not answered.
+- B (the one joining): `Sent, PARTY: 1 ANNOUNCE … 1 1 0`. A, the group's only other member, has also just joined, so the same from A.
+- Each, after about 5 s: `Sent, WHISPER <other>: 1 ANNOUNCE … 1 0 0`, and nothing more: an answer is not answered.
 - B leaves and is invited again: the same exchange again. A change in the group (a third player joining) sends nothing from A or B unless they join.
 
 **Logging in.** A and B in the same guild, or grouped with the Group scope on. `/reload` B.
 
-- B: `Sent, GUILD (or PARTY): 1 ANNOUNCE … 1 1`.
-- A, after about 5 s: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 0`.
+- B: `Sent, GUILD (or PARTY): 1 ANNOUNCE … 1 1 0`.
+- A, after about 5 s: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 0 0`.
 
 **Whispering.** On A, `/ww scope whispers on`; A and B not grouped, not in a guild together; `/reload` both first, so neither has reached the other this session.
 
-- A whispers B: right away, `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
+- A whispers B: right away, `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
 - A whispers B again: nothing more. After a change of A's revision, the next whisper sends the announcement again.
 - B whispers A: A sends nothing.
-- On B, `/ww scope whispers on`, then a change of A's revision and A whispers B: B, having whispered A, answers after about 5 s with `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0`. B whispering A again sends nothing more: the answer already reached A.
+- On B, `/ww scope whispers on`, then a change of A's revision and A whispers B: B, having whispered A, answers after about 5 s with `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0 0`. B whispering A again sends nothing more: the answer already reached A.
 
 ## First-Login Prompt
 

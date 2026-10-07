@@ -39,7 +39,8 @@ local VERSION = "1"
 ---@param wantsAnnouncement boolean
 ---@return string
 function Codec.Announcement(id, rev, level, acceptsGet, wantsAnnouncement)
-    return ("%s ANNOUNCE %s %d %d %d %d"):format(VERSION, id, rev, level, acceptsGet and 1 or 0,
+    -- The last field is the revision of the guild list I hold, 0 until guild lists exist.
+    return ("%s ANNOUNCE %s %d %d %d %d 0"):format(VERSION, id, rev, level, acceptsGet and 1 or 0,
         wantsAnnouncement and 1 or 0)
 end
 
@@ -63,9 +64,18 @@ local function revision(s)
     return n and n >= 1 and n <= Record.MAX_REVISION and n or nil
 end
 
+-- The guild list revision: 0 for none, otherwise <server time>.<hash of the list>.
+local function isGuildListRev(s)
+    return s == "0" or s:match("^%d+%.%x+$") ~= nil
+end
+
+-- Fields a later version adds after the known ones are ignored.
 local function decodeAnnouncement(fields)
-    local id, rev, level, acceptsGet, wantsAnnouncement = fields:match("^(%x+) (%d+) (%d%d?%d?) ([01]) ([01])$")
-    if not (Record.IsId(id) and revision(rev) and tonumber(level) >= 1) then return nil end
+    local id, rev, level, acceptsGet, wantsAnnouncement, guildListRev =
+        fields:match("^(%x+) (%d+) (%d%d?%d?) ([01]) ([01]) (%S+)")
+    if not (Record.IsId(id) and revision(rev) and tonumber(level) >= 1 and isGuildListRev(guildListRev)) then
+        return nil
+    end
     return {
         type = "ANNOUNCE", id = id, rev = revision(rev), level = tonumber(level),
         acceptsGet = acceptsGet == "1", wantsAnnouncement = wantsAnnouncement == "1",

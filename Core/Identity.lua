@@ -17,6 +17,7 @@ ns.Identity = Identity
 ---@field main string? GUID of the main character, always a linked one
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
 ---@field sig string? signature of the current revision
+---@field signedDigest string? SHA-512 (hex) of the bytes sig covers, so a signature from an older record format is never reused
 
 ---@class WhosWho.OwnCharacter: WhosWho.Character
 ---@field linked boolean? nil until the character is registered in the identity, linked or not
@@ -36,7 +37,7 @@ local revisionListeners = {}
 local function nextRevision()
     local identity = data()
     identity.rev = identity.rev + 1
-    identity.sig = nil
+    identity.sig, identity.signedDigest = nil, nil
     for _, listener in ipairs(revisionListeners) do listener() end
 end
 
@@ -318,22 +319,28 @@ function Identity.UnsignedRecord()
     end
     return {
         v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = identity.nickname,
-        main = identity.main, chars = chars,
+        main = identity.main, chars = chars, guild = { consent = ns.settings.scopes.guild },
     }
 end
 
----Signing takes about 120 ms in game, so the signature is kept until the next change.
+---Signing takes about 120 ms in game, so the signature is kept while it covers the same bytes.
 ---@return WhosWho.SignedIdentityRecord
 function Identity.SignedRecord()
     local identity = data()
-    if identity.sig then
-        local signedRecord = Identity.UnsignedRecord()
-        ---@cast signedRecord WhosWho.SignedIdentityRecord
-        signedRecord.sig = identity.sig
-        return signedRecord
+    local record = Identity.UnsignedRecord()
+    ---@cast record WhosWho.SignedIdentityRecord
+    local digest = ns.Crypto.ToHex(ns.Crypto.SHA512(ns.Record.Canonical(record)))
+    if identity.sig and identity.signedDigest == digest then
+        record.sig = identity.sig
+        return record
     end
 
-    local signedRecord = ns.Record.Sign(Identity.UnsignedRecord(), identity.seed)
-    identity.sig = signedRecord.sig
-    return signedRecord
+    ns.Record.Sign(record, identity.seed)
+    identity.sig, identity.signedDigest = record.sig, digest
+    return record
+end
+
+---The Guild scope changed: it is the record's guild consent, so the record gets a new revision.
+function Identity.GuildScopeChanged()
+    nextRevision()
 end

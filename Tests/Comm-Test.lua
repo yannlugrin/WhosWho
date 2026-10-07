@@ -829,6 +829,20 @@ whisper(cat, bobMain)
 run(6)
 check(sent({ from = "Bob Main", target = "Cat Main" }) == 0, "a whisper received sends nothing")
 
+-- Announcement format -----------------------------------------------------------------------------------
+
+do
+    local Codec, id = ann.ns.Codec, ann.ns.Identity.Id()
+    local decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false))
+    check(decoded and decoded.type == "ANNOUNCE" and decoded.rev == 3 and decoded.acceptsGet and not decoded.wantsAnnouncement,
+        "an announcement decodes, its guild list revision 0")
+    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 1791403200.9f2c41ab") ~= nil,
+        "a guild list revision <time>.<hash> is accepted")
+    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0 later fields") ~= nil, "fields a later version adds are ignored")
+    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0") == nil, "an announcement without the guild list field is refused")
+    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 x") == nil, "a malformed guild list revision is refused")
+end
+
 if failures > 0 then
     print(("%d of %d checks FAILED"):format(failures, checks))
     os.exit(1)

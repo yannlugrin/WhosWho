@@ -142,7 +142,7 @@ Everything is an **identity** (a person): a nickname and characters.
 | **Manual identity** | This player, for someone without the add-on (ID `M<n>`) | Local claim |
 | **Added alt** | This player, on a shared or manual identity | Local claim, state `added` |
 
-Guild identities, set at guild level for players without the add-on, are planned; how they are created, shared and trusted is not designed yet.
+Guild identities, set at guild level for players without the add-on, are decided but not built (see Guild Sharing).
 
 Each character of a person has a **state**:
 
@@ -177,7 +177,10 @@ Identity record (shared)
   main      GUID of the main character, one of chars; absent when chars is empty
   chars     { [guid] = { name, ruleset, classID } }   characters the owner declares, signed in GUID order;
             ruleset one of Record.RULESET, classID a class the game knows
-  sig       signature over the other fields; a record holding any other key, or a character any other field, is refused
+  guild     { consent }   consent: the record may be passed on to the members of the guilds of the owner's
+            characters; it is the owner's Guild scope, so changing that scope makes a new revision
+  sig       signature over the other fields; a record holding any other key, or a character or guild any other
+            field, is refused
 ```
 
 ### Character Confirmations
@@ -215,7 +218,7 @@ Measured on build 1.60.1. In instances, still *to verify in game*: whether add-o
 
 | Type | Content | Sent |
 |---|---|---|
-| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement | At login, level-up and logout, and right after the `REC` of a change of revision, from a linked or removed character, to the audiences of the enabled scopes; on joining a group, to the group; to a player I whisper; in answer to an announcement that wants one (see Announcements) |
+| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement, the revision of the guild list the sender holds | At login, level-up and logout, and right after the `REC` of a change of revision, from a linked or removed character, to the audiences of the enabled scopes; on joining a group, to the group; to a player I whisper; in answer to an announcement that wants one (see Announcements) |
 | `GET` | identity ID | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend); planned: on encounter (whisper, group, tooltip) |
 | `REC` | the signed identity record | After a change of revision, or in answer to `GET`s (see Sending a Record) |
 
@@ -227,7 +230,7 @@ A message for several players goes out on the cheapest channel that reaches them
 
 ### Announcements
 
-`1 ANNOUNCE <id> <rev> <level> <acceptsGet> <wantsAnnouncement>`, each flag being `1` or `0`; about 92 bytes, one message.
+`1 ANNOUNCE <id> <rev> <level> <acceptsGet> <wantsAnnouncement> <guildListRev>`, each flag being `1` or `0`; about 94 bytes, one message. `guildListRev` is the revision of the guild list the sender holds, `<server time>.<hash>`, or `0` without one; it is always `0` until guild lists are built (see Guild Sharing). Fields after these are ignored, so a later version can add some without breaking this one.
 
 Confirming characters is the core of the system, so one message carries the confirmation, the activity and the revision, and every announcement carries the identity.
 
@@ -323,6 +326,20 @@ Never transmitted: BattleTags, account IDs, Battle.net presence or game account 
 
 My own identity ID is ignored. A `REC` is used only when it came through a channel I share on: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope, or by whisper or Battle.net from a sender `Scopes.Allows` (see Scopes); otherwise it is ignored, so strangers cannot fill my saved data. It must also bring an identity `People` does not hold yet (a change can reach a friend who never received it) or a newer revision of one it holds, and not an identity forgotten at that revision or a later one. A used `REC` goes to the verification queue (see Signatures), then to `People.Accept`, which also applies the confirmations waiting for it. A `REC` never confirms a character; only announcements do.
 
+### Guild Sharing
+
+Decided, not built. The record (`guild.consent`) and the announcement (`guildListRev`) already carry what it needs, so building it needs no format change; its own messages are new types, which this version ignores.
+
+- **Consent.** A record is passed on to a guild only when its `guild.consent` is true: the owner's Guild scope. A player who shares with friends only is never spread through their guild.
+- **Guild settings record.** Signed by a member of the trusted rank: whether linking characters in the guild is enforced, and the rank trusted for relayed identities (see Rank Gate). It names the signing character; a member accepts it only if that character is a confirmed character of the signing identity, in the guild, at the trusted rank in the member's own roster. Its revision is the server time when signed; the most recent wins, ties broken by signer ID. A change of the trusted rank must be signed by a member of the rank already held.
+- **Enforced linking** (a later setting): with the Guild scope on, every character of mine in the guild is in the record the guild gets, linked or not; everyone else still gets my linked characters only.
+- **Guild lists.** Each member keeps its own list: for each identity with consent and a confirmed character in the guild, and each guild-made identity, its ID and the highest revision the member holds. The list's revision is `<server time>.<hash>`: when it last gained a newer identity revision, and a short hash of its content. The announcement carries it.
+  - Mine older (or the same time with a lower hash): I ask **one** member who announced a newer list for it, take the highest revision per identity, fetch the records I lack (one `GET` may name several), then give my list a new time, so members holding an older list ask me in turn.
+  - Mine newer or equal: I do nothing; several members asking me at once get one answer on `GUILD` (fewest messages, as for `REC`s).
+  - Lists are hints, not data: every record is still verified with its owner's signature, so lists are not signed. A revision nobody delivers is dropped after the usual retry.
+- **Relayed records.** From a guild member who is not the record's owner: a newer revision of an identity I hold is accepted from any member; an identity I don't hold yet only from a member of the trusted rank, stored with every character listed until I see one. A record sent by the owner's own character is handled as today.
+- **Guild-made identities**, for players without the add-on: one record each, signed by the member of the trusted rank who wrote it, revision = server time, the most recent wins. A player's own identity takes precedence, as over my manual identities.
+
 ### Own Messages
 
 Recognised by content: an announcement or a `REC` carrying my identity ID is mine (the `GUILD` and group echo) and is ignored; a `GET` is answered only for my identity ID, and none is ever sent for it; whispers only go to other players.
@@ -332,8 +349,8 @@ Recognised by content: an announcement or a `REC` carrying my identity ID is min
 ### Rank Gate
 
 - Guild ranks are compared by **index** (0 = guild master); a threshold means "this rank and every rank above".
-- Officers (rank index 0 and 1) enable guild sharing and choose the threshold. The configuration is sent as a message by an officer, and members trust it only from a sender whose rank, in their own roster, is officer or above; nothing is written in the guild info text. Not decided yet: the message, and how a member who was offline gets it. The default threshold is 1 (officers); lower ranks can be trusted but never change it. Without a configuration, guild-shared links are off.
-- **Receivers** look the sender up in their own roster. The sender's own claim is never trusted.
+- The trusted rank is set in the guild settings record (see Guild Sharing); without one, it is rank index 1 (the guild master and officers). Nothing is written in the guild info text.
+- **Receivers** look the sender, or the signing character, up in their own roster. A claim of rank is never trusted.
 
 ### Signatures
 
@@ -356,7 +373,8 @@ AceDB (defaults in `Core/Store.lua`). Data is account-wide, in `WhosWhoDB.global
 identity    id (public key, hex), seed (private key, hex), rev, nickname (override), main (GUID),
             chars = { [guid] = { name, ruleset, classID, level, lastSeen, linked = nil | true | false, guild,
                                  removedInRevision (unlinked: the first revision without it, see Removals) } },
-            sig (signature of the current revision)
+            sig (signature of the current revision), signedDigest (SHA-512 of the bytes sig covers: a signature
+            from an older record format is made again)
 people      { [identityID or "M<n>"] = { id (the same as the key), signedRecord (shared only), nickname (the player's own), customNickname, main,
                                    chars = { [guid] = { name, ruleset, classID, state, level, lastSeen,
                                                         guild, friendOf = { [my character's GUID] = true }, whisperedAt } } } }

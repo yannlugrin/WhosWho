@@ -171,7 +171,7 @@ local SCOPE_NAMES = { guild = L["Guild"], friends = L["Friends"], whispers = L["
 ns.Commands.scope = function(rest)
     local scope, state = rest:lower():match("^(%S+)%s+(%S+)$")
     if scope and SCOPE_NAMES[scope] and (state == "on" or state == "off") then
-        ns.settings.scopes[scope] = state == "on"
+        ns.Scopes.Set(scope, state == "on")
     elseif rest ~= "" then
         ns.Print(L["Usage: /ww scope <guild|friends|whispers|group> <on|off>"])
         return

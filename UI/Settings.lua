@@ -50,7 +50,7 @@ local function addScopeCheckbox(scope, name, tooltip)
     local setting = Settings.RegisterProxySetting(category, "WhosWho_Scope_" .. scope, Settings.VarType.Boolean, name,
         ns.Store.DEFAULTS.profile.scopes[scope],
         function() return ns.settings.scopes[scope] end,
-        function(value) ns.settings.scopes[scope] = value end)
+        function(value) ns.Scopes.Set(scope, value) end)
     Settings.CreateCheckbox(category, setting, tooltip)
 end
 

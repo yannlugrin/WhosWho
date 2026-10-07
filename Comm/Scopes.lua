@@ -183,6 +183,15 @@ end
 
 -- Sharing ----------------------------------------------------------------------------------------
 
+---Turns a scope on or off (settings and /ww scope).
+---@param key "guild"|"friends"|"whispers"|"group"
+---@param enabled boolean
+function Scopes.Set(key, enabled)
+    if ns.settings.scopes[key] == enabled then return end
+    ns.settings.scopes[key] = enabled
+    if key == "guild" then Identity.GuildScopeChanged() end
+end
+
 ---Whether my scopes allow sharing identities with that player, both ways: sending my record, and using or asking
 ---for theirs.
 ---@param name string "First Surname"

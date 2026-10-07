@@ -25,6 +25,9 @@ for _, file in ipairs({
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end
 
+-- The Guild scope is the record's guild consent.
+ns.settings = { scopes = { guild = true } }
+
 local failures, checks = 0, 0
 local function check(ok, label)
     checks = checks + 1
@@ -125,6 +128,9 @@ do
     check(ns.Record.Verify(signed), "signed record verifies")
     local again = I.SignedRecord()
     check(again.sig == signed.sig, "signature reused while nothing changed")
+    check(signed.guild.consent == true, "the record carries the Guild scope as its guild consent")
+    ns.data.identity.signedDigest = "from an older record format"
+    check(ns.Record.Verify(I.SignedRecord()), "a signature over other bytes is made again")
 
     local tampered = I.SignedRecord()
     tampered.nickname = "Someone"
@@ -160,7 +166,7 @@ do
     local R = ns.Record
     local base = function()
         return { v = 1, id = string.rep("a", 64), rev = 2, main = G1,
-            chars = { [G1] = { name = "A B", ruleset = NORMAL, classID = MAGE } } }
+            chars = { [G1] = { name = "A B", ruleset = NORMAL, classID = MAGE } }, guild = { consent = true } }
     end
     check(R.Validate(base()), "base record valid")
     local r = base(); r.id = "xyz"
@@ -193,6 +199,12 @@ do
     check(not R.Validate(r), "missing main refused")
     r = base(); r.main = G2
     check(not R.Validate(r), "main outside the characters refused")
+    r = base(); r.guild = nil
+    check(select(2, R.Validate(r)) == "guild", "missing guild consent refused")
+    r = base(); r.guild.consent = "yes"
+    check(select(2, R.Validate(r)) == "guild", "guild consent not a boolean refused")
+    r = base(); r.guild.other = true
+    check(select(2, R.Validate(r)) == "guild", "unknown guild field refused")
 end
 
 -- People: shared identities ------------------------------------------------------------------------
@@ -200,7 +212,7 @@ end
 local function makeRecord(id, rev, guids, nickname)
     local chars = {}
     for i, g in ipairs(guids) do chars[g] = { name = "N" .. i, ruleset = NORMAL, classID = MAGE } end
-    return { v = 1, id = id, rev = rev, nickname = nickname, main = guids[1], chars = chars }
+    return { v = 1, id = id, rev = rev, nickname = nickname, main = guids[1], chars = chars, guild = { consent = true } }
 end
 local INFO = { name = "Tank Bob", ruleset = NORMAL, classID = WARRIOR }
 local G5 = "Player-70-0000000E"
@@ -368,9 +380,10 @@ fresh()
 do
     local P = ns.People
     local A = string.rep("a", 64)
-    local empty = { v = 1, id = A, rev = 2, chars = {} }
+    local empty = { v = 1, id = A, rev = 2, chars = {}, guild = { consent = true } }
     check(ns.Record.Validate(empty), "a record without characters is valid")
-    check(not ns.Record.Validate({ v = 1, id = A, rev = 2, main = G1, chars = {} }), "a main without characters refused")
+    check(not ns.Record.Validate({ v = 1, id = A, rev = 2, main = G1, chars = {}, guild = { consent = true } }),
+        "a main without characters refused")
 
     P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann"))
     P.AddCharacter(A, G3, INFO)
@@ -534,14 +547,14 @@ do
     check(#AC.List() == before, "a revision dropping nothing logs nothing")
 
     P.AddCharacter(A, G8, INFO)
-    P.Accept({ v = 1, id = A, rev = 4, chars = {} })
+    P.Accept({ v = 1, id = A, rev = 4, chars = {}, guild = { consent = true } })
     change = latest()
     check(change.kind == "forgotten" and change.from.nickname == "Anna" and change.from.customNickname == "Annie",
         "a forgotten identity logged with my nickname for it")
     check(count(change.chars) == 2 and change.chars[G2].state == "listed" and change.chars[G8].state == "added",
         "with its characters and my added alts")
     before = #AC.List()
-    P.Accept({ v = 1, id = F, rev = 1, chars = {} })
+    P.Accept({ v = 1, id = F, rev = 1, chars = {}, guild = { consent = true } })
     check(#AC.List() == before, "forgetting an identity I never had logs nothing")
 
     check(AC.UnreadCount() == before, "every change unread")
@@ -594,7 +607,7 @@ do
     check(P.IsNewer(A, 1), "an identity not held yet is new")
     P.Accept(makeRecord(A, 2, { G1, G2 }))
     check(not P.IsNewer(A, 2) and not P.IsNewer(A, 1) and P.IsNewer(A, 3), "only a later revision is newer")
-    P.Accept({ v = 1, id = B, rev = 4, chars = {} })
+    P.Accept({ v = 1, id = B, rev = 4, chars = {}, guild = { consent = true } })
     check(not P.IsNewer(B, 4) and P.IsNewer(B, 5), "a forgotten identity is newer only past the revision that forgot it")
 
     check(P.FindConfirmedByName("N1", NORMAL) == nil, "a listed character is not found by name")
@@ -717,6 +730,10 @@ do
     I.Link(G1)
     check(I.AnnouncedRevision(G1) == I.Revision() and ns.data.identity.chars[G1].removedInRevision == nil,
         "linked again, it announces the current revision")
+
+    local revisionBefore = I.Revision()
+    I.GuildScopeChanged()
+    check(I.Revision() == revisionBefore + 1, "a change of the Guild scope is a new revision")
 end
 
 -- Resolver ---------------------------------------------------------------------------------------------------
