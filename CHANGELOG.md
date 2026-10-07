@@ -11,6 +11,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Right-click menu** on a player, with what applies to that character: link it to a person, show that person in the People tab, make it their main or unlink it. On your own characters, it opens My identity.
 - **Forget** a person from the People tab.
 
+### Fixed
+
+- **My identity**: clicking the Name, Level or Last played header sorts your characters.
+
 ## [0.1.0-beta.1] - 2026-10-07
 
 First beta, for World of Warcraft: Forever.

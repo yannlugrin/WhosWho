@@ -314,6 +314,33 @@ function panel:SetCharacters(characters)
     scrollBox:SetDataProvider(CreateDataProvider(characters))
 end
 
+-- The list's sort: "Name" (A to Z when ascending), "Level" (lowest first when ascending) or "LastPlayed" (oldest first
+-- when ascending; the character logged in counts as the most recent). The main always comes first.
+local sortKey, sortAscending = "Name", true
+
+local function playedAt(character)
+    return character.online and math.huge or character.lastSeen or 0
+end
+
+local function sortCharacters(characters)
+    table.sort(characters, function(a, b)
+        if a.main ~= b.main then return a.main end
+        local aValue, bValue
+        if sortKey == "Level" then
+            aValue, bValue = a.level or 0, b.level or 0
+        elseif sortKey == "LastPlayed" then
+            aValue, bValue = playedAt(a), playedAt(b)
+        end
+        if aValue ~= bValue then
+            if sortAscending then return aValue < bValue end
+            return aValue > bValue
+        end
+        local aName, bName = a.name:lower(), b.name:lower()
+        if sortKey == "Name" and not sortAscending then return aName > bName end
+        return aName < bName
+    end)
+end
+
 ---Fills the panel from the identity, or shows the empty state while no character is linked.
 function panel:Refresh()
     local Identity = ns.Identity
@@ -340,10 +367,8 @@ function panel:Refresh()
             online = guid == onlineGuid, main = guid == mainGuid, linked = character.linked == true,
         }
     end
-    table.sort(characters, function(a, b)
-        if a.main ~= b.main then return a.main end
-        return a.name < b.name
-    end)
+    sortCharacters(characters)
+    self.ListHeader:SetSort(sortKey, sortAscending)
     self:SetCharacters(characters)
 end
 
@@ -357,6 +382,20 @@ ns.IdentityDialogs.NewIdentity:HookScript("OnHide", refreshIfShown)
 ns.IdentityDialogs.LinkCharacter:HookScript("OnHide", refreshIfShown)
 -- Changes made while the window is open, from the panel or elsewhere (Settings, slash commands).
 ns.Identity.OnRevisionChanged(refreshIfShown)
+
+-- A click on the active column reverses it; another column starts A to Z for names, highest first for levels and most
+-- recent first for last played.
+local function sortBy(key)
+    if key == sortKey then
+        sortAscending = not sortAscending
+    else
+        sortKey, sortAscending = key, key == "Name"
+    end
+    panel:Refresh()
+end
+panel.ListHeader.Labels.Name:SetScript("OnClick", function() sortBy("Name") end)
+panel.ListHeader.Labels.Level:SetScript("OnClick", function() sortBy("Level") end)
+panel.ListHeader.Labels.LastPlayed:SetScript("OnClick", function() sortBy("LastPlayed") end)
 
 -- Skin -------------------------------------------------------------------------------------------
 
