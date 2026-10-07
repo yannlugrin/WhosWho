@@ -31,7 +31,7 @@ jobs:
         run: |
           version="$GITHUB_REF_NAME"
           awk -v heading="## [$version]" '
-            index($0, heading) == 1 { found = 1; next }
+            index($0, heading) == 1 { found = 1; print; next }
             found && (/^## \[/ || /^\[[^]]*\]: /) { exit }
             found { print }
           ' CHANGELOG.md > CHANGELOG-VERSION.md

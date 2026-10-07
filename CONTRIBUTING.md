@@ -62,11 +62,11 @@ Update the documents your change touches, in the same pull request:
 ## Releasing (maintainers)
 
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and date, `## [0.1.0-beta.1] - 2026-10-07`, add an empty `## [Unreleased]` above it, and update the links at the bottom.
-2. Commit, then tag the commit with the version itself (`0.1.0-beta.1`, no `v`), as an annotated tag whose message is that version's section of the changelog, the same text the release notes get. From the repository root (Git Bash):
+2. Commit, then tag the commit with the version itself (`0.1.0-beta.1`, no `v`), as an annotated tag whose message is that version's section of the changelog, heading included: the same text the release notes get. From the repository root (Git Bash):
    ```
    version=0.1.0-beta.1
    { echo "Who's Who $version"; awk -v heading="## [$version]" '
-       index($0, heading) == 1 { found = 1; next }
+       index($0, heading) == 1 { found = 1; print; next }
        found && (/^## \[/ || /^\[[^]]*\]: /) { exit }
        found { print }' CHANGELOG.md | tr -d '\r'; } | git tag -a "$version" --cleanup=verbatim -F -
    ```
