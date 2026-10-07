@@ -55,7 +55,8 @@
         "GetUnitName",
         "WorldMapFrame",
         "GameTooltipTextLeft1",
-        "MinimalSliderWithSteppersMixin"
+        "MinimalSliderWithSteppersMixin",
+        "UnitPopup_OpenMenu"
     ],
     "Lua.type.weakUnionCheck": true
 }

@@ -11,7 +11,7 @@ local window = Main.Window
 local TOP_BAR_LEFT = 70
 local SEARCH_WIDTH = 190
 local FILTER_WIDTH = 130
-local LIST_WIDTH = 330
+local LIST_WIDTH = 380
 local PANEL_GAP = 6
 -- The key runs under both panels.
 local KEY_HEIGHT = 26
@@ -74,7 +74,7 @@ listInset:SetWidth(LIST_WIDTH)
 
 local COLUMNS = {
     { key = "Characters", width = 40, label = L["Chars"], justify = "RIGHT" },
-    { key = "LastSeen", width = 80, label = L["Last seen"], justify = "RIGHT", sortable = true },
+    { key = "LastSeen", width = 100, label = L["Last seen"], justify = "RIGHT", sortable = true },
 }
 local columnsWidth = Lists.LayOut(COLUMNS)
 local columnByKey = {}
@@ -168,8 +168,6 @@ local function initPersonRow(row, person)
     setRowSelected(row, person.id == panel.selectedId)
     setGlyph(row.Glyph, Glyphs.Nickname[person.source])
 
-    local unconfirmed = person.source == "unconfirmed"
-    row.Nickname:SetFontObject(unconfirmed and "GameFontDisable" or "GameFontHighlight")
     row.Nickname:SetText(person.nickname)
     -- The nickname keeps its width; the online character takes what is left before the columns.
     local nameSpace = listBox:GetWidth() - NAME_LEFT - columnsWidth - 4
@@ -269,11 +267,20 @@ local function createCharacterRow(row)
     row.Details = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     row.Details:SetPoint("LEFT", row.StateGlyph, "RIGHT", 4, 0)
 
+    -- Right-click: the game's player menu, as on a name in chat.
+    row:EnableMouse(true)
+    row:SetScript("OnMouseUp", function(self, button)
+        if button ~= "RightButton" then return end
+        local character = self:GetElementData()
+        UnitPopup_OpenMenu("FRIEND", { name = character.name, guid = character.guid, fromPeoplePanel = true })
+    end)
+
     if skin then skin.SquareIcon(row.ClassIcon, iconFrame) end
 end
 
 ---A character of the selected person.
 ---@class WhosWho.PersonDetailCharacter
+---@field guid string
 ---@field name string
 ---@field classID integer
 ---@field state "confirmed"|"listed"|"added"|"guild"
@@ -398,29 +405,6 @@ local People = ns.People
 -- people, then the most recently seen; equal ones by name.
 local sortKey, sortAscending = "LastSeen", false
 
--- Where the name a person is shown under comes from.
-local function nicknameSource(person)
-    if not person.signedRecord then return "unconfirmed" end
-    for _, character in pairs(person.chars) do
-        if character.state == "confirmed" then return person.customNickname and "renamed" or "confirmed" end
-    end
-    return "unconfirmed"
-end
-
--- Whether the search text, lowercased, is in the person's nickname, their own nickname or a character's name.
-local function matchesSearch(person, text)
-    if text == "" then return true end
-    local identityNickname = People.IdentityNickname(person.id)
-    if People.Nickname(person.id):lower():find(text, 1, true)
-        or identityNickname and identityNickname:lower():find(text, 1, true) then
-        return true
-    end
-    for _, character in pairs(person.chars) do
-        if character.name:lower():find(text, 1, true) then return true end
-    end
-    return false
-end
-
 ---@param person WhosWho.Person
 ---@param onlineGuids table<string, true>
 ---@return WhosWho.PeopleListEntry
@@ -432,7 +416,7 @@ local function listEntry(person, onlineGuids)
         if onlineGuids[guid] then onlineCharacter = { name = character.name, classID = character.classID } end
     end
     return {
-        id = person.id, nickname = People.Nickname(person.id), source = nicknameSource(person),
+        id = person.id, nickname = People.Nickname(person.id), source = Lists.NicknameSource(person),
         characterCount = characterCount, lastSeen = lastSeen, onlineCharacter = onlineCharacter,
     }
 end
@@ -465,6 +449,7 @@ local function personDetail(person, onlineGuids)
     local characters = {}
     for guid, character in pairs(person.chars) do
         characters[#characters + 1] = {
+            guid = guid,
             name = character.name, classID = character.classID, state = character.state, main = guid == person.main,
             online = onlineGuids[guid] == true, lastSeen = character.lastSeen, level = character.level,
             ruleset = character.ruleset,
@@ -477,7 +462,7 @@ local function personDetail(person, onlineGuids)
 
     local nickname, identityNickname = People.Nickname(person.id), People.IdentityNickname(person.id)
     return {
-        nickname = nickname, source = nicknameSource(person), characters = characters,
+        nickname = nickname, source = Lists.NicknameSource(person), characters = characters,
         baseNickname = person.customNickname and identityNickname ~= nickname and identityNickname or nil,
     }
 end
@@ -501,7 +486,7 @@ function panel:Refresh()
     local entries, selectedShown = {}, false
     for _, person in pairs(people) do
         local entry = listEntry(person, onlineGuids)
-        if (self.filter == "all" or entry.source == self.filter) and matchesSearch(person, text) then
+        if (self.filter == "all" or entry.source == self.filter) and Lists.MatchesSearch(person, text) then
             entries[#entries + 1] = entry
             if entry.id == self.selectedId then selectedShown = true end
         end
@@ -510,6 +495,20 @@ function panel:Refresh()
     self.ListHeader:SetSort(sortKey, sortAscending)
     self:SetPeople(entries)
     self:Select(selectedShown and self.selectedId or nil)
+end
+
+---Opens the main window on this tab with a person selected and in view, clearing the search and filter that could
+---hide them.
+---@param id string
+function panel:ShowPerson(id)
+    self.filter = "all"
+    self.FilterDropdown:GenerateMenu()
+    self.SearchBox:SetText("")
+    self.selectedId = id
+    window:Show()
+    Main.SelectTab(self)
+    self:Refresh()
+    listBox:ScrollToElementDataByPredicate(function(entry) return entry.id == id end, ScrollBoxConstants.AlignCenter)
 end
 
 -- A click on the active column reverses it; another column starts A to Z for names, most recent first for last seen.
@@ -525,6 +524,7 @@ panel.ListHeader.Labels.Name:SetScript("OnClick", function() sortBy("Name") end)
 panel.ListHeader.Labels.LastSeen:SetScript("OnClick", function() sortBy("LastSeen") end)
 
 panel.SearchBox:HookScript("OnTextChanged", function() panel:Refresh() end)
+detail.ForgetButton:SetScript("OnClick", function() ns.PeopleDialogs.ConfirmForget(panel.selectedId) end)
 panel:SetScript("OnShow", function(self)
     self:Refresh()
     -- Online guild members come from the roster, which the game sends again when asked.

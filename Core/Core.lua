@@ -28,6 +28,7 @@ local addonName, ns = ...
 ---@field Main WhosWho.Main
 ---@field Lists WhosWho.Lists
 ---@field Glyphs WhosWho.Glyphs
+---@field PeopleDialogs WhosWho.PeopleDialogs
 ---@field Launcher WhosWho.Launcher
 
 -- Add-on -----------------------------------------------------------------------------------------

@@ -7,6 +7,9 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Added
 
 - **Tooltips**: the nickname of the people you know, after their name or on its own line, and an "Also:" line with their other characters, each adjustable in the settings.
+- **People who don't use Who's Who.** Start a person from one of their characters and link their other characters to them, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
+- **Right-click menu** on a player, with what applies to that character: link it to a person, show that person in the People tab, make it their main or unlink it. On your own characters, it opens My identity.
+- **Forget** a person from the People tab.
 
 ## [0.1.0-beta.1] - 2026-10-07
 

@@ -44,6 +44,8 @@ UI\Main\Window.lua
 UI\Main\Lists.lua
 UI\Main\MyIdentity.lua
 UI\Main\People.lua
+UI\Dialogs\People.lua
 UI\Launcher.lua
 UI\Decorations\Chat.lua
 UI\Decorations\Tooltip.lua
+UI\Decorations\UnitMenu.lua

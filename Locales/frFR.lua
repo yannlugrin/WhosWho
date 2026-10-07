@@ -170,3 +170,16 @@ L["How many other characters the \"Also:\" line names; the others are counted as
 L["+%d more"] = "+%d de plus"
 L["Also: %s"] = "Aussi : %s"
 L["Who's Who: %s"] = "Who's Who : %s"
+
+-- Right-click menu and Link character
+L["Link character"] = "Lier le personnage"
+L["New person"] = "Nouvelle personne"
+L["Which person does %s belong to?"] = "À quelle personne appartient %s ?"
+L["Show my identity"] = "Afficher mon identité"
+L["Show person"] = "Afficher la personne"
+L["Unlink %s from %s?"] = "Délier %s de %s ?"
+L["The character is no longer part of this person. You can link it again later."] = "Le personnage ne fait plus partie de cette personne. Vous pourrez le lier à nouveau plus tard."
+L["Forget %s?"] = "Oublier %s ?"
+L["%s and their %d |4character:characters; are removed from your list. This can't be undone."] = "%s et ses %d |4personnage:personnages; sont retirés de votre liste. Cette action est irréversible."
+L["Make %s the main character of %s?"] = "Faire de %s le personnage principal de %s ?"
+L["The person is shown under this character's name when you haven't given it a nickname."] = "La personne est affichée sous le nom de ce personnage quand vous ne lui avez pas donné de surnom."

@@ -54,6 +54,37 @@ function Lists.CreateRowHighlight(row)
     return highlight
 end
 
+-- People ---------------------------------------------------------------------------------------
+
+---Where the name a person is shown under comes from.
+---@param person WhosWho.Person
+---@return "confirmed"|"renamed"|"unconfirmed"
+function Lists.NicknameSource(person)
+    if not person.signedRecord then return "unconfirmed" end
+    for _, character in pairs(person.chars) do
+        if character.state == "confirmed" then return person.customNickname and "renamed" or "confirmed" end
+    end
+    return "unconfirmed"
+end
+
+---Whether the search text, lowercased, is in the person's nickname, their own nickname or a character's name.
+---@param person WhosWho.Person
+---@param text string
+---@return boolean
+function Lists.MatchesSearch(person, text)
+    if text == "" then return true end
+    local People = ns.People
+    local identityNickname = People.IdentityNickname(person.id)
+    if People.Nickname(person.id):lower():find(text, 1, true)
+        or identityNickname and identityNickname:lower():find(text, 1, true) then
+        return true
+    end
+    for _, character in pairs(person.chars) do
+        if character.name:lower():find(text, 1, true) then return true end
+    end
+    return false
+end
+
 -- Columns ----------------------------------------------------------------------------------------
 
 ---A column right of a list's name, which takes the space left of them.

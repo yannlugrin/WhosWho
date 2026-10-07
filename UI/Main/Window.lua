@@ -10,7 +10,7 @@ local L = ns.L
 local Main = {}
 ns.Main = Main
 
-local WIDTH, HEIGHT = 700, 460
+local WIDTH, HEIGHT = 800, 520
 local TAB_SPACING = 3
 
 -- Window -----------------------------------------------------------------------------------------

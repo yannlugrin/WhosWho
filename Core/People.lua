@@ -252,6 +252,16 @@ function People.AddCharacter(id, guid, character)
     return true
 end
 
+---Whether People.RemoveCharacter accepts this character: one I added, and not a manual person's main.
+---@param id string
+---@param guid string
+---@return boolean
+function People.CanRemoveCharacter(id, guid)
+    local person = ns.data.people[id]
+    local character = person and person.chars[guid]
+    return character ~= nil and character.state == "added" and guid ~= person.main
+end
+
 ---Removes a character I added. A manual person's main is refused: change the main first, or forget the person.
 ---@param id string
 ---@param guid string
@@ -285,6 +295,15 @@ function People.Rename(id, nickname)
     changed()
 
     return true
+end
+
+---Whether People.SetMain would change this person's main to this character: a manual person, not its main yet.
+---@param id string
+---@param guid string
+---@return boolean
+function People.CanSetMain(id, guid)
+    local person = ns.data.people[id]
+    return person ~= nil and not person.signedRecord and person.chars[guid] ~= nil and guid ~= person.main
 end
 
 ---Sets a manual person's main character. A shared identity's main is the player's own.

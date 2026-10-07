@@ -54,10 +54,12 @@ WhosWho/
 │   │   ├── MyIdentity.lua         My identity tab
 │   │   └── People.lua             People tab
 │   ├── Dialogs/
-│   │   └── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
-│   └── Decorations/               Nicknames added to the game's own frames
+│   │   ├── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
+│   │   └── People.lua             Link character: to a person I know, or a new person
+│   └── Decorations/               Additions to the game's own frames
 │       ├── Chat.lua               Sender names in chat lines
-│       └── Tooltip.lua            Nickname and "Also:" line in player tooltips
+│       ├── Tooltip.lua            Nickname and "Also:" line in player tooltips
+│       └── UnitMenu.lua           Who's Who entry in players' right-click menus
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
 │   ├── Glyphs/                    Person, Pencil, Banner, Question, Hourglass: white 32×32, tinted in code
@@ -85,8 +87,7 @@ Planned:
 │   └── Trust.lua                  Rank gate and the guild configuration sent by officers
 ├── Comm/
 └── UI/
-    ├── PersonEditor.lua           Create and edit a manual identity, add alts
-    └── Decorations/               Unit menu entries
+    └── PersonEditor.lua           Create and edit a manual identity, add alts
 ```
 
 ## Architecture

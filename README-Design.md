@@ -50,11 +50,11 @@ The People and Guild tabs show a key of all these glyphs under both panels, full
 
 - **Look**: the default WoW Forever window style (Blizzard frames: title bar with close button, dark inset panels, gold headings, white body text, standard buttons). If the EllesmereUI add-on is installed, the same frames get a flat dark theme with an accent color, so layouts must not depend on decoration.
 - **Widgets allowed** (the only ones the theme can restyle): window shell, panel, inset panel, tabs, buttons, text inputs, checkboxes, dropdowns, scroll lists with a scroll bar, close button, prev/next page arrows, square icons, sortable column headers.
-- **Size**: main window about 700×460 px at default UI scale, movable. Dialogs about 360 px wide.
+- **Size**: main window about 800×520 px at default UI scale, movable. Dialogs about 360 px wide.
 - **Text**: everything is translated; allow texts to be 30% longer than English.
 - **Names**: characters are shown as "First Surname" (WoW: Forever has no realms), in their class color, with a class icon where there is room.
 - **Glyphs**: small (about the text height), next to the name, never replacing it. Small actions on a nickname (edit, clear) are glyph buttons next to it; actions on a whole person (Edit, Forget) are text buttons at the bottom of its panel.
-- **Colours**: each glyph keeps one colour everywhere (Main and Confirmed gold, Renamed blue, Guild green, Unconfirmed, Listed and Added grey); a nickname quoted in a sentence (dialogs, notices) takes the colour of its glyph. Unconfirmed names are shown in grey italics. "Online" is green.
+- **Colours**: each glyph keeps one colour everywhere (Main and Confirmed gold, Renamed blue, Guild green, Unconfirmed, Listed and Added grey); a nickname quoted in a sentence (dialogs, notices) takes the colour of its glyph. "Online" is green.
 
 ## Frames
 
@@ -101,7 +101,7 @@ Same list and detail panel as the People tab, with a status strip on top, but no
 
 ### 5. Person Editor (Dialog)
 
-Create or edit a person I linked, or add alts to a person shared by the player. Opened from **New person** (People tab), **Edit** (People and Guild tabs), and the right-click menu (**New person**, **Link to a person**).
+Create or edit a person I linked, or add alts to a person shared by the player. Opened from **New person** (People tab) and **Edit** (People and Guild tabs).
 
 - **Custom nickname** input (labelled so, since it overrides the person's own name), empty when no nickname is set, with as placeholder the main character's name, or the player's own nickname when the person is shared by the player. Typing a nickname overrides it; a clear glyph button (cross) right of the input removes my nickname, back to the one that applies without it.
 - Characters list with the main crown (movable for a person I linked, fixed for a person shared by the player) and each character's state glyph (Confirmed, Listed, Guild, Added by me), as in the People tab; remove buttons only on alts added manually; the main of a person I linked can't be removed, so its last character is always the main. What is shared by the player cannot be changed. Removing a person is done with **Forget**.
@@ -137,21 +137,30 @@ The game's own settings list: its section headers and controls. Each setting is 
 
 - **Tooltip** on a player: the nickname only (no source, no source glyph), in a soft color, shown one of two ways depending on the setting: in brackets after the character's name on the same line, e.g. `Character Name (Ann)` — left out when it's the same as the character's name (e.g. a person without a nickname, hovered on their main) —, or on its own line under the name, e.g. `Who's Who: Ann`. A separate line `Also: Alt One, Alt Two` with the person's other characters on the hovered character's ruleset: the main first (with the crown), then the most recently seen, in class colour unless turned off, the Listed glyph on alts not seen yet; past the chosen number, "+3 more". Controlled by its own settings (frame 7). Never on my own characters.
 - **Chat line**: `[Character Name (Ann)]: hello` — the nickname in round brackets right after the usual name, inside its link, in a soft color, so it can't be mistaken for a channel tag like `[Guild]`; left out when it's the same as the character's name. The message itself is unchanged.
-- **Right-click menu** on a player (target, party, chat name, guild roster): **New person** (opens the person editor with this character as main) and **Link to a person** (person chooser, frame 9, then the person editor with this character added); both only when the character doesn't belong to a person yet. **Show in Who's Who** (opens the record we have for this person, in the People tab) only when the character already belongs to a person. **Share my identity** (sends my identity to that player and adds them to my selected people) only when the "Selected people" sharing option is on.
+- **Right-click menu** on a friendly player (target, focus, party and raid frames, the guild roster, friends online or offline, and any name in chat): a Who's Who section after a divider, left out when it has no entry.
+  - On one of my characters: the title **Who's Who**, then **Show my identity** (opens the My identity tab).
+  - On a character that belongs to a person: the title **Who's Who: <nickname>**, then, each only when it applies:
+    - **Show person**: opens the People tab with that person selected (not in the People tab's own menu, which is already on them);
+    - **Make main**: a non-main character of a person I created; confirmation (frame 10);
+    - **Unlink**: a character I added, not the main of a person I created; confirmation (frame 10).
+  - Otherwise: the title **Who's Who**, then **Link character**: opens the person chooser (frame 9), where the character is linked to a person I know or starts a new one. One entry only, so there is no choice to get wrong before seeing the people I know.
+  - In the People tab, right-clicking a character in the detail panel opens the game's player menu (Whisper, Invite and its other actions) with this section.
+
+  **Share my identity** (sends my identity to that player and adds them to my selected people) only when the "Selected people" sharing option is on.
 - **Notices**: chat lines prefixed "Who's Who:", e.g. "3 people updated from the guild"; the same notice can also show as a toast. Links in notices use the game's bracketed link style.
   - Automatic changes: one line per change, e.g. "Bob is now Ann's shared identity (2 characters moved). Review this change" — "Review this change" is a link that opens frame 11 on that change. Several changes at once are grouped: "3 changes from shared identities. Review these changes".
 
 ### 9. Person Chooser (Dialog)
 
-Opened by **Link to a person** in the right-click menu, to choose the person the clicked character belongs to.
+Opened by **Link character** in the right-click menu, to link the clicked character to a person I know, or to start a new person with it.
 
-- Title "Link to a person", and the question "Which person does <Character> belong to?" (character in class color).
+- Title "Link character", and the question "Which person does <Character> belong to?" (character in class color).
 - Search box; list of the people I know, one row per person: source glyph, nickname, main character's name (class color, small), number of characters; sortable by nickname; single selection.
-- Buttons: **Link** (opens the person editor, frame 5, with the character added), **Cancel**.
+- Buttons: **Link** (adds the character to the selected person), **New person** (a new person with this character as its main), **Cancel**. After **Link** or **New person**, the main window opens on the People tab with that person selected.
 
 ### 10. Confirmation (Dialog)
 
-The game's standard confirmation popup (no title bar), for actions that can't be undone: **Forget** in the People and Guild tabs and the person editor, and the **Data** actions in Settings.
+The game's standard confirmation popup (no title bar), for actions that can't be undone: **Forget** in the People and Guild tabs and the person editor, and the **Data** actions in Settings. Also for the actions that change where a character belongs: **Make main** and **Unlink** (right-click menu, My identity tab).
 
 - A question naming what is affected, e.g. "Forget Tank Bob?" (nickname with its source color).
 - One line on the consequence, e.g. "Tank Bob and their 2 characters are removed from your list. This can't be undone."

@@ -170,3 +170,16 @@ L["How many other characters the \"Also:\" line names; the others are counted as
 L["+%d more"] = true
 L["Also: %s"] = true
 L["Who's Who: %s"] = true
+
+-- Right-click menu and Link character
+L["Link character"] = true
+L["New person"] = true
+L["Which person does %s belong to?"] = true
+L["Show my identity"] = true
+L["Show person"] = true
+L["Unlink %s from %s?"] = true
+L["The character is no longer part of this person. You can link it again later."] = true
+L["Forget %s?"] = true
+L["%s and their %d |4character:characters; are removed from your list. This can't be undone."] = true
+L["Make %s the main character of %s?"] = true
+L["The person is shown under this character's name when you haven't given it a nickname."] = true
