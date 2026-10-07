@@ -16,9 +16,8 @@ ns.Store = Store
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
 ---@field scopes { guild: boolean, friends: boolean, whispers: boolean, group: boolean }
----@field chatNicknames boolean
----@field tooltipNickname "afterName"|"ownLine"|"hidden"
----@field tooltipOtherCharacters boolean the "Also:" line
+---@field chat { nickname: { enable: boolean } } the nickname after the sender's name
+---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted
 ---@field debugMessages boolean every Who's Who message sent or received, printed in chat
 ---@field launcher { hide: boolean, showInCompartment: boolean, minimapPos: number? } LibDBIcon's own format: the minimap button and the add-on compartment entry
 
@@ -32,13 +31,40 @@ Store.DEFAULTS = {
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },
-        chatNicknames = true,
-        tooltipNickname = "ownLine",
-        tooltipOtherCharacters = true,
+        chat = { nickname = { enable = true } },
+        tooltip = {
+            nickname = { enable = true, position = "afterName" },
+            otherCharacters = { enable = true, classColor = true, limit = 4 },
+        },
         debugMessages = false,
         launcher = { hide = false, showInCompartment = true },
     },
 }
+
+---Moves settings saved under older keys to the current ones, and removes the older keys.
+---@param settings table the profile, with the current defaults
+function Store.MigrateSettings(settings)
+    -- 0.1.0-beta.1: chatNicknames, tooltipNickname, tooltipOtherCharacters (a boolean, later a table).
+    if settings.chatNicknames ~= nil then
+        settings.chat.nickname.enable = settings.chatNicknames
+        settings.chatNicknames = nil
+    end
+    if settings.tooltipNickname ~= nil then
+        if settings.tooltipNickname == "hidden" then
+            settings.tooltip.nickname.enable = false
+        else
+            settings.tooltip.nickname.position = settings.tooltipNickname
+        end
+        settings.tooltipNickname = nil
+    end
+    local otherCharacters = settings.tooltipOtherCharacters
+    if type(otherCharacters) == "table" then
+        for key, value in pairs(otherCharacters) do settings.tooltip.otherCharacters[key] = value end
+    elseif otherCharacters ~= nil then
+        settings.tooltip.otherCharacters.enable = otherCharacters
+    end
+    settings.tooltipOtherCharacters = nil
+end
 
 ---Sets ns.db, ns.data and ns.settings. Call on ADDON_LOADED.
 function Store.Init()
@@ -46,6 +72,7 @@ function Store.Init()
     ns.db = db
     ns.data = db.global
     ns.settings = db.profile
+    Store.MigrateSettings(ns.settings)
 end
 
 ---A fresh data table with the defaults, for the offline tests.

@@ -6,7 +6,7 @@
                 <FontString parentKey="Text" inherits="GameFontHighlight" justifyH="LEFT" justifyV="TOP">
                     <Anchors>
                         <Anchor point="TOPLEFT" x="7" y="0"/>
-                        <Anchor point="RIGHT" x="-7"/>
+                        <Anchor point="BOTTOMRIGHT" x="-7" y="0"/>
                     </Anchors>
                 </FontString>
             </Layer>

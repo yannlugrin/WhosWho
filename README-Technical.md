@@ -56,7 +56,8 @@ WhosWho/
 │   ├── Dialogs/
 │   │   └── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
 │   └── Decorations/               Nicknames added to the game's own frames
-│       └── Chat.lua               Sender names in chat lines
+│       ├── Chat.lua               Sender names in chat lines
+│       └── Tooltip.lua            Nickname and "Also:" line in player tooltips
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
 │   ├── Glyphs/                    Person, Pencil, Banner, Question, Hourglass: white 32×32, tinted in code
@@ -85,7 +86,7 @@ Planned:
 ├── Comm/
 └── UI/
     ├── PersonEditor.lua           Create and edit a manual identity, add alts
-    └── Decorations/               Tooltip line, unit menu entries
+    └── Decorations/               Unit menu entries
 ```
 
 ## Architecture
@@ -198,7 +199,7 @@ The nickname shown, for me: my nickname, otherwise the identity's own (the playe
 
 Nicknames are shown by the receiving add-on only, in the lines, tooltips and lists it decorates; outgoing chat is never modified.
 
-In chat, `ChatFrameUtil.AddSenderNameFilter` gets each line's decorated sender name with the event's arguments; the filter adds the nickname, in light grey and round brackets, after the name, and the game puts the result inside the player link: `[Ann Main (Annie)]: hello`. It adds nothing when the `chatNicknames` setting is off, when the sender's name or GUID is secret (the game already skips the filter when the decorated name is), for my own characters, for a character no identity holds, or when the nickname is the character's name.
+In chat, `ChatFrameUtil.AddSenderNameFilter` gets each line's decorated sender name with the event's arguments; the filter adds the nickname, in light grey and round brackets, after the name, and the game puts the result inside the player link: `[Ann Main (Annie)]: hello`. It adds nothing when the `chat.nickname.enable` setting is off, when the sender's name or GUID is secret (the game already skips the filter when the decorated name is), for my own characters, for a character no identity holds, or when the nickname is the character's name.
 
 ## Protocol
 
@@ -390,10 +391,13 @@ automaticChanges  { { time, kind = "merged" | "moved" | "taken" | "dropped" | "f
 Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared by every character), so they can be reset without touching the data:
 
 ```
-scopes = { guild, friends, whispers, group }, chatNicknames, tooltipNickname ("afterName" | "ownLine" | "hidden"),
-tooltipOtherCharacters, debugMessages (every Who's Who message sent or received, printed in chat),
+scopes = { guild, friends, whispers, group }, chat = { nickname = { enable } },
+tooltip = { nickname = { enable, position ("afterName" | "ownLine") }, otherCharacters = { enable, classColor, limit } (the "Also:" line) },
+debugMessages (every Who's Who message sent or received, printed in chat),
 launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the minimap button and the add-on compartment entry)
 ```
+
+`Store.MigrateSettings`, at load, moves settings saved by 0.1.0-beta.1 (`chatNicknames`, `tooltipNickname`, `tooltipOtherCharacters`, a boolean then, a table in development builds) to these keys and removes the old ones. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
 
 Planned: `scopes.selected` and the list of selected players.
 

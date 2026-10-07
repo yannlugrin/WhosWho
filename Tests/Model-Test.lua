@@ -160,6 +160,35 @@ do
     check(I.AnnouncedRevision(G1) == I.Revision(), "a character unlinked by forgetting announces that revision")
 end
 
+-- Settings migration ------------------------------------------------------------------------------
+
+do
+    local function profile(old)
+        local settings = {
+            chat = { nickname = { enable = true } },
+            tooltip = {
+                nickname = { enable = true, position = "afterName" },
+                otherCharacters = { enable = true, classColor = true, limit = 4 },
+            },
+        }
+        for key, value in pairs(old) do settings[key] = value end
+        ns.Store.MigrateSettings(settings)
+        return settings
+    end
+
+    local s = profile({ chatNicknames = false, tooltipNickname = "ownLine", tooltipOtherCharacters = false })
+    check(s.chat.nickname.enable == false and s.tooltip.nickname.enable and s.tooltip.nickname.position == "ownLine"
+        and s.tooltip.otherCharacters.enable == false, "0.1.0-beta.1 settings move to the new keys")
+    check(s.chatNicknames == nil and s.tooltipNickname == nil and s.tooltipOtherCharacters == nil, "and the old keys are removed")
+    s = profile({ tooltipNickname = "hidden" })
+    check(s.tooltip.nickname.enable == false and s.tooltip.nickname.position == "afterName", "a hidden nickname keeps the default position")
+    s = profile({ tooltipOtherCharacters = { enable = true, classColor = false, limit = 7 } })
+    check(s.tooltip.otherCharacters.classColor == false and s.tooltip.otherCharacters.limit == 7
+        and s.tooltipOtherCharacters == nil, "the table form of the other characters setting moves too")
+    s = profile({})
+    check(s.chat.nickname.enable and s.tooltip.nickname.position == "afterName", "nothing saved: the defaults stay")
+end
+
 -- Record validation -------------------------------------------------------------------------------
 
 do

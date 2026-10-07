@@ -66,10 +66,69 @@ addScopeCheckbox("whispers", L["People I whisper"], L["Anyone you whisper can as
 
 addSectionHeader(L["Display"])
 Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_ChatNicknames",
-    Settings.VarType.Boolean, L["Show nicknames in chat"], ns.Store.DEFAULTS.profile.chatNicknames,
-    function() return ns.settings.chatNicknames end,
-    function(value) ns.settings.chatNicknames = value end),
+    Settings.VarType.Boolean, L["Show nicknames in chat"], ns.Store.DEFAULTS.profile.chat.nickname.enable,
+    function() return ns.settings.chat.nickname.enable end,
+    function(value) ns.settings.chat.nickname.enable = value end),
     L["Adds the nickname after the name, for every player you know."])
+-- "hidden" turns the nickname off and keeps its position for when it is shown again.
+Settings.CreateDropdown(category, Settings.RegisterProxySetting(category, "WhosWho_TooltipNickname",
+    Settings.VarType.String, L["Nickname in tooltips"], ns.Store.DEFAULTS.profile.tooltip.nickname.position,
+    function()
+        local nickname = ns.settings.tooltip.nickname
+        return nickname.enable and nickname.position or "hidden"
+    end,
+    function(value)
+        local nickname = ns.settings.tooltip.nickname
+        nickname.enable = value ~= "hidden"
+        if value ~= "hidden" then nickname.position = value end
+    end),
+    function()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("afterName", L["After the name"])
+        container:Add("ownLine", L["On its own line"])
+        container:Add("hidden", L["Hidden"])
+        return container:GetData()
+    end,
+    L["\"After the name\" changes the tooltip's first line, which other tooltip add-ons may also change; choose \"On its own line\" if they conflict."])
+do
+    -- One dropdown for the "Also:" line: shown in class colours, shown in plain text, or hidden; "hidden" keeps the
+    -- colour choice for when it is shown again. The number of characters is greyed out while it is hidden.
+    local otherCharactersInitializer = Settings.CreateDropdown(category, Settings.RegisterProxySetting(category,
+        "WhosWho_TooltipOtherCharacters", Settings.VarType.String, L["Other characters in tooltips"], "classColor",
+        function()
+            local otherCharacters = ns.settings.tooltip.otherCharacters
+            if not otherCharacters.enable then return "hidden" end
+            return otherCharacters.classColor and "classColor" or "plain"
+        end,
+        function(value)
+            local otherCharacters = ns.settings.tooltip.otherCharacters
+            otherCharacters.enable = value ~= "hidden"
+            if value ~= "hidden" then otherCharacters.classColor = value == "classColor" end
+        end),
+        function()
+            local container = Settings.CreateControlTextContainer()
+            container:Add("classColor", L["Class colors"])
+            container:Add("plain", L["Plain text"])
+            container:Add("hidden", L["Hidden"])
+            return container:GetData()
+        end,
+        L["Adds an \"Also:\" line with the person's other characters on the same ruleset, in their class color or in plain text."])
+
+    local options = Settings.CreateSliderOptions(1, 10, 1)
+    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+    local limitInitializer = Settings.CreateSlider(category, Settings.RegisterProxySetting(category,
+        "WhosWho_TooltipOtherCharactersLimit", Settings.VarType.Number, L["Other characters shown"],
+        ns.Store.DEFAULTS.profile.tooltip.otherCharacters.limit,
+        function() return ns.settings.tooltip.otherCharacters.limit end,
+        function(value) ns.settings.tooltip.otherCharacters.limit = value end),
+        options, L["How many other characters the \"Also:\" line names; the others are counted as \"+N more\"."])
+    limitInitializer:SetParentInitializer(otherCharactersInitializer,
+        function() return ns.settings.tooltip.otherCharacters.enable end)
+end
+
+-- Minimap ----------------------------------------------------------------------------------------
+
+addSectionHeader(L["Minimap"])
 Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_MinimapButton",
     Settings.VarType.Boolean, L["Show minimap button"], true,
     function() return not ns.settings.launcher.hide end,

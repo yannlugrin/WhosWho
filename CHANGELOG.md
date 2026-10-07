@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+
+- **Tooltips**: the nickname of the people you know, after their name or on its own line, and an "Also:" line with their other characters, each adjustable in the settings.
+
 ## [0.1.0-beta.1] - 2026-10-07
 
 First beta, for World of Warcraft: Forever.

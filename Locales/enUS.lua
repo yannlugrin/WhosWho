@@ -124,6 +124,7 @@ L["Display"] = true
 L["Right-click: menu"] = true
 L["Settings"] = true
 L["Show in the add-on compartment"] = true
+L["Minimap"] = true
 L["Show minimap button"] = true
 L["Who's Who in the add-on compartment next to the minimap: click to open your identity, right-click for a menu."] = true
 
@@ -153,3 +154,19 @@ L["Characters"] = true
 L["Lvl %d · %s"] = true
 L["This list fills with players who share their identity with you, and with players you or your guild give a nickname to — no add-on needed on their side."] = true
 L["No one here yet"] = true
+
+-- Tooltip
+L["Nickname in tooltips"] = true
+L["After the name"] = true
+L["On its own line"] = true
+L["Hidden"] = true
+L["\"After the name\" changes the tooltip's first line, which other tooltip add-ons may also change; choose \"On its own line\" if they conflict."] = true
+L["Other characters in tooltips"] = true
+L["Class colors"] = true
+L["Plain text"] = true
+L["Adds an \"Also:\" line with the person's other characters on the same ruleset, in their class color or in plain text."] = true
+L["Other characters shown"] = true
+L["How many other characters the \"Also:\" line names; the others are counted as \"+N more\"."] = true
+L["+%d more"] = true
+L["Also: %s"] = true
+L["Who's Who: %s"] = true

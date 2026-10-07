@@ -46,3 +46,4 @@ UI\Main\MyIdentity.lua
 UI\Main\People.lua
 UI\Launcher.lua
 UI\Decorations\Chat.lua
+UI\Decorations\Tooltip.lua

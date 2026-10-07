@@ -6,7 +6,7 @@ local issecretvalue = issecretvalue or function() return false end
 -- The sender's name in a chat line, followed by its nickname: the game puts the result inside the player link,
 -- "[Ann Main (Annie)]". Returning nil leaves the name as it is.
 local function addNickname(_, decoratedName, ...)
-    if not ns.settings.chatNicknames then return nil end
+    if not ns.settings.chat.nickname.enable then return nil end
 
     -- The chat event's arguments: the sender's name is the second, its GUID the twelfth.
     local senderName, senderGuid = select(2, ...), select(12, ...)

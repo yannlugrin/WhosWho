@@ -53,7 +53,9 @@
         "RaidBossEmoteFrame",
         "UIErrorsFrame",
         "GetUnitName",
-        "WorldMapFrame"
+        "WorldMapFrame",
+        "GameTooltipTextLeft1",
+        "MinimalSliderWithSteppersMixin"
     ],
     "Lua.type.weakUnionCheck": true
 }

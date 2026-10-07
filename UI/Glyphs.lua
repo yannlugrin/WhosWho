@@ -69,6 +69,15 @@ function Glyphs.Set(texture, glyph)
     end
 end
 
+---The glyph inside a line of text, at the text's height.
+---@param glyph WhosWho.Glyph
+---@return string
+function Glyphs.Markup(glyph)
+    if not glyph.color then return "|T" .. glyph.texture .. ":0|t" end
+    local r, g, b = glyph.color:GetRGBAsBytes()
+    return ("|T%s:0:0:0:0:32:32:0:32:0:32:%d:%d:%d|t"):format(glyph.texture, r, g, b)
+end
+
 ---Shows a glyph's label and line in the game tooltip.
 ---@param owner Region
 ---@param glyph WhosWho.Glyph
