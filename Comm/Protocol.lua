@@ -77,8 +77,8 @@ end
 ---@field revision integer
 ---@field leftAt number?
 
--- Last revision sent to every audience this session, and whether that record had characters.
-local publishedRevision, publishedWithCharacters
+-- Last revision announced to every audience this session, and whether the Guild scope was on then.
+local broadcastRevision, broadcastWithGuildScope
 ---@type table<string, true> names of the players who sent a GET for my identity
 local requesters = {}
 ---@type table<string, WhosWho.Delivery> by channel (GUILD, PARTY, RAID) or by name (WHISPER)
@@ -146,7 +146,7 @@ local function fewestMessages(names)
     return bestChoice, bestWhispered
 end
 
--- Requesters left after any broadcast, in the fewest messages.
+-- Every requester my scopes still allow, in the fewest messages.
 local function answerRequesters(recordUpdate)
     local names = {}
     for name in pairs(requesters) do
@@ -158,6 +158,26 @@ local function answerRequesters(recordUpdate)
     if bestChoice.guild then sendRecord(recordUpdate(), "GUILD") end
     if bestChoice.group then sendRecord(recordUpdate(), Scopes.GroupChannel()) end
     for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(), "WHISPER", name) end
+end
+
+-- A change of revision, to every audience: the players holding an older one ask for it. When the Guild scope was
+-- turned on since the last one, the guild members send theirs back: until then they ignored mine, and I theirs.
+local function announceRevision()
+    local level = UnitLevel("player")
+    local message = announcementText(level, true, false)
+    if not message then return end
+
+    local guildScopeTurnedOn = Scopes.Get("guild") and not broadcastWithGuildScope
+    broadcastWithGuildScope = Scopes.Get("guild")
+    local audience = Scopes.BroadcastAudience()
+    for _, channel in ipairs(audience.memberChannels) do
+        if channel == "GUILD" and guildScopeTurnedOn then
+            sendQueued(announcementText(level, true, true), channel)
+        else
+            sendQueued(message, channel)
+        end
+    end
+    for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
 end
 
 local function sendRecords()
@@ -172,28 +192,15 @@ local function sendRecords()
     end
     sendAt, waitStartedAt = nil, nil
 
+    if Identity.Revision() ~= broadcastRevision then announceRevision() end
+    broadcastRevision = Identity.Revision()
+
     -- The REC text, built once for every REC this wait sends, and only when one goes out.
     local message
-    local function recordUpdate()
+    answerRequesters(function()
         message = message or Codec.RecordUpdate(Identity.SignedRecord())
         return message
-    end
-
-    -- A change of revision goes to every audience; nothing goes out while no record ever had characters.
-    local withCharacters = Identity.Main() ~= nil
-    if Identity.Revision() ~= publishedRevision and (withCharacters or publishedWithCharacters) then
-        local audience = Scopes.BroadcastAudience()
-        for _, channel in ipairs(audience.memberChannels) do sendRecord(recordUpdate(), channel) end
-        for _, name in ipairs(audience.names) do sendRecord(recordUpdate(), "WHISPER", name) end
-        for name in pairs(requesters) do
-            if Scopes.BroadcastReaches(audience, name) then requesters[name] = nil end
-        end
-        publishedWithCharacters = withCharacters
-        announce(UnitLevel("player"), false, false, sendQueued)
-    end
-    publishedRevision = Identity.Revision()
-
-    answerRequesters(recordUpdate)
+    end)
 end
 
 -- One wait for every pending REC: a call never brings the send forward, and pushes it back to waitSeconds from now, up
@@ -252,6 +259,30 @@ local function queueAnnouncement(name)
     if announcementWaiting then return end
     announcementWaiting = true
     C_Timer.After(ANNOUNCEMENT_WAIT_SECONDS, sendAnnouncements)
+end
+
+-- Players new to my audience ----------------------------------------------------------------------
+-- A scope turned on, a group or guild joined, a friend added: they missed my announcements, so each gets one now and
+-- sends theirs back.
+
+local function announceToChannel(channel)
+    local message = announcementText(UnitLevel("player"), true, true)
+    if message then sendQueued(message, channel) end
+end
+
+-- The online ones among those friends that no member channel reaches.
+---@param friends WhosWho.Friend[]
+local function announceToFriends(friends)
+    local message = announcementText(UnitLevel("player"), true, true)
+    if not message then return end
+
+    local revision = Identity.AnnouncedRevision(UnitGUID("player"))
+    for _, friend in ipairs(friends) do
+        if friend.connected and not Scopes.GuildReaches(friend.name) and not Scopes.GroupReaches(friend.name) then
+            sendQueued(message, "WHISPER", friend.name)
+            announcedRevisions[friend.name] = revision
+        end
+    end
 end
 
 -- Requesting a record ---------------------------------------------------------------------------
@@ -357,17 +388,39 @@ end
 -- Game events ----------------------------------------------------------------------------------
 
 ---@type boolean? nil until Protocol.Start
-local wasInGroup
+local wasInGroup, wasInGuild
+---@type table<string, true>? GUIDs of my WoW friends at the previous FRIENDLIST_UPDATE, nil until Protocol.Start
+local friendGuids
 
----PLAYER_LOGIN, after the character refresh: registers the prefix, takes the current revision as published, sends
----a REC after each change of revision.
+---@param friends WhosWho.Friend[]
+local function guidsOf(friends)
+    local guids = {}
+    for _, friend in ipairs(friends) do guids[friend.guid] = true end
+    return guids
+end
+
+-- Turning the Guild scope on makes a change of revision, whose announcement brings the guild's back (announceRevision).
+-- Turning the Whispers scope on sends nothing: it applies to the players I whisper from then on.
+---@param key "guild"|"friends"|"whispers"|"group"
+local function scopeEnabled(key)
+    if key == "group" and IsInGroup() then
+        announceToChannel(Scopes.GroupChannel())
+    elseif key == "friends" then
+        announceToFriends(Scopes.Friends())
+    end
+end
+
+---PLAYER_LOGIN, after the character refresh: registers the prefix, takes the current revision as announced, announces
+---each change of revision and each scope turned on.
 function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
-    publishedRevision, publishedWithCharacters = Identity.Revision(), Identity.Main() ~= nil
+    broadcastRevision, broadcastWithGuildScope = Identity.Revision(), Scopes.Get("guild")
     Identity.OnRevisionChanged(function() scheduleRecordSending(REVISION_WAIT_SECONDS) end)
-    -- The login announcement already reaches a group I am in.
-    wasInGroup = IsInGroup()
+    Scopes.OnEnabled(scopeEnabled)
+    -- The login announcement already reaches a group or guild I am in, and my friends online.
+    wasInGroup, wasInGuild = IsInGroup(), IsInGuild()
+    friendGuids = guidsOf(Scopes.Friends())
 end
 
 ---PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement.
@@ -409,8 +462,28 @@ function Protocol.GroupChanged()
     wasInGroup = inGroup
     if not (joined and Scopes.Get("group")) then return end
 
-    local message = announcementText(UnitLevel("player"), true, true)
-    if message then sendQueued(message, Scopes.GroupChannel()) end
+    announceToChannel(Scopes.GroupChannel())
+end
+
+---PLAYER_GUILD_UPDATE for my character: on joining a guild, my announcement to it, which every member answers with
+---theirs.
+function Protocol.GuildChanged()
+    if wasInGuild == nil then return end
+    local inGuild = IsInGuild()
+    local joined = inGuild and not wasInGuild
+    wasInGuild = inGuild
+    if joined and Scopes.Get("guild") then announceToChannel("GUILD") end
+end
+
+---FRIENDLIST_UPDATE, after Scopes.FriendListChanged: my announcement to each friend added, which they answer with theirs.
+function Protocol.FriendListChanged()
+    if not friendGuids then return end
+    local friends, added = Scopes.Friends(), {}
+    for _, friend in ipairs(friends) do
+        if not friendGuids[friend.guid] then added[#added + 1] = friend end
+    end
+    friendGuids = guidsOf(friends)
+    if Scopes.Get("friends") then announceToFriends(added) end
 end
 
 ---CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, once per revision this

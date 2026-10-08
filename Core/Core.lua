@@ -129,10 +129,12 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Protocol.AnnounceLevel(arg1)
     elseif event == "PLAYER_GUILD_UPDATE" and arg1 == "player" then
         ns.Scopes.GuildChanged()
+        ns.Protocol.GuildChanged()
     elseif event == "GUILD_ROSTER_UPDATE" then
-        ns.Scopes.ReadGuildRoster()
+        ns.Scopes.GuildRosterChanged()
     elseif event == "FRIENDLIST_UPDATE" then
-        ns.Scopes.ReadFriends()
+        ns.Scopes.FriendListChanged()
+        ns.Protocol.FriendListChanged()
     elseif event == "CHAT_MSG_WHISPER" then
         -- The sender's name and GUID.
         ns.Scopes.WhisperReceived(select(2, ...), select(12, ...))

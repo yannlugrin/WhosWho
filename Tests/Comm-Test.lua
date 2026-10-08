@@ -396,11 +396,12 @@ run(1)
 check(sent({ from = "Ann Main" }) == 0, "nothing goes out before a character is linked")
 slash(ann, "link")
 run(1)
-check(sent({ type = "REC" }) == 0, "a REC waits after a change")
+check(sent({ from = "Ann Main" }) == 0, "a change waits")
 run(30)
-check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1, "a new revision goes to the guild")
-check(sent({ from = "Ann Main", type = "REC", target = "Dan Main" }) == 1, "and to an online friend outside the guild")
-check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 0, "a friend in the guild gets no copy of their own")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1, "a new revision is announced to the guild")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Dan Main" }) == 1, "and to an online friend outside the guild")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 0, "a friend in the guild gets no copy of their own")
+check(sent({ from = "Ann Main", type = "REC" }) == 0, "no REC goes out without a GET")
 local annId = ann.ns.Identity.Id()
 check(ann.ns.People.Get(annId) == nil, "my own REC coming back from the guild is ignored")
 
@@ -501,9 +502,9 @@ getFromBob()
 run(5)
 check(sent({ from = "Ann Main", type = "REC" }) == 0, "a GET does not bring forward the wait of a change")
 run(6)
-check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
-    and sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 0,
-    "the change goes out 15 seconds after it, and its guild REC answers the GET")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1,
+    "the change is announced 15 seconds after it, and the waiting GET is answered then")
 
 run(40)
 clearLog()
@@ -511,9 +512,11 @@ slash(ann, "nick Ann Waits More")
 run(13)
 getFromBob()
 run(3)
-check(sent({ from = "Ann Main", type = "REC" }) == 0, "a GET with less than 5 seconds left pushes the send back")
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0 and sent({ from = "Ann Main", type = "REC" }) == 0,
+    "a GET with less than 5 seconds left pushes the send back")
 run(3)
-check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1, "then everything goes out")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1, "then everything goes out")
 
 run(40)
 clearLog()
@@ -537,9 +540,10 @@ slash(ann, "link")
 run(30)
 check(holderId(bob, annAlt.guid) == annId and state(bob, annAlt.guid) == "confirmed"
     and select(2, bob.ns.People.Find(annAlt.guid)).level == annAlt.level,
-    "an alt linked while played arrives confirmed, with its level: the announcement follows the REC")
-check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) > 0 and sent({ type = "GET" }) == 0,
-    "that announcement asks for no GET: the REC is already on its way")
+    "an alt linked while played arrives confirmed, with its level: its announcement waits for the record")
+check(sent({ type = "GET", target = "Ann Alt" }) == 2 and sent({ from = "Ann Alt", type = "REC", distribution = "GUILD" }) == 1
+    and sent({ from = "Ann Alt", type = "REC" }) == 1,
+    "the guild members ask for the new revision, and get one REC on the guild")
 logout(ann)
 run(1)
 
@@ -691,8 +695,7 @@ logout(bob)
 logout(ann)
 ann = login(annAccount, annAlt)
 slash(ann, "unlink")
--- Past the change's wait, then the 30 seconds in which a GET from a guild member is taken as answered by the guild
--- REC of that change.
+-- Past the change's wait, and the GETs its announcement brings.
 run(70)
 bob = login(bobAccount, bobMain)
 run(1)
@@ -842,6 +845,110 @@ clearLog()
 whisper(cat, bobMain)
 run(6)
 check(sent({ from = "Bob Main", target = "Cat Main" }) == 0, "a whisper received sends nothing")
+
+-- Players new to my audience -----------------------------------------------------------------------------
+
+-- Whether the last announcement matching the filter wants the receiver's.
+local function lastWantsAnnouncement(filter)
+    filter.type = "ANNOUNCE"
+    for i = #world.log, 1, -1 do
+        local entry, match = world.log[i], true
+        for k, v in pairs(filter) do
+            if entry[k] ~= v then match = false end
+        end
+        if match then return entry.text:match("^%d+ ANNOUNCE %S+ %d+ %d+ %d (%d)") == "1" end
+    end
+    return false
+end
+
+world.group = { annMain, bobMain }
+bob.ns.settings.scopes.group = true
+clearLog()
+slash(ann, "scope group on")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1
+    and lastWantsAnnouncement({ from = "Ann Main", distribution = "PARTY" }),
+    "turning the Group scope on in a group announces to it right away")
+run(6)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Ann Main" }) == 1, "and the members answer")
+clearLog()
+slash(ann, "scope group on")
+run(6)
+check(sent({ type = "ANNOUNCE" }) == 0, "a scope already on sends nothing")
+world.group = {}
+slash(ann, "scope group off")
+bob.ns.settings.scopes.group = false
+clearLog()
+slash(ann, "scope group on")
+run(6)
+check(sent({ from = "Ann Main" }) == 0, "outside a group, turning the Group scope on sends nothing")
+slash(ann, "scope group off")
+
+clearLog()
+whisper(ann, eveMain)
+slash(ann, "scope whispers on")
+run(6)
+check(sent({ from = "Ann Main" }) == 0, "turning the Whispers scope on sends nothing, even to a player whispered before")
+slash(ann, "scope whispers off")
+
+slash(ann, "scope friends off")
+clearLog()
+slash(ann, "scope friends on")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Dan Main" }) == 1
+    and lastWantsAnnouncement({ from = "Ann Main", target = "Dan Main" }),
+    "turning the Friends scope on announces to an online friend outside the guild")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 0, "not to a friend the guild reaches")
+
+clearLog()
+annMain.friends = { danMain, bobMain, eveMain }
+fire(ann, "FRIENDLIST_UPDATE")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Eve Main" }) == 1
+    and sent({ from = "Ann Main", type = "ANNOUNCE" }) == 1, "a friend added gets my announcement, the others nothing")
+fire(ann, "FRIENDLIST_UPDATE")
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 1, "a friend list update without a friend added sends nothing")
+annMain.friends = { danMain, bobMain }
+fire(ann, "FRIENDLIST_UPDATE")
+ann.ns.settings.scopes.friends = false
+annMain.friends = { danMain, bobMain, eveMain }
+fire(ann, "FRIENDLIST_UPDATE")
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 1, "a friend added sends nothing with the Friends scope off")
+annMain.friends = { danMain, bobMain }
+fire(ann, "FRIENDLIST_UPDATE")
+ann.ns.settings.scopes.friends = true
+run(6)
+
+slash(bob, "scope guild off")
+run(30)
+clearLog()
+slash(bob, "scope guild on")
+run(10)
+check(sent({ from = "Bob Main", type = "ANNOUNCE" }) == 0, "turning the Guild scope on waits, as any change of revision")
+run(6)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and lastWantsAnnouncement({ from = "Bob Main", distribution = "GUILD" }),
+    "then its announcement on the guild wants the members' back")
+run(6)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", target = "Bob Main" }) == 1, "and they answer")
+clearLog()
+slash(bob, "nick Bob Again")
+run(30)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and not lastWantsAnnouncement({ from = "Bob Main", distribution = "GUILD" }),
+    "the next change of revision does not")
+
+eveMain.guild = GUILD
+clearLog()
+fire(eve, "PLAYER_GUILD_UPDATE", "player")
+check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and lastWantsAnnouncement({ from = "Eve Main", distribution = "GUILD" }),
+    "joining a guild announces to it right away")
+run(6)
+check(sent({ type = "ANNOUNCE", target = "Eve Main" }) == 2, "and the members answer")
+clearLog()
+fire(eve, "PLAYER_GUILD_UPDATE", "player")
+run(6)
+check(sent({ from = "Eve Main" }) == 0, "a guild update while already in it sends nothing")
+eveMain.guild = nil
+fire(eve, "PLAYER_GUILD_UPDATE", "player")
 
 -- Logging out -----------------------------------------------------------------------------------------
 

@@ -27,6 +27,11 @@ local issecretvalue = issecretvalue or function() return false end
 ---@type table<string, WhosWho.Whisper> whole name -> players whispered with this session (sent or received)
 local whispers = {}
 
+---@class WhosWho.Friend
+---@field guid string
+---@field name string
+---@field connected boolean
+
 ---Whether no value read from the game is secret. A secret value (Midnight-era API) may only be displayed: never
 ---compared, stored or used as a key.
 local function notSecret(...)
@@ -70,6 +75,19 @@ local function groupMemberGuid(name)
     return nil
 end
 
+---My WoW friends. Empty on PLAYER_LOGOUT: the friend list is already cleared.
+---@return WhosWho.Friend[]
+function Scopes.Friends()
+    local friends = {}
+    for i = 1, C_FriendList.GetNumFriends() or 0 do
+        local info = C_FriendList.GetFriendInfoByIndex(i)
+        if info and info.guid and info.name and notSecret(info.guid, info.name, info.connected) then
+            friends[#friends + 1] = { guid = info.guid, name = info.name, connected = info.connected == true }
+        end
+    end
+    return friends
+end
+
 local function friendGuid(name)
     local info = C_FriendList.GetFriendInfo(name)
     local guid = info and info.guid
@@ -96,9 +114,8 @@ function Scopes.OnlineGuids()
         local online, guid = select(9, GetGuildRosterInfo(i)), select(17, GetGuildRosterInfo(i))
         if online and guid and notSecret(online, guid) then guids[guid] = true end
     end
-    for i = 1, C_FriendList.GetNumFriends() do
-        local info = C_FriendList.GetFriendInfoByIndex(i)
-        if info and info.connected and info.guid and notSecret(info.connected, info.guid) then guids[info.guid] = true end
+    for _, friend in ipairs(Scopes.Friends()) do
+        if friend.connected then guids[friend.guid] = true end
     end
     for _, unit in ipairs(groupUnits()) do
         local online, guid = UnitIsConnected(unit), UnitGUID(unit)
@@ -130,7 +147,7 @@ end
 -- Relationships ----------------------------------------------------------------------------------
 
 ---GUILD_ROSTER_UPDATE: my current character's guild, and the guild of the characters I hold.
-function Scopes.ReadGuildRoster()
+function Scopes.GuildRosterChanged()
     local count = GetNumGuildMembers()
     local clubId = C_Club.GetGuildClubId()
     -- The roster is empty until the game has loaded it.
@@ -156,12 +173,9 @@ function Scopes.GuildChanged()
 end
 
 ---FRIENDLIST_UPDATE: friendOf of the characters I hold, for my current character.
-function Scopes.ReadFriends()
+function Scopes.FriendListChanged()
     local friendGuids = {}
-    for i = 1, C_FriendList.GetNumFriends() do
-        local info = C_FriendList.GetFriendInfoByIndex(i)
-        if info and info.guid and notSecret(info.guid) then friendGuids[info.guid] = true end
-    end
+    for _, friend in ipairs(Scopes.Friends()) do friendGuids[friend.guid] = true end
     People.UpdateFriends(UnitGUID("player"), friendGuids)
 end
 
@@ -183,6 +197,9 @@ end
 
 -- Sharing ----------------------------------------------------------------------------------------
 
+---@type fun(key: "guild"|"friends"|"whispers"|"group")[]
+local enabledListeners = {}
+
 ---Whether that scope is on. On PLAYER_LOGOUT, AceDB may already have removed the values equal to their defaults.
 ---@param key "guild"|"friends"|"whispers"|"group"
 ---@return boolean
@@ -200,6 +217,14 @@ function Scopes.Set(key, enabled)
     if Scopes.Get(key) == enabled then return end
     ns.settings.scopes[key] = enabled
     if key == "guild" then Identity.GuildScopeChanged() end
+    if not enabled then return end
+    for _, listener in ipairs(enabledListeners) do listener(key) end
+end
+
+---Calls the listener with the scope's key each time a scope is turned on.
+---@param listener fun(key: "guild"|"friends"|"whispers"|"group")
+function Scopes.OnEnabled(listener)
+    enabledListeners[#enabledListeners + 1] = listener
 end
 
 ---Whether my scopes allow sharing identities with that player, both ways: sending my record, and using or asking
@@ -269,10 +294,8 @@ function Scopes.BroadcastAudience()
         names[#names + 1] = name
     end
     if Scopes.Get("friends") then
-        -- nil on PLAYER_LOGOUT: the friend list is already cleared.
-        for i = 1, C_FriendList.GetNumFriends() or 0 do
-            local info = C_FriendList.GetFriendInfoByIndex(i)
-            if info and info.connected and info.name and notSecret(info.name) then add(info.name) end
+        for _, friend in ipairs(Scopes.Friends()) do
+            if friend.connected then add(friend.name) end
         end
     end
     if Scopes.Get("whispers") then
@@ -282,16 +305,4 @@ function Scopes.BroadcastAudience()
     end
 
     return { memberChannels = memberChannels, names = names }
-end
-
----Whether a broadcast to that audience reaches the player.
----@param audience WhosWho.Audience
----@param name string
----@return boolean
-function Scopes.BroadcastReaches(audience, name)
-    if Scopes.GuildReaches(name) or Scopes.GroupReaches(name) then return true end
-    for _, audienceName in ipairs(audience.names) do
-        if audienceName == name then return true end
-    end
-    return false
 end

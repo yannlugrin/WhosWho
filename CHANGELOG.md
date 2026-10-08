@@ -12,6 +12,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Forget** a person from the People tab.
 - **Notes** about the people you know, in the People tab, seen only by you. The start of the note shows in their tooltips, which you can turn off in the settings.
 - **Your nickname for a person**, set or removed from the People tab.
+- **Turning a sharing option on**, joining a guild or adding a friend now sends your identity to the players it adds, and gets theirs back, without waiting for your next login.
 
 ### Fixed
 

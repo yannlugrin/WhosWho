@@ -28,12 +28,13 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Linking while grouped.** On A, link another character while playing it.
 
-- A, after 15 s: `Sent, PARTY: 1 REC …`, then `Sent, PARTY: 1 ANNOUNCE … 0 0 0`.
-- B: no `GET`; `/ww people` lists the new character as **confirmed**, with its level.
+- A, after 15 s: `Sent, PARTY: 1 ANNOUNCE … 1 0 0`, and no `REC` yet.
+- B: `Sent, WHISPER <A>: 1 GET …`; after about 5 s, A: `Sent, WHISPER <B>: 1 REC …`.
+- B: `/ww people` lists the new character as **confirmed**, with its level.
 
 **Unlinking while grouped.** On A, `/ww unlink` on a linked character.
 
-- A, after 15 s: `Sent, PARTY: 1 REC …` (and `GUILD` if A is in a guild).
+- A, after 15 s: `Sent, PARTY: 1 ANNOUNCE …` (and `GUILD` if A is in a guild), then B's `GET`, then a `REC`.
 - B: `/ww people` no longer lists that character.
 
 ## Removal While Offline
@@ -53,13 +54,13 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **A scope turned off.** On B, `/ww scope group off`. On A, link or unlink a character.
 
-- A: `Sent, PARTY: 1 REC …`.
-- B: `Received, PARTY <A>: 1 REC …`, but `/ww people` does not change.
+- A: `Sent, PARTY: 1 ANNOUNCE …`.
+- B: `Received, PARTY <A>: 1 ANNOUNCE …`, but no `GET`, and `/ww people` does not change.
 
 **Whispers.** On both, `/ww scope whispers on`; leave the group; A and B don't know each other (`/ww people`).
 
-- B whispers A; A doesn't answer. On A, link or unlink a character: nothing goes to B. On B, link or unlink a character: A gets `Received, WHISPER <B>: 1 REC …` and the announcement, but `/ww people` does not change: a whisper received allows nothing.
-- A whispers B. On A, link or unlink a character: A sends `Sent, WHISPER <B>: 1 REC …`; B: `/ww people` follows the change. On B, link or unlink a character: A's `/ww people` shows B's character, confirmed.
+- B whispers A; A doesn't answer. On A, link or unlink a character: nothing goes to B. On B, link or unlink a character: A gets `Received, WHISPER <B>: 1 ANNOUNCE …`, but sends no `GET`, and `/ww people` does not change: a whisper received allows nothing.
+- A whispers B. On A, link or unlink a character: A sends `Sent, WHISPER <B>: 1 ANNOUNCE …`, B a `GET`, A the `REC`; B: `/ww people` follows the change. On B, link or unlink a character: A's `/ww people` shows B's character, confirmed.
 - A: `/reload`. On B, link or unlink a character: A's `/ww people` follows the change (B is allowed from the saved whisper). On A, link or unlink a character: nothing goes to B (only the players whispered this session are in the audience).
 
 ## Reaching Players Who Come Later
@@ -69,6 +70,26 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - B (the one joining): `Sent, PARTY: 1 ANNOUNCE … 1 1 0`. A, the group's only other member, has also just joined, so the same from A.
 - Each, after about 5 s: `Sent, WHISPER <other>: 1 ANNOUNCE … 1 0 0`, and nothing more: an answer is not answered.
 - B leaves and is invited again: the same exchange again. A change in the group (a third player joining) sends nothing from A or B unless they join.
+
+**Turning the Group scope on.** A and B grouped, B's Group scope on, A's off; `/reload` both. On A, `/ww scope group on`.
+
+- A, right away: `Sent, PARTY: 1 ANNOUNCE … 1 1 0`.
+- B: a `GET` if it doesn't hold A's revision; after about 5 s, `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0 0`. A then asks for B's record if it doesn't hold it.
+- `/ww scope group off`, then on again: the same announcement again; turning the Whispers scope on sends nothing.
+
+**Turning the Guild scope on** (needs a guild). A and B in the same guild, B's Guild scope on, A's off. On A, `/ww scope guild on`.
+
+- A, after 15 s (the change of revision it makes): `Sent, GUILD: 1 ANNOUNCE … 1 1 0`.
+- B: a `GET`, then its answer `1 ANNOUNCE … 1 0 0`; A gets B's record in turn.
+
+**Joining a guild** (needs a guild). A linked, Guild scope on, not in a guild. A joins B's guild.
+
+- A, right away: `Sent, GUILD: 1 ANNOUNCE … 1 1 0`; B answers as for a login. *To verify*: whether B's roster already lists A, which B needs to allow A.
+
+**Adding a friend** (needs friends). A and B online, Friends scope on, B lists A as a friend. A adds B.
+
+- A, right away: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`; B answers as for a login. Turning the Friends scope on sends the same to each online friend.
+- *To verify*: whether the friend list is loaded at login. If it isn't, the first `FRIENDLIST_UPDATE` sends this announcement to every online friend, which the login announcement missed.
 
 **Logging in.** A and B in the same guild, or grouped with the Group scope on. `/reload` B.
 
