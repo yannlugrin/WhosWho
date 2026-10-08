@@ -53,6 +53,15 @@ L["Members of your party or raid who also have this option on see your identity,
 L["My party or raid"] = true
 L["Nothing is shared until a character is linked. Your identity is your nickname and your linked characters."] = true
 L["People I whisper"] = true
+L["Whispers count for"] = true
+L["How long after your last whisper to a player you keep seeing each other's identity."] = true
+L["1 hour"] = true
+L["3 hours"] = true
+L["6 hours"] = true
+L["12 hours"] = true
+L["1 day"] = true
+L["3 days"] = true
+L["1 week"] = true
 L["Sharing"] = true
 L["Forget everyone else"] = true
 L["Forget everyone else?"] = true

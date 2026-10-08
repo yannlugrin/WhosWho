@@ -159,6 +159,29 @@ local function fire(session, event, ...)
     end
 end
 
+-- Saved values missing, from the defaults.
+local function fillDefaults(saved, defaults)
+    for k, v in pairs(defaults) do
+        if saved[k] == nil then
+            saved[k] = copy(v)
+        elseif type(v) == "table" and type(saved[k]) == "table" then
+            fillDefaults(saved[k], v)
+        end
+    end
+end
+
+-- Saved values equal to their defaults removed, empty tables included, as AceDB does on PLAYER_LOGOUT.
+local function removeDefaults(saved, defaults)
+    for k, v in pairs(defaults) do
+        if type(v) == "table" and type(saved[k]) == "table" then
+            removeDefaults(saved[k], v)
+            if next(saved[k]) == nil then saved[k] = nil end
+        elseif saved[k] == v then
+            saved[k] = nil
+        end
+    end
+end
+
 local function newEnvironment(session)
     local account, c = session.account, session.character
     local env = setmetatable({}, { __index = _G })
@@ -277,9 +300,14 @@ local function newEnvironment(session)
             end
         end,
     }
+    -- Like AceDB: the defaults fill what the saved data lacks, and PLAYER_LOGOUT removes them again before the
+    -- add-on's own handler runs (see logout).
     local AceDB = {
         New = function(_, _, defaults)
-            account.saved = account.saved or { global = copy(defaults.global), profile = copy(defaults.profile) }
+            account.saved = account.saved or { global = {}, profile = {} }
+            fillDefaults(account.saved.global, defaults.global)
+            fillDefaults(account.saved.profile, defaults.profile)
+            session.defaults = defaults
             return account.saved
         end,
     }
@@ -299,7 +327,8 @@ local function account(name)
     return { name = name }
 end
 
-local function login(acc, c)
+-- reloading: a /reload rather than a login, as PLAYER_ENTERING_WORLD tells it.
+local function login(acc, c, reloading)
     assert(not online(c.name), c.name .. " is already online")
     -- The UI files are not loaded: no first-login prompt.
     local session = { account = acc, character = c, frames = {}, online = true, ns = { IdentityDialogs = { AskToLink = function() end }, Launcher = { Register = function() end }, Tooltip = { Register = function() end } } }
@@ -311,12 +340,16 @@ local function login(acc, c)
     end
     fire(session, "ADDON_LOADED", "WhosWho")
     fire(session, "PLAYER_LOGIN")
+    fire(session, "PLAYER_ENTERING_WORLD", not reloading, reloading == true)
     -- The friend list arrives after login.
     fire(session, "FRIENDLIST_UPDATE")
     return session
 end
 
 local function logout(session)
+    local saved, defaults = session.account.saved, session.defaults
+    removeDefaults(saved.global, defaults.global)
+    removeDefaults(saved.profile, defaults.profile)
     fire(session, "PLAYER_LOGOUT")
     session.online = false
 end
@@ -679,14 +712,33 @@ do
         "once I whisper them, they are asked and their REC is stored")
     check(select(2, bob.ns.People.Find(eveMain.guid)).whisperedAt == whisperedAt,
         "the stored character keeps when I whispered it")
-    check(bob.ns.Scopes.BroadcastAudience().names[1] == "Eve Main", "and they are in my audience")
+    check(bob.ns.Scopes.BroadcastAudience().names[1] == "Eve Main" and not bob.ns.Scopes.LoginAudience().names[1],
+        "and, whispered this session, in my broadcasts' audience, not in my login's")
 
     logout(bob)
     bob = login(bobAccount, bobMain)
     run(1)
     check(bob.ns.Scopes.Allows("Eve Main"), "after a reload, the saved whisper still allows the player")
+    check(bob.ns.Scopes.SenderGuid("Eve Main", "WHISPER") == eveMain.guid, "and gives the sender's GUID")
     bob.ns.settings.scopes.whispers = false
     check(not bob.ns.Scopes.Allows("Eve Main"), "not once the Whispers scope is off")
+    bob.ns.settings.scopes.whispers = true
+
+    run(3 * 3600)
+    check(not bob.ns.Scopes.Allows("Eve Main"), "past the whisper window, the player is no longer allowed")
+    check(bob.ns.Scopes.SenderGuid("Eve Main", "WHISPER") == nil, "nor gives the sender's GUID")
+    logout(bob)
+    check(next(bobAccount.saved.global.whispers) == nil
+        and select(2, bob.ns.People.Find(eveMain.guid)).whisperedAt == nil,
+        "logout removes the whispers and clears the whisperedAt older than the window")
+    bob = login(bobAccount, bobMain)
+    run(1)
+    bob.ns.settings.whisperHours = 168
+    whisper(bob, eveMain)
+    run(3 * 3600)
+    check(bob.ns.Scopes.Allows("Eve Main"), "a longer window keeps the player allowed")
+    bob.ns.settings.whisperHours = 3
+    bob.ns.settings.scopes.whispers = false
 end
 
 -- Removing a character while a holder is offline -------------------------------------------------------
@@ -829,6 +881,10 @@ run(6)
 check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1, "once per revision")
 slash(bob, "nick Bobby")
 run(30)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 2,
+    "a change of revision goes to the person I whispered this session")
+-- Eve whispered Bob more than the whisper window ago: she whispers him again, with her Whispers scope still off.
+whisper(eve, bobMain)
 eve.ns.settings.scopes.whispers = true
 clearLog()
 whisper(bob, eveMain)
@@ -840,11 +896,114 @@ whisper(eve, bobMain)
 run(6)
 check(sent({ from = "Eve Main", type = "ANNOUNCE", target = "Bob Main" }) == 1,
     "their answer already reached me: whispering me sends nothing more")
+run(30 * 60)
+clearLog()
+whisper(bob, eveMain)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
+    "30 minutes after my last announcement, whispering the player announces again")
+clearLog()
+whisper(bob, annMain)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Ann Main" }) == 0,
+    "whispering a player my guild announcements reach sends nothing")
 eve.ns.settings.scopes.whispers = false
 clearLog()
 whisper(cat, bobMain)
 run(6)
 check(sent({ from = "Bob Main", target = "Cat Main" }) == 0, "a whisper received sends nothing")
+
+-- The people I whispered this session ------------------------------------------------------------------
+
+clearLog()
+levelUp(bob)
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
+    "a level-up goes to the person I whispered this session")
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Ann Main" }) == 0,
+    "not to a person I whispered that my guild announcement reaches")
+
+logout(bob)
+bob = login(bobAccount, bobMain, true)
+run(10)
+clearLog()
+levelUp(bob)
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1, "a /reload keeps the session's whispers")
+
+logout(bob)
+clearLog()
+bob = login(bobAccount, bobMain)
+run(10)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0,
+    "the login announcement does not go to the person I whispered in an earlier session")
+clearLog()
+levelUp(bob)
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0, "nor the next ones")
+
+-- Eve plays an alt she links, and whispers Bob from it.
+local eveAlt = character("Eve Alt", "Player-1-0000E002", PRIEST)
+logout(eve)
+eve = login(eveAccount, eveAlt)
+slash(eve, "link")
+eve.ns.settings.scopes.whispers = true
+run(30)
+whisper(bob, eveMain)
+whisper(eve, bobMain)
+whisper(bob, eveAlt)
+run(30)
+check(state(bob, eveAlt.guid) == "confirmed", "Eve's alt, whispered both ways, is confirmed")
+clearLog()
+levelUp(bob)
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 1
+    and sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0,
+    "one announcement per person, to the character I last whispered with")
+
+do
+    local whispers = bobAccount.saved.global.whispers
+    local mainWhisper, altWhisper = whispers[eveMain.guid], whispers[eveAlt.guid]
+    local altSentAt, altReceivedAt = altWhisper.sentAt, altWhisper.receivedAt
+    altWhisper.sentAt, altWhisper.receivedAt = mainWhisper.sentAt - 1, nil
+    clearLog()
+    levelUp(bob)
+    run(1)
+    check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1
+        and sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 0,
+        "with the main whispered last, the announcement goes to the main")
+    altWhisper.sentAt, altWhisper.receivedAt = altSentAt, altReceivedAt
+
+    local altEntry = select(2, bob.ns.People.Find(eveAlt.guid))
+    altEntry.state = "listed"
+    clearLog()
+    levelUp(bob)
+    run(1)
+    check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 0
+        and sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
+        "a character not confirmed is never the one announced to")
+    altEntry.state = "confirmed"
+end
+
+bobMain.friends = { eveAlt }
+fire(bob, "FRIENDLIST_UPDATE")
+clearLog()
+levelUp(bob)
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 1,
+    "a person I whispered who is also my friend gets one announcement")
+bobMain.friends = {}
+fire(bob, "FRIENDLIST_UPDATE")
+
+clearLog()
+fire(bob, "PLAYER_CAMPING")
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 1, "the logout announcement goes to them too")
+bob.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "clicked")
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 2, "and the canceled logout")
+eve.ns.settings.scopes.whispers = false
+bob.ns.settings.scopes.whispers = false
+logout(eve)
+eve = login(eveAccount, eveMain)
+run(10)
 
 -- Players new to my audience -----------------------------------------------------------------------------
 

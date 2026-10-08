@@ -51,7 +51,7 @@ local function addScopeCheckbox(scope, name, tooltip)
         ns.Store.DEFAULTS.profile.scopes[scope],
         function() return ns.Scopes.Get(scope) end,
         function(value) ns.Scopes.Set(scope, value) end)
-    Settings.CreateCheckbox(category, setting, tooltip)
+    return Settings.CreateCheckbox(category, setting, tooltip)
 end
 
 addSectionHeader(L["Sharing"])
@@ -60,7 +60,29 @@ addScopeCheckbox("guild", L["Guild"], L["Guild members who also have this option
 addScopeCheckbox("friends", L["Friends"], L["Friends who also have this option on see your identity, and you see theirs."])
 addScopeCheckbox("group", L["My party or raid"],
     L["Members of your party or raid who also have this option on see your identity, and you see theirs."])
-addScopeCheckbox("whispers", L["People I whisper"], L["When you whisper a player who also has this option on, you see each other's identity."])
+do
+    -- The whisper window is greyed out while the Whispers scope is off.
+    local whispersInitializer = addScopeCheckbox("whispers", L["People I whisper"],
+        L["When you whisper a player who also has this option on, you see each other's identity."])
+    local whisperHoursInitializer = Settings.CreateDropdown(category, Settings.RegisterProxySetting(category,
+        "WhosWho_WhisperHours", Settings.VarType.Number, L["Whispers count for"],
+        ns.Store.DEFAULTS.profile.whisperHours,
+        function() return ns.settings.whisperHours end,
+        function(value) ns.settings.whisperHours = value end),
+        function()
+            local container = Settings.CreateControlTextContainer()
+            container:Add(1, L["1 hour"])
+            container:Add(3, L["3 hours"])
+            container:Add(6, L["6 hours"])
+            container:Add(12, L["12 hours"])
+            container:Add(24, L["1 day"])
+            container:Add(72, L["3 days"])
+            container:Add(168, L["1 week"])
+            return container:GetData()
+        end,
+        L["How long after your last whisper to a player you keep seeing each other's identity."])
+    whisperHoursInitializer:SetParentInitializer(whispersInitializer, function() return ns.Scopes.Get("whispers") end)
+end
 
 -- Display ----------------------------------------------------------------------------------------
 

@@ -570,3 +570,13 @@ function People.SetWhisperedAt(guid, whisperedAt)
     local _, character = People.Find(guid)
     if character then character.whisperedAt = whisperedAt end
 end
+
+---Clears every whisperedAt older than that time.
+---@param before number seconds, from time()
+function People.ClearWhisperedBefore(before)
+    for _, person in pairs(ns.data.people) do
+        for _, character in pairs(person.chars) do
+            if character.whisperedAt and character.whisperedAt < before then character.whisperedAt = nil end
+        end
+    end
+end

@@ -59,9 +59,11 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Whispers.** On both, `/ww scope whispers on`; leave the group; A and B don't know each other (`/ww people`).
 
-- B whispers A; A doesn't answer. On A, link or unlink a character: nothing goes to B. On B, link or unlink a character: A gets `Received, WHISPER <B>: 1 ANNOUNCE …`, but sends no `GET`, and `/ww people` does not change: a whisper received allows nothing.
-- A whispers B. On A, link or unlink a character: A sends `Sent, WHISPER <B>: 1 ANNOUNCE …`, B a `GET`, A the `REC`; B: `/ww people` follows the change. On B, link or unlink a character: A's `/ww people` shows B's character, confirmed.
-- A: `/reload`. On B, link or unlink a character: A's `/ww people` follows the change (B is allowed from the saved whisper). On A, link or unlink a character: nothing goes to B (only the players whispered this session are in the audience).
+- B whispers A; A doesn't answer. A gets `Received, WHISPER <B>: 1 ANNOUNCE …`, but sends no `GET`, and `/ww people` does not change: a whisper received allows nothing.
+- A whispers B. A sends `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`, B a `GET`, A the `REC`, and B's answer brings B's record the same way: each `/ww people` shows the other's character, confirmed.
+- On A, link or unlink a character: after 15 s, nothing goes to B (a whispered player is never in a broadcast). A whispers B: the announcement goes out, B sends a `GET` and follows the change.
+- A: `/reload`, then B whispers A: A sends a `GET` (B is still allowed from the saved whisper). `/reload` again, then log out and back in: the same.
+- In A's settings, **Whispers count for** is greyed out while **People I whisper** is off. Set it to **1 hour**; one hour after A's last whisper to B, B whispering A brings no `GET` from A.
 
 ## Reaching Players Who Come Later
 
@@ -105,7 +107,9 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 **Whispering.** On A, `/ww scope whispers on`; A and B not grouped, not in a guild together; `/reload` both first, so neither has reached the other this session.
 
 - A whispers B: right away, `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
-- A whispers B again: nothing more. After a change of A's revision, the next whisper sends the announcement again.
+- A whispers B again: nothing more. After a change of A's revision, or 30 minutes after the last one, the next whisper sends the announcement again. Whispering a guild member (Guild scope on) sends none.
+- Once B's character is confirmed on A, A levels up (or changes its revision, or starts a logout): `Sent, WHISPER <B>: 1 ANNOUNCE …`. After a `/reload` of A, the same. After a real logout and login of A, nothing goes to B until A whispers B again.
+- B on another linked character of the same ruleset, confirmed on A, whispers A and A answers: A's next level-up goes to that character only.
 - B whispers A: A sends nothing.
 - On B, `/ww scope whispers on`, then a change of A's revision and A whispers B: B, having whispered A, answers after about 5 s with `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0 0`. B whispering A again sends nothing more: the answer already reached A.
 

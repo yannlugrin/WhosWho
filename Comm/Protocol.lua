@@ -20,6 +20,7 @@ local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players 
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
 local ANNOUNCEMENT_WAIT_SECONDS = 5 -- before answering announcements, gathering the ones that follow
+local WHISPER_ANNOUNCEMENT_SECONDS = 30 * 60 -- after that, whispering a player sends my announcement again
 
 local issecretvalue = issecretvalue or function() return false end
 
@@ -51,11 +52,12 @@ local function announcementText(level, acceptsGet, wantsAnnouncement)
     return revision and Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement)
 end
 
-local function announce(level, acceptsGet, wantsAnnouncement, send)
+-- My announcement to that audience, in its order: at logout, the client drops the messages past its limit.
+---@param audience WhosWho.Audience
+local function announce(audience, level, acceptsGet, wantsAnnouncement, send)
     local message = announcementText(level, acceptsGet, wantsAnnouncement)
     if not message then return end
 
-    local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do send(message, channel) end
     for _, name in ipairs(audience.names) do send(message, "WHISPER", name) end
 end
@@ -229,9 +231,18 @@ end
 
 ---@type table<string, true> names of the players waiting for my announcement in answer to theirs
 local announcementRecipients = {}
----@type table<string, integer> by name, the revision my last announcement to that player carried this session
-local announcedRevisions = {}
+---My last announcement to one player this session.
+---@class WhosWho.AnnouncementSent
+---@field revision integer
+---@field sentAt number GetTime()
+
+---@type table<string, WhosWho.AnnouncementSent> by name
+local announcements = {}
 local announcementWaiting = false
+
+local function rememberAnnouncement(name, revision)
+    announcements[name] = { revision = revision, sentAt = GetTime() }
+end
 
 local function sendAnnouncements()
     announcementWaiting = false
@@ -250,7 +261,7 @@ local function sendAnnouncements()
     for _, name in ipairs(bestWhispered) do sendQueued(message, "WHISPER", name) end
 
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
-    for _, name in ipairs(names) do announcedRevisions[name] = revision end
+    for _, name in ipairs(names) do rememberAnnouncement(name, revision) end
 end
 
 -- One wait for every player waiting for my answer, from the first one.
@@ -280,7 +291,7 @@ local function announceToFriends(friends)
     for _, friend in ipairs(friends) do
         if friend.connected and not Scopes.GuildReaches(friend.name) and not Scopes.GroupReaches(friend.name) then
             sendQueued(message, "WHISPER", friend.name)
-            announcedRevisions[friend.name] = revision
+            rememberAnnouncement(friend.name, revision)
         end
     end
 end
@@ -425,13 +436,13 @@ end
 
 ---PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement.
 function Protocol.AnnounceLogin()
-    announce(UnitLevel("player"), true, true, sendQueued)
+    announce(Scopes.LoginAudience(), UnitLevel("player"), true, true, sendQueued)
 end
 
 ---PLAYER_LEVEL_UP.
 ---@param level integer the new level
 function Protocol.AnnounceLevel(level)
-    announce(level, true, false, sendQueued)
+    announce(Scopes.BroadcastAudience(), level, true, false, sendQueued)
 end
 
 -- Whether my logout announcement went out, until the logout is canceled.
@@ -443,14 +454,14 @@ local loggingOut = false
 function Protocol.AnnounceLogout()
     if loggingOut then return end
     loggingOut = true
-    announce(UnitLevel("player"), false, false, sendNow)
+    announce(Scopes.BroadcastAudience(), UnitLevel("player"), false, false, sendNow)
 end
 
 ---The logout or quit countdown is canceled: I stay, and answer a GET again.
 function Protocol.LogoutCanceled()
     if not loggingOut then return end
     loggingOut = false
-    announce(UnitLevel("player"), true, false, sendQueued)
+    announce(Scopes.BroadcastAudience(), UnitLevel("player"), true, false, sendQueued)
 end
 
 ---GROUP_ROSTER_UPDATE: on joining a group, my announcement to the group, which every member answers with theirs.
@@ -486,15 +497,19 @@ function Protocol.FriendListChanged()
     if Scopes.Get("friends") then announceToFriends(added) end
 end
 
----CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, once per revision this
----session, sent right away. The player answers with theirs if they allow me.
+---CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, sent right away, when
+---none reached them this session, the last one carried an older revision, or it left WHISPER_ANNOUNCEMENT_SECONDS ago.
+---A player my guild, group or friends announcements reach gets none. The player answers with theirs if they allow me.
 ---@param name any
 function Protocol.Whispered(name)
     if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
     if not (Scopes.Get("whispers") and Scopes.Allows(name)) then return end
+    if Scopes.GuildReaches(name) or Scopes.GroupReaches(name) or Scopes.FriendReaches(name) then return end
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
-    if not revision or announcedRevisions[name] == revision then return end
+    if not revision then return end
+    local last = announcements[name]
+    if last and last.revision == revision and GetTime() - last.sentAt < WHISPER_ANNOUNCEMENT_SECONDS then return end
 
     sendQueued(announcementText(UnitLevel("player"), true, true), "WHISPER", name)
-    announcedRevisions[name] = revision
+    rememberAnnouncement(name, revision)
 end

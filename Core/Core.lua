@@ -78,6 +78,7 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_LOGOUT")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_CAMPING")
 frame:RegisterEvent("PLAYER_QUITING")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
@@ -116,10 +117,14 @@ frame:SetScript("OnEvent", function(_, event, ...)
         if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.IdentityDialogs.AskToLink() end
         ns.Launcher.Register()
         ns.Tooltip.Register()
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        -- arg1 is isInitialLogin: a login, not a /reload or a loading screen.
+        if arg1 then ns.Identity.LoggedIn(UnitGUID("player")) end
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
         ns.Protocol.AnnounceLogout()
+        ns.Scopes.ForgetOldWhispers()
     elseif event == "PLAYER_CAMPING" or event == "PLAYER_QUITING" then
         -- The 20-second logout or quit countdown starts.
         ns.Protocol.AnnounceLogout()

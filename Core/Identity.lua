@@ -25,6 +25,7 @@ ns.Identity = Identity
 ---@field lastSeen number seconds, from time(): end of the last session (or its start, after a crash)
 ---@field guild integer? club ID of the character's guild (C_Club.GetGuildClubId)
 ---@field removedInRevision integer? unlinked: the first revision without it, which it announces
+---@field loggedInAt number? seconds, from time(): when its current or last session started; a /reload keeps it
 
 ---@return WhosWho.IdentityData
 local function data()
@@ -98,6 +99,21 @@ function Identity.Seen(guid, level)
     local character = data().chars[guid]
     if not character then return end
     character.level, character.lastSeen = level, time()
+end
+
+---PLAYER_ENTERING_WORLD on a login, not on a /reload: the start of the character's session.
+---@param guid string
+function Identity.LoggedIn(guid)
+    local character = data().chars[guid]
+    if character then character.loggedInAt = time() end
+end
+
+---When the character's current or last session started, in seconds from time().
+---@param guid string
+---@return number? loggedInAt
+function Identity.LoggedInAt(guid)
+    local character = data().chars[guid]
+    return character and character.loggedInAt
 end
 
 ---Whether the character is registered in the identity, linked or not.

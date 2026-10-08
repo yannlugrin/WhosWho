@@ -12,10 +12,12 @@ ns.Store = Store
 ---@field nextManual integer number of the next manual person ("M<n>")
 ---@field forgotten table<string, integer> identity ID -> revision in which the player unlinked every character
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
+---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
 ---@field scopes { guild: boolean, friends: boolean, whispers: boolean, group: boolean }
+---@field whisperHours integer the whisper window: how long a whisper counts
 ---@field chat { nickname: { enable: boolean } } the nickname after the sender's name
 ---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer }, note: { enable: boolean } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted; the start of my note about the person
 ---@field debugMessages boolean every Who's Who message sent or received, printed in chat
@@ -24,13 +26,13 @@ ns.Store = Store
 Store.DEFAULTS = {
     global = {
         identity = { rev = 1, chars = {} },
-        people = {},
         nextManual = 1,
         forgotten = {},
         automaticChanges = {},
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },
+        whisperHours = 3,
         chat = { nickname = { enable = true } },
         tooltip = {
             nickname = { enable = true, position = "afterName" },
@@ -41,6 +43,15 @@ Store.DEFAULTS = {
         launcher = { hide = false, showInCompartment = true },
     },
 }
+
+-- Data tables read on PLAYER_LOGOUT. AceDB removes the defaults from the saved data before the add-on's own handler
+-- runs, an empty table included, so these are not defaults: they are created when missing.
+local LOGOUT_TABLES = { "people", "whispers" }
+
+---@param data table
+local function createLogoutTables(data)
+    for _, key in ipairs(LOGOUT_TABLES) do data[key] = data[key] or {} end
+end
 
 ---Moves settings saved under older keys to the current ones, and removes the older keys.
 ---@param settings table the profile, with the current defaults
@@ -72,6 +83,7 @@ function Store.Init()
     local db = LibStub("AceDB-3.0"):New(addonName .. "DB", Store.DEFAULTS, true)
     ns.db = db
     ns.data = db.global
+    createLogoutTables(ns.data)
     ns.settings = db.profile
     Store.MigrateSettings(ns.settings)
 end
@@ -84,5 +96,7 @@ function Store.NewData()
         for k, v in pairs(t) do out[k] = type(v) == "table" and copy(v) or v end
         return out
     end
-    return copy(Store.DEFAULTS.global)
+    local data = copy(Store.DEFAULTS.global)
+    createLogoutTables(data)
+    return data
 end

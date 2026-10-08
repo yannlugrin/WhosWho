@@ -13,6 +13,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Notes** about the people you know, in the People tab, seen only by you. The start of the note shows in their tooltips, which you can turn off in the settings.
 - **Your nickname for a person**, set or removed from the People tab.
 - **Turning a sharing option on**, joining a guild or adding a friend now sends your identity to the players it adds, and gets theirs back, without waiting for your next login.
+- **Whispers count for a time you choose** (3 hours by default, in the settings): the people you whisper stay recognised across a reload or a new login, and get your identity and its updates while you talk to them.
 
 ### Fixed
 
