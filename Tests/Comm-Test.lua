@@ -327,9 +327,12 @@ local function account(name)
     return { name = name }
 end
 
--- reloading: a /reload rather than a login, as PLAYER_ENTERING_WORLD tells it.
-local function login(acc, c, reloading)
+-- how: nil for a login long after the account's last logout (the world's clock does not move while every character of
+-- the account is offline), "relog" for a login right after it, "reload" for a /reload, as PLAYER_ENTERING_WORLD tells.
+local function login(acc, c, how)
     assert(not online(c.name), c.name .. " is already online")
+    local identity = acc.saved and acc.saved.global.identity
+    if not how and identity and identity.lastLogout then identity.lastLogout.at = identity.lastLogout.at - 3600 end
     -- The UI files are not loaded: no first-login prompt.
     local session = { account = acc, character = c, frames = {}, online = true, ns = { IdentityDialogs = { AskToLink = function() end }, Launcher = { Register = function() end }, Tooltip = { Register = function() end } } }
     c.session = session
@@ -340,18 +343,31 @@ local function login(acc, c, reloading)
     end
     fire(session, "ADDON_LOADED", "WhosWho")
     fire(session, "PLAYER_LOGIN")
-    fire(session, "PLAYER_ENTERING_WORLD", not reloading, reloading == true)
+    fire(session, "PLAYER_ENTERING_WORLD", how ~= "reload", how == "reload")
     -- The friend list arrives after login.
     fire(session, "FRIENDLIST_UPDATE")
     return session
 end
 
-local function logout(session)
+-- PLAYER_LOGOUT, after AceDB removed the defaults: a logout's last event, or a /reload's.
+local function endSession(session)
     local saved, defaults = session.account.saved, session.defaults
     removeDefaults(saved.global, defaults.global)
     removeDefaults(saved.profile, defaults.profile)
     fire(session, "PLAYER_LOGOUT")
     session.online = false
+end
+
+-- A logout: the countdown starts, then runs out.
+local function logout(session)
+    fire(session, "PLAYER_CAMPING")
+    endSession(session)
+end
+
+-- A /reload: PLAYER_LOGOUT, then the same character loads again.
+local function reload(session)
+    endSession(session)
+    return login(session.account, session.character, "reload")
 end
 
 -- Ends a session without PLAYER_LOGOUT, like a crash or a lost connection.
@@ -921,8 +937,7 @@ check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
 check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Ann Main" }) == 0,
     "not to a person I whispered that my guild announcement reaches")
 
-logout(bob)
-bob = login(bobAccount, bobMain, true)
+bob = reload(bob)
 run(10)
 clearLog()
 levelUp(bob)
@@ -998,7 +1013,6 @@ fire(bob, "PLAYER_CAMPING")
 check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 1, "the logout announcement goes to them too")
 bob.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "clicked")
 run(1)
-check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Alt" }) == 2, "and the canceled logout")
 eve.ns.settings.scopes.whispers = false
 bob.ns.settings.scopes.whispers = false
 logout(eve)
@@ -1131,14 +1145,14 @@ check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 
     "the logout countdown announces my logout right away")
 ann.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "clicked")
 run(1)
-check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 2 and lastAcceptsGet(),
-    "a canceled logout announces again, answering a GET")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1, "a canceled logout sends nothing")
 clearLog()
 fire(ann, "PLAYER_QUITING")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1,
+    "after a canceled logout, the next one is announced again")
 ann.env.StaticPopupDialogs.QUIT.OnHide({ timeleft = 12 })
 run(1)
-check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 2 and lastAcceptsGet(),
-    "a canceled quit announces again, answering a GET")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1, "a canceled quit sends nothing")
 clearLog()
 fire(ann, "PLAYER_CAMPING")
 ann.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "timeout")
@@ -1162,6 +1176,46 @@ annMain.resting = false
 ann.env.StaticPopupDialogs.QUIT.OnHide({ timeleft = 12 })
 world.group = {}
 ann.ns.settings.scopes.group = false
+
+-- A quick relog ----------------------------------------------------------------------------------------
+
+clearLog()
+ann = reload(ann)
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0, "a /reload announces nothing, at logout nor at login")
+logout(ann)
+clearLog()
+ann = login(annAccount, annMain, "relog")
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0, "nor a login of the same character within 5 minutes")
+logout(ann)
+run(5 * 60)
+clearLog()
+ann = login(annAccount, annMain, "relog")
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1, "5 minutes later, the login announces")
+
+-- Ann Alt, linked again, announces the same revision as Ann Main.
+logout(ann)
+local annAltSession = login(annAccount, annAlt, "relog")
+slash(annAltSession, "link")
+run(30)
+logout(annAltSession)
+clearLog()
+ann = login(annAccount, annMain, "relog")
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1,
+    "after another character's session, the login announces, even at the same revision")
+
+slash(ann, "nick Ann Quick")
+run(1)
+logout(ann)
+clearLog()
+ann = login(annAccount, annMain, "relog")
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1,
+    "a change of revision not announced before the logout is announced at login")
+run(30)
 
 -- Announcement format -----------------------------------------------------------------------------------
 

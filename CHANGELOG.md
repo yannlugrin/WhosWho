@@ -14,11 +14,12 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Your nickname for a person**, set or removed from the People tab.
 - **Turning a sharing option on**, joining a guild or adding a friend now sends your identity to the players it adds, and gets theirs back, without waiting for your next login.
 - **Whispers count for a time you choose** (3 hours by default, in the settings): the people you whisper stay recognised across a reload or a new login, and get your identity and its updates while you talk to them.
+- **Fewer messages**: a reload, a quick relog of the same character or a canceled logout no longer sends announcements the other players already have.
 
 ### Fixed
 
 - **My identity**: clicking the Name, Level or Last played header sorts your characters.
-- **Logout**: your guild, friends and group receive the logout announcement, and logging out or reloading no longer throws an error. Canceling a logout tells them you stayed.
+- **Logout**: your guild, friends and group receive the logout announcement, and logging out or reloading no longer throws an error.
 
 ## [0.1.0-beta.1] - 2026-10-07
 

@@ -18,6 +18,8 @@ ns.Identity = Identity
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
 ---@field sig string? signature of the current revision
 ---@field signedDigest string? SHA-512 (hex) of the bytes sig covers, so a signature from an older record format is never reused
+---@field lastLogout { guid: string, at: number }? the account's last logout or /reload: the character, and when (time())
+---@field lastBroadcastRevision integer? the revision my last announcement to every audience that answers a GET carried
 
 ---@class WhosWho.OwnCharacter: WhosWho.Character
 ---@field linked boolean? nil until the character is registered in the identity, linked or not
@@ -114,6 +116,27 @@ end
 function Identity.LoggedInAt(guid)
     local character = data().chars[guid]
     return character and character.loggedInAt
+end
+
+---PLAYER_LOGOUT (a logout or a /reload): the account's last logout.
+---@param guid string
+function Identity.LoggedOut(guid)
+    data().lastLogout = { guid = guid, at = time() }
+end
+
+---@return { guid: string, at: number }? lastLogout
+function Identity.LastLogout()
+    return data().lastLogout
+end
+
+---@param revision integer the revision my announcement to every audience that answers a GET carried
+function Identity.SetLastBroadcastRevision(revision)
+    data().lastBroadcastRevision = revision
+end
+
+---@return integer? lastBroadcastRevision
+function Identity.LastBroadcastRevision()
+    return data().lastBroadcastRevision
 end
 
 ---Whether the character is registered in the identity, linked or not.

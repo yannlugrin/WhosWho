@@ -21,6 +21,7 @@ local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and 
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
 local ANNOUNCEMENT_WAIT_SECONDS = 5 -- before answering announcements, gathering the ones that follow
 local WHISPER_ANNOUNCEMENT_SECONDS = 30 * 60 -- after that, whispering a player sends my announcement again
+local QUICK_RELOG_SECONDS = 5 * 60 -- a login this soon after the same character's logout announces nothing
 
 local issecretvalue = issecretvalue or function() return false end
 
@@ -52,7 +53,8 @@ local function announcementText(level, acceptsGet, wantsAnnouncement)
     return revision and Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement)
 end
 
--- My announcement to that audience, in its order: at logout, the client drops the messages past its limit.
+-- My announcement to that audience, in its order: at logout, the client drops the messages past its limit. One that
+-- answers a GET keeps the revision it carried, for the next login.
 ---@param audience WhosWho.Audience
 local function announce(audience, level, acceptsGet, wantsAnnouncement, send)
     local message = announcementText(level, acceptsGet, wantsAnnouncement)
@@ -60,6 +62,7 @@ local function announce(audience, level, acceptsGet, wantsAnnouncement, send)
 
     for _, channel in ipairs(audience.memberChannels) do send(message, channel) end
     for _, name in ipairs(audience.names) do send(message, "WHISPER", name) end
+    if acceptsGet then Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(UnitGUID("player"))) end
 end
 
 local function sendQueued(message, channel, name)
@@ -79,8 +82,8 @@ end
 ---@field revision integer
 ---@field leftAt number?
 
--- Last revision announced to every audience this session, and whether the Guild scope was on then.
-local broadcastRevision, broadcastWithGuildScope
+-- Last revision published to every audience this session, and whether the Guild scope was on then.
+local publishedRevision, publishedWithGuildScope
 ---@type table<string, true> names of the players who sent a GET for my identity
 local requesters = {}
 ---@type table<string, WhosWho.Delivery> by channel (GUILD, PARTY, RAID) or by name (WHISPER)
@@ -169,8 +172,8 @@ local function announceRevision()
     local message = announcementText(level, true, false)
     if not message then return end
 
-    local guildScopeTurnedOn = Scopes.Get("guild") and not broadcastWithGuildScope
-    broadcastWithGuildScope = Scopes.Get("guild")
+    local guildScopeTurnedOn = Scopes.Get("guild") and not publishedWithGuildScope
+    publishedWithGuildScope = Scopes.Get("guild")
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do
         if channel == "GUILD" and guildScopeTurnedOn then
@@ -180,6 +183,7 @@ local function announceRevision()
         end
     end
     for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
+    Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(UnitGUID("player")))
 end
 
 local function sendRecords()
@@ -194,8 +198,8 @@ local function sendRecords()
     end
     sendAt, waitStartedAt = nil, nil
 
-    if Identity.Revision() ~= broadcastRevision then announceRevision() end
-    broadcastRevision = Identity.Revision()
+    if Identity.Revision() ~= publishedRevision then announceRevision() end
+    publishedRevision = Identity.Revision()
 
     -- The REC text, built once for every REC this wait sends, and only when one goes out.
     local message
@@ -426,7 +430,7 @@ end
 function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
-    broadcastRevision, broadcastWithGuildScope = Identity.Revision(), Scopes.Get("guild")
+    publishedRevision, publishedWithGuildScope = Identity.Revision(), Scopes.Get("guild")
     Identity.OnRevisionChanged(function() scheduleRecordSending(REVISION_WAIT_SECONDS) end)
     Scopes.OnEnabled(scopeEnabled)
     -- The login announcement already reaches a group or guild I am in, and my friends online.
@@ -434,8 +438,13 @@ function Protocol.Start()
     friendGuids = guidsOf(Scopes.Friends())
 end
 
----PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement.
+---PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement. Nothing on a quick
+---relog: the same character as the account's last logout, less than QUICK_RELOG_SECONDS ago, announcing the revision
+---my last announcement to every audience already carried.
 function Protocol.AnnounceLogin()
+    local guid, lastLogout = UnitGUID("player"), Identity.LastLogout()
+    local quickRelog = lastLogout and lastLogout.guid == guid and time() - lastLogout.at < QUICK_RELOG_SECONDS
+    if quickRelog and Identity.AnnouncedRevision(guid) == Identity.LastBroadcastRevision() then return end
     announce(Scopes.LoginAudience(), UnitLevel("player"), true, true, sendQueued)
 end
 
@@ -448,20 +457,19 @@ end
 -- Whether my logout announcement went out, until the logout is canceled.
 local loggingOut = false
 
----When the logout or quit countdown starts, on an immediate logout or quit, and on PLAYER_LOGOUT (/reload): once.
----Sent directly, since the throttled queue would not empty in time; a GET would get no answer. On a logout,
----SendAddonMessage fails during PLAYER_LOGOUT.
+---When the logout or quit countdown starts, and on an immediate logout or quit: once per logout. Sent directly, since
+---the throttled queue would not empty in time; a GET would get no answer. Nothing on a /reload, and SendAddonMessage
+---fails during a logout's PLAYER_LOGOUT.
 function Protocol.AnnounceLogout()
     if loggingOut then return end
     loggingOut = true
     announce(Scopes.BroadcastAudience(), UnitLevel("player"), false, false, sendNow)
 end
 
----The logout or quit countdown is canceled: I stay, and answer a GET again.
+---The logout or quit countdown is canceled: nothing is sent, and the next logout is announced again. The players who
+---need my record ask for it at my next announcement.
 function Protocol.LogoutCanceled()
-    if not loggingOut then return end
     loggingOut = false
-    announce(Scopes.BroadcastAudience(), UnitLevel("player"), true, false, sendQueued)
 end
 
 ---GROUP_ROSTER_UPDATE: on joining a group, my announcement to the group, which every member answers with theirs.

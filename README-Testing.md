@@ -11,9 +11,11 @@ Manual tests between two clients, for what the offline suites cannot check: the 
 
 Useful commands: `/ww status` (my identity), `/ww people` (the identities I hold), `/ww scope` (my scopes).
 
+**Re-log** a character: log out and back in on another linked character, or on the same one more than 5 minutes later. A `/reload`, or logging back in on the same character sooner, sends no login announcement (see Quick Relog).
+
 ## Group
 
-**Announcement, request and record.** Group A and B, then `/reload` A.
+**Announcement, request and record.** Group A and B, then re-log A.
 
 | A's chat | B's chat |
 |---|---|
@@ -22,7 +24,7 @@ Useful commands: `/ww status` (my identity), `/ww people` (the identities I hold
 | after about 5 s: `Sent, WHISPER <B>: 1 REC (… bytes)` | `Received, WHISPER <A>: 1 REC (… bytes)` |
 | after about 5 s: `Received, WHISPER <B>: 1 ANNOUNCE … 1 0 0` | `Sent, WHISPER <A>: 1 ANNOUNCE <B's ID> <rev> <level> 1 0 0` (B's answer to the login) |
 
-On B, `/ww people` lists A's character as **confirmed**, with its level. Then `/reload` B: the same on the other side.
+On B, `/ww people` lists A's character as **confirmed**, with its level. Then re-log B: the same on the other side.
 
 A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignored.
 
@@ -42,11 +44,11 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 1. B logs out.
 2. On A, unlink a character, then play that character.
 3. B logs back in; group A and B.
-4. `/reload` A.
+4. Re-log A.
 
 - A: `Sent, PARTY: 1 ANNOUNCE <A's ID> <removal rev> …`, then B's `GET`, then a `REC`.
 - B: `/ww people` no longer lists the removed character.
-- A second `/reload` of A: B sends no `GET` (it already has that revision).
+- A second re-log of A: B sends no `GET` (it already has that revision).
 
 **Unlinking every character** works the same way: after the last unlink, B, offline at the time, forgets A's identity once the last removed character announces. `/ww people <A's character>` on B then finds no one.
 
@@ -93,7 +95,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - A, right away: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`; B answers as for a login. Turning the Friends scope on sends the same to each online friend.
 - *To verify*: whether the friend list is loaded at login. If it isn't, the first `FRIENDLIST_UPDATE` sends this announcement to every online friend, which the login announcement missed.
 
-**Logging in.** A and B in the same guild, or grouped with the Group scope on. `/reload` B.
+**Logging in.** A and B in the same guild, or grouped with the Group scope on. Re-log B.
 
 - B: `Sent, GUILD (or PARTY): 1 ANNOUNCE … 1 1 0`.
 - A, after about 5 s: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 0 0`.
@@ -101,8 +103,16 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 **Logging out.** A and B grouped, A's Group scope on, A outside a rested area.
 
 - A logs out: when the countdown starts, `Sent, PARTY: 1 ANNOUNCE … 0 0 0`. B receives it.
-- A logs out and moves to cancel: `Sent, PARTY: 1 ANNOUNCE … 1 0 0` after the cancel.
+- A logs out and moves to cancel: nothing after the cancel. A logs out again: the logout announcement goes out again.
+- `/reload` A: no logout announcement.
 - A logs out in an inn (immediate): B receives `1 ANNOUNCE … 0 0 0`.
+
+**Quick relog.** A and B grouped, A's Group scope on.
+
+- `/reload` A: no `Sent, PARTY: 1 ANNOUNCE … 1 1 0` after the reload.
+- A logs out to character select and back in on the same character within 5 minutes: no login announcement either.
+- The same more than 5 minutes later, or after playing another character in between: the login announcement goes out.
+- On A, `/ww nick Test`, then `/reload` within 15 s: the login announcement goes out, carrying the new revision; B sends a `GET`.
 
 **Whispering.** On A, `/ww scope whispers on`; A and B not grouped, not in a guild together; `/reload` both first, so neither has reached the other this session.
 
