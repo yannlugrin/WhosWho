@@ -319,9 +319,8 @@ end
 
 -- A REC is used only from a channel I share on, so strangers cannot fill my saved data.
 local function sharedChannel(distribution, sender)
-    local scopes = ns.settings.scopes
-    if distribution == "GUILD" then return scopes.guild end
-    if distribution == "PARTY" or distribution == "RAID" then return scopes.group end
+    if distribution == "GUILD" then return Scopes.Get("guild") end
+    if distribution == "PARTY" or distribution == "RAID" then return Scopes.Get("group") end
     if distribution == "WHISPER" then return Scopes.Allows(sender) end
     return false
 end
@@ -382,9 +381,23 @@ function Protocol.AnnounceLevel(level)
     announce(level, true, false, sendQueued)
 end
 
----PLAYER_LOGOUT: sent directly, since the throttled queue would not empty in time; a GET would get no answer.
+-- Whether my logout announcement went out, until the logout is canceled.
+local loggingOut = false
+
+---When the logout or quit countdown starts, on an immediate logout or quit, and on PLAYER_LOGOUT (/reload): once.
+---Sent directly, since the throttled queue would not empty in time; a GET would get no answer. On a logout,
+---SendAddonMessage fails during PLAYER_LOGOUT.
 function Protocol.AnnounceLogout()
+    if loggingOut then return end
+    loggingOut = true
     announce(UnitLevel("player"), false, false, sendNow)
+end
+
+---The logout or quit countdown is canceled: I stay, and answer a GET again.
+function Protocol.LogoutCanceled()
+    if not loggingOut then return end
+    loggingOut = false
+    announce(UnitLevel("player"), true, false, sendQueued)
 end
 
 ---GROUP_ROSTER_UPDATE: on joining a group, my announcement to the group, which every member answers with theirs.
@@ -394,7 +407,7 @@ function Protocol.GroupChanged()
     local inGroup = IsInGroup()
     local joined = inGroup and not wasInGroup
     wasInGroup = inGroup
-    if not (joined and ns.settings.scopes.group) then return end
+    if not (joined and Scopes.Get("group")) then return end
 
     local message = announcementText(UnitLevel("player"), true, true)
     if message then sendQueued(message, Scopes.GroupChannel()) end
@@ -405,7 +418,7 @@ end
 ---@param name any
 function Protocol.Whispered(name)
     if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
-    if not (ns.settings.scopes.whispers and Scopes.Allows(name)) then return end
+    if not (Scopes.Get("whispers") and Scopes.Allows(name)) then return end
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
     if not revision or announcedRevisions[name] == revision then return end
 

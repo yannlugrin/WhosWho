@@ -20,7 +20,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 local ns = {}
 for _, file in ipairs({
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Record.lua",
-    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua",
+    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Comm/Scopes.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end

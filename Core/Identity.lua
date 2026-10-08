@@ -319,7 +319,7 @@ function Identity.UnsignedRecord()
     end
     return {
         v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = identity.nickname,
-        main = identity.main, chars = chars, guild = { consent = ns.settings.scopes.guild },
+        main = identity.main, chars = chars, guild = { consent = ns.Scopes.Get("guild") },
     }
 end
 

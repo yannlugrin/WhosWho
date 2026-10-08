@@ -23,8 +23,8 @@ read_globals = {
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "BNET_CLIENT_WOW",
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
     "GetGuildRosterInfo", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumGuildMembers", "GetServerTime", "GetTime",
-    "GuildControlGetNumRanks", "GuildControlGetRankName", "GuildRoster", "IsInGroup", "IsInGuild", "IsInInstance", "IsInRaid",
-    "UnitClass", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsConnected", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
+    "GuildControlGetNumRanks", "GuildControlGetRankName", "GuildRoster", "IsInGroup", "IsInGuild", "IsInInstance", "IsInRaid", "IsResting",
+    "UnitAffectingCombat", "UnitClass", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsConnected", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
     "WOW_PROJECT_ID", "WOW_PROJECT_CAMELOT", "WOW_PROJECT_MAINLINE",
 }
 

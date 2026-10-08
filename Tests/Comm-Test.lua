@@ -82,7 +82,9 @@ local LibDeflate = {
 
 local function send(session, text, distribution, target, onSent)
     local messageType = text:match("^%d+ (%u+)")
-    world.log[#world.log + 1] = { from = session.character.name, type = messageType, distribution = distribution, target = target }
+    world.log[#world.log + 1] = {
+        from = session.character.name, type = messageType, distribution = distribution, target = target, text = text,
+    }
     world.messages[#world.messages + 1] = {
         from = session, text = text, distribution = distribution, target = target, onSent = onSent,
     }
@@ -196,6 +198,18 @@ local function newEnvironment(session)
     end
     env.UnitClass = function() return nil, nil, c.classID end
     env.UnitLevel = function() return c.level end
+    env.IsResting = function() return c.resting == true end
+    env.UnitAffectingCombat = function() return c.inCombat == true end
+    env.Logout, env.Quit = function() end, function() end
+    env.StaticPopupDialogs = { CAMP = { OnCancel = function() end }, QUIT = { OnHide = function() end } }
+    env.hooksecurefunc = function(target, name, hook)
+        if type(target) == "string" then target, name, hook = env, target, name end
+        local original = target[name]
+        target[name] = function(...)
+            original(...)
+            hook(...)
+        end
+    end
 
     env.IsInGuild = function() return c.guild ~= nil end
     env.C_Club = { GetGuildClubId = function() return c.guild end }
@@ -828,6 +842,60 @@ clearLog()
 whisper(cat, bobMain)
 run(6)
 check(sent({ from = "Bob Main", target = "Cat Main" }) == 0, "a whisper received sends nothing")
+
+-- Logging out -----------------------------------------------------------------------------------------
+
+-- Whether Ann's last announcement answers a GET.
+local function lastAcceptsGet()
+    for i = #world.log, 1, -1 do
+        local entry = world.log[i]
+        if entry.from == "Ann Main" and entry.type == "ANNOUNCE" then
+            return entry.text:match("^%d+ ANNOUNCE %S+ %d+ %d+ (%d)") == "1"
+        end
+    end
+    return false
+end
+
+world.group = { annMain, bobMain }
+ann.ns.settings.scopes.group = true
+run(40)
+clearLog()
+fire(ann, "PLAYER_CAMPING")
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1 and not lastAcceptsGet(),
+    "the logout countdown announces my logout right away")
+ann.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "clicked")
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 2 and lastAcceptsGet(),
+    "a canceled logout announces again, answering a GET")
+clearLog()
+fire(ann, "PLAYER_QUITING")
+ann.env.StaticPopupDialogs.QUIT.OnHide({ timeleft = 12 })
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 2 and lastAcceptsGet(),
+    "a canceled quit announces again, answering a GET")
+clearLog()
+fire(ann, "PLAYER_CAMPING")
+ann.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "timeout")
+logout(ann)
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1,
+    "a countdown that runs out announces my logout once, PLAYER_LOGOUT not again")
+ann = login(annAccount, annMain)
+run(40)
+clearLog()
+ann.env.Logout()
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0, "a logout outside a rested area waits for the countdown")
+annMain.resting, annMain.inCombat = true, true
+ann.env.Logout()
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0, "a logout in combat announces nothing")
+annMain.inCombat = false
+ann.env.Quit()
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1 and not lastAcceptsGet(),
+    "an immediate quit while resting announces my logout")
+annMain.resting = false
+ann.env.StaticPopupDialogs.QUIT.OnHide({ timeleft = 12 })
+world.group = {}
+ann.ns.settings.scopes.group = false
 
 -- Announcement format -----------------------------------------------------------------------------------
 

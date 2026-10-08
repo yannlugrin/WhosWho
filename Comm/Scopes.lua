@@ -183,11 +183,21 @@ end
 
 -- Sharing ----------------------------------------------------------------------------------------
 
+---Whether that scope is on. On PLAYER_LOGOUT, AceDB may already have removed the values equal to their defaults.
+---@param key "guild"|"friends"|"whispers"|"group"
+---@return boolean
+function Scopes.Get(key)
+    local scopes = ns.settings.scopes
+    local enabled = scopes and scopes[key]
+    if enabled == nil then return ns.Store.DEFAULTS.profile.scopes[key] end
+    return enabled
+end
+
 ---Turns a scope on or off (settings and /ww scope).
 ---@param key "guild"|"friends"|"whispers"|"group"
 ---@param enabled boolean
 function Scopes.Set(key, enabled)
-    if ns.settings.scopes[key] == enabled then return end
+    if Scopes.Get(key) == enabled then return end
     ns.settings.scopes[key] = enabled
     if key == "guild" then Identity.GuildScopeChanged() end
 end
@@ -197,11 +207,12 @@ end
 ---@param name string "First Surname"
 ---@return boolean
 function Scopes.Allows(name)
-    local scopes = ns.settings.scopes
-    if scopes.guild and C_GuildInfo.MemberExistsByName(name) then return true end
-    if scopes.friends and C_FriendList.GetFriendInfo(name) then return true end
-    if scopes.group and groupMemberGuid(name) then return true end
-    if scopes.whispers and whispers[name] and whispers[name].sentAt then return true end
+    local guild, friends = Scopes.Get("guild"), Scopes.Get("friends")
+    local whispersOn = Scopes.Get("whispers")
+    if guild and C_GuildInfo.MemberExistsByName(name) then return true end
+    if friends and C_FriendList.GetFriendInfo(name) then return true end
+    if Scopes.Get("group") and groupMemberGuid(name) then return true end
+    if whispersOn and whispers[name] and whispers[name].sentAt then return true end
 
     -- An alt of a player my scopes allow: one of the person's confirmed characters has a guild one of my characters is
     -- in (Guild scope), is the WoW friend of one of my characters (Friends scope), or was whispered by one of my
@@ -212,11 +223,11 @@ function Scopes.Allows(name)
 
     for _, character in pairs(person.chars) do
         if character.state == "confirmed" then
-            if scopes.guild and character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset) then
+            if guild and character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset) then
                 return true
             end
-            if scopes.friends and character.friendOf then return true end
-            if scopes.whispers and character.whisperedAt then return true end
+            if friends and character.friendOf then return true end
+            if whispersOn and character.whisperedAt then return true end
         end
     end
 
@@ -233,38 +244,38 @@ end
 ---@param name string
 ---@return boolean
 function Scopes.GuildReaches(name)
-    return ns.settings.scopes.guild and C_GuildInfo.MemberExistsByName(name)
+    return Scopes.Get("guild") and C_GuildInfo.MemberExistsByName(name)
 end
 
 ---Whether that player is in my group and the Group scope is on: the group channel reaches it.
 ---@param name string
 ---@return boolean
 function Scopes.GroupReaches(name)
-    return ns.settings.scopes.group and groupMemberGuid(name) ~= nil
+    return Scopes.Get("group") and groupMemberGuid(name) ~= nil
 end
 
 ---Every player my enabled scopes reach, each once: the member channels (GUILD, PARTY or RAID), and one message to
 ---each online friend or player I whispered this session that no member channel reaches.
 ---@return WhosWho.Audience
 function Scopes.BroadcastAudience()
-    local scopes = ns.settings.scopes
     local memberChannels, names, seen = {}, {}, { [ns.UnitWholeName("player")] = true }
 
-    if scopes.guild and IsInGuild() then memberChannels[#memberChannels + 1] = "GUILD" end
-    if scopes.group and IsInGroup() then memberChannels[#memberChannels + 1] = Scopes.GroupChannel() end
+    if Scopes.Get("guild") and IsInGuild() then memberChannels[#memberChannels + 1] = "GUILD" end
+    if Scopes.Get("group") and IsInGroup() then memberChannels[#memberChannels + 1] = Scopes.GroupChannel() end
 
     local function add(name)
         if seen[name] or Scopes.GuildReaches(name) or Scopes.GroupReaches(name) then return end
         seen[name] = true
         names[#names + 1] = name
     end
-    if scopes.friends then
-        for i = 1, C_FriendList.GetNumFriends() do
+    if Scopes.Get("friends") then
+        -- nil on PLAYER_LOGOUT: the friend list is already cleared.
+        for i = 1, C_FriendList.GetNumFriends() or 0 do
             local info = C_FriendList.GetFriendInfoByIndex(i)
             if info and info.connected and info.name and notSecret(info.name) then add(info.name) end
         end
     end
-    if scopes.whispers then
+    if Scopes.Get("whispers") then
         for name, whisper in pairs(whispers) do
             if whisper.sentAt then add(name) end
         end

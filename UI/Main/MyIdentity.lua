@@ -353,7 +353,7 @@ function panel:Refresh()
 
     local scopeNames = {}
     for _, scope in ipairs(SCOPES) do
-        if ns.settings.scopes[scope.key] then scopeNames[#scopeNames + 1] = scope.name end
+        if ns.Scopes.Get(scope.key) then scopeNames[#scopeNames + 1] = scope.name end
     end
     self:SetSharing(scopeNames)
 

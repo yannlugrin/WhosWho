@@ -77,6 +77,8 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("PLAYER_LOGOUT")
+frame:RegisterEvent("PLAYER_CAMPING")
+frame:RegisterEvent("PLAYER_QUITING")
 frame:RegisterEvent("PLAYER_LEVEL_UP")
 frame:RegisterEvent("PLAYER_GUILD_UPDATE")
 frame:RegisterEvent("GUILD_ROSTER_UPDATE")
@@ -84,6 +86,21 @@ frame:RegisterEvent("FRIENDLIST_UPDATE")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- Resting, logout and quit are immediate: no countdown.
+local function onLogoutOrQuit()
+    if IsResting() and not UnitAffectingCombat("player") then ns.Protocol.AnnounceLogout() end
+end
+hooksecurefunc("Logout", onLogoutOrQuit)
+hooksecurefunc("Quit", onLogoutOrQuit)
+
+-- The logout and quit countdown dialogs call CancelLogout when closed before the countdown runs out.
+hooksecurefunc(StaticPopupDialogs.CAMP, "OnCancel", function(_, _, reason)
+    if reason ~= "timeout" then ns.Protocol.LogoutCanceled() end
+end)
+hooksecurefunc(StaticPopupDialogs.QUIT, "OnHide", function(dialog)
+    if dialog.timeleft > 0 then ns.Protocol.LogoutCanceled() end
+end)
+
 frame:SetScript("OnEvent", function(_, event, ...)
     local arg1 = ...
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -100,6 +117,9 @@ frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
+        ns.Protocol.AnnounceLogout()
+    elseif event == "PLAYER_CAMPING" or event == "PLAYER_QUITING" then
+        -- The 20-second logout or quit countdown starts.
         ns.Protocol.AnnounceLogout()
     elseif event == "PLAYER_LEVEL_UP" then
         -- arg1 is the new level.
@@ -178,7 +198,7 @@ ns.Commands.scope = function(rest)
         return
     end
     for _, key in ipairs(SCOPES) do
-        ns.Print(L["%s scope: %s"]:format(SCOPE_NAMES[key], ns.settings.scopes[key] and L["on"] or L["off"]))
+        ns.Print(L["%s scope: %s"]:format(SCOPE_NAMES[key], ns.Scopes.Get(key) and L["on"] or L["off"]))
     end
 end
 

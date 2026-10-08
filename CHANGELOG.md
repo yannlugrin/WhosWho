@@ -14,6 +14,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Fixed
 
 - **My identity**: clicking the Name, Level or Last played header sorts your characters.
+- **Logout**: your guild, friends and group receive the logout announcement, and logging out or reloading no longer throws an error. Canceling a logout tells them you stayed.
 
 ## [0.1.0-beta.1] - 2026-10-07
 

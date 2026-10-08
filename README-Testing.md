@@ -75,6 +75,12 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - B: `Sent, GUILD (or PARTY): 1 ANNOUNCE … 1 1 0`.
 - A, after about 5 s: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 0 0`.
 
+**Logging out.** A and B grouped, A's Group scope on, A outside a rested area.
+
+- A logs out: when the countdown starts, `Sent, PARTY: 1 ANNOUNCE … 0 0 0`. B receives it.
+- A logs out and moves to cancel: `Sent, PARTY: 1 ANNOUNCE … 1 0 0` after the cancel.
+- A logs out in an inn (immediate): B receives `1 ANNOUNCE … 0 0 0`.
+
 **Whispering.** On A, `/ww scope whispers on`; A and B not grouped, not in a guild together; `/reload` both first, so neither has reached the other this session.
 
 - A whispers B: right away, `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
