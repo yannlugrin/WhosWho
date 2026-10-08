@@ -30,6 +30,7 @@ local addonName, ns = ...
 ---@field Glyphs WhosWho.Glyphs
 ---@field PeopleDialogs WhosWho.PeopleDialogs
 ---@field Launcher WhosWho.Launcher
+---@field Tooltip WhosWho.Tooltip
 
 -- Add-on -----------------------------------------------------------------------------------------
 
@@ -114,6 +115,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         if IsInGuild() then C_GuildInfo.GuildRoster() end
         if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.IdentityDialogs.AskToLink() end
         ns.Launcher.Register()
+        ns.Tooltip.Register()
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))

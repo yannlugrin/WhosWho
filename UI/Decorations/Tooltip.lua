@@ -1,6 +1,10 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
 
+---@class WhosWho.Tooltip
+local Tooltip = {}
+ns.Tooltip = Tooltip
+
 local L = ns.L
 local Glyphs = ns.Glyphs
 local issecretvalue = issecretvalue or function() return false end
@@ -97,4 +101,8 @@ local function decorate(tooltip, data)
     end
 end
 
-TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, decorate)
+---Decorates player tooltips. Call on PLAYER_LOGIN: one frame later, the decoration runs after the post-calls other
+---add-ons register at login, so one that rewrites the name line (EllesmereUI hides player titles) keeps the nickname.
+function Tooltip.Register()
+    C_Timer.After(0, function() TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, decorate) end)
+end
