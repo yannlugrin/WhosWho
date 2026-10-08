@@ -8,7 +8,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 - **Tooltips**: the nickname of the people you know, after their name or on its own line, and an "Also:" line with their other characters, each adjustable in the settings.
 - **People who don't use Who's Who.** Start a person from one of their characters and link their other characters to them, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
-- **Right-click menu** on a player, with what applies to that character: link it to a person, show that person in the People tab, make it their main or unlink it. On your own characters, it opens My identity.
+- **Right-click menu** on a player, from their unit frame, the guild roster, your friends and Battle.net friends, recent contacts or their name in chat, with what applies to that character: link it to a person, show that person in the People tab, make it their main or unlink it. On your own characters, it opens My identity.
 - **Forget** a person from the People tab.
 
 ### Fixed

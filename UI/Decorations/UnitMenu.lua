@@ -8,7 +8,8 @@ local issecretvalue = issecretvalue or function() return false end
 local MENUS = {
     "MENU_UNIT_SELF", "MENU_UNIT_PLAYER", "MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_PARTY",
     "MENU_UNIT_RAID_PLAYER", "MENU_UNIT_FRIEND", "MENU_UNIT_FRIEND_OFFLINE", "MENU_UNIT_GUILD",
-    "MENU_UNIT_GUILD_OFFLINE", "MENU_UNIT_COMMUNITIES_GUILD_MEMBER",
+    "MENU_UNIT_GUILD_OFFLINE", "MENU_UNIT_COMMUNITIES_GUILD_MEMBER", "MENU_UNIT_BN_FRIEND", "MENU_UNIT_RECENT_ALLY",
+    "MENU_UNIT_RECENT_ALLY_OFFLINE",
 }
 
 -- The whole name, "First Surname", from its two parts; a name without a second part is already whole.
@@ -17,12 +18,16 @@ local function wholeName(name, surname)
     return name
 end
 
--- The player's GUID: from the menu, its unit or its chat line, else from the guild roster, the group, my friends
--- or the players whispered this session.
+-- The player's GUID: from the menu, its unit, the character a Battle.net friend is playing or its chat line, else
+-- from the guild roster, the group, my friends or the players whispered this session.
 local function playerGuid(contextData)
     if contextData.guid then return contextData.guid end
     local unit = contextData.unit
     if unit then return UnitIsPlayer(unit) and UnitGUID(unit) or nil end
+    if contextData.bnetIDAccount then
+        local account = C_BattleNet.GetAccountInfoByID(contextData.bnetIDAccount)
+        return account and account.gameAccountInfo and account.gameAccountInfo.playerGuid
+    end
     -- A name in chat: the menu carries the line's ID, as text.
     local lineID = tonumber(contextData.lineID)
     if lineID then
