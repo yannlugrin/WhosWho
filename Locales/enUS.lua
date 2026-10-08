@@ -183,3 +183,15 @@ L["Forget %s?"] = true
 L["%s and their %d |4character:characters; are removed from your list. This can't be undone."] = true
 L["Make %s the main character of %s?"] = true
 L["The person is shown under this character's name when you haven't given it a nickname."] = true
+
+-- Notes and person nickname
+L["Show notes in tooltips"] = true
+L["Adds the start of your note about the person."] = true
+L["Note"] = true
+L["Edit note"] = true
+L["No note."] = true
+L["Your nickname for %s"] = true
+L["Only you see it. It replaces the name this person is shown under."] = true
+L["Remove my nickname"] = true
+L["About %s"] = true
+L["Note: %s"] = true

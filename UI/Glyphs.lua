@@ -12,6 +12,8 @@ local PATH = "Interface\\AddOns\\" .. addonName .. "\\Media\\Glyphs\\"
 local RENAMED_COLOR = CreateColor(0.44, 0.74, 1)
 
 Glyphs.CROWN_TEXTURE = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
+-- The button that edits a nickname or a note.
+Glyphs.EDIT_TEXTURE = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
 
 ---@class WhosWho.Glyph
 ---@field texture string

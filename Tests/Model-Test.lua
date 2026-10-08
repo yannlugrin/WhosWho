@@ -344,6 +344,20 @@ do
         "a record whose main another identity holds still gives a name")
 end
 
+-- People: my note ------------------------------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local manual = P.Create(G1, INFO)
+    check(P.SetNote(manual, "  line one\nline two  \n\n") and P.Get(manual).note == "line one\nline two",
+        "a note keeps its lines, without the spaces and empty lines around it")
+    check(not P.SetNote(manual, string.rep("x", P.NOTE_MAX_LENGTH + 1)) and P.Get(manual).note == "line one\nline two",
+        "a note over the limit is refused")
+    check(P.SetNote(manual, " ") and P.Get(manual).note == nil, "an empty note removes it")
+    check(not P.SetNote("M999", "x"), "no note for an unknown person")
+end
+
 -- People: a confirmation of a character in my manual identity ------------------------------------------
 
 fresh()
@@ -356,7 +370,10 @@ do
     local manual = P.Create(G1, INFO)
     P.AddCharacter(manual, G4, INFO)
     P.Rename(manual, "Tanky")
+    P.SetNote(B, "Healer")
+    P.SetNote(manual, "  Tanks on Thursdays\n")
     check(P.Confirm(B, G1, 10) and holderId(G1) == B and state(G1) == "confirmed", "the confirmed character moves to its player")
+    check(P.Get(B).note == "Healer\nTanks on Thursdays", "my note on the merged identity is added below the player's")
     check(P.Get(manual) == nil and holderId(G4) == B and state(G4) == "added" and P.Get(B).customNickname == "Tanky",
         "my manual identity holding it merges into that player")
     local merge = ns.AutomaticChanges.List()[1]

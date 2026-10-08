@@ -17,7 +17,7 @@ ns.Store = Store
 ---@class WhosWho.Settings
 ---@field scopes { guild: boolean, friends: boolean, whispers: boolean, group: boolean }
 ---@field chat { nickname: { enable: boolean } } the nickname after the sender's name
----@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted
+---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer }, note: { enable: boolean } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted; the start of my note about the person
 ---@field debugMessages boolean every Who's Who message sent or received, printed in chat
 ---@field launcher { hide: boolean, showInCompartment: boolean, minimapPos: number? } LibDBIcon's own format: the minimap button and the add-on compartment entry
 
@@ -35,6 +35,7 @@ Store.DEFAULTS = {
         tooltip = {
             nickname = { enable = true, position = "afterName" },
             otherCharacters = { enable = true, classColor = true, limit = 4 },
+            note = { enable = true },
         },
         debugMessages = false,
         launcher = { hide = false, showInCompartment = true },

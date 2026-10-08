@@ -17,6 +17,7 @@ ns.People = People
 ---@field signedRecord WhosWho.SignedIdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
 ---@field nickname string? the player's own nickname, from the record
 ---@field customNickname string? my nickname for this person
+---@field note string? my note about this person, never shared; may hold several lines
 ---@field main string GUID of the main character. Another identity can hold a shared person's main.
 ---@field chars table<string, WhosWho.PersonCharacter> by GUID
 
@@ -297,6 +298,25 @@ function People.Rename(id, nickname)
     return true
 end
 
+People.NOTE_MAX_LENGTH = 500
+
+---Sets or removes my note about a person. Spaces and empty lines around it are dropped; an empty note removes it.
+---@param id string
+---@param note string?
+---@return boolean ok
+---@return "missing"|"long"? err
+function People.SetNote(id, note)
+    local person = ns.data.people[id]
+    if not person then return false, "missing" end
+
+    note = note and note:match("^%s*(.-)%s*$") or ""
+    if strlenutf8(note) > People.NOTE_MAX_LENGTH then return false, "long" end
+    person.note = note ~= "" and note or nil
+    changed()
+
+    return true
+end
+
 ---Whether People.SetMain would change this person's main to this character: a manual person, not its main yet.
 ---@param id string
 ---@param guid string
@@ -370,6 +390,9 @@ local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
             indexCharacter(movedGuid, toPerson.id)
         end
         toPerson.customNickname = toPerson.customNickname or fromPerson.customNickname
+        if fromPerson.note then
+            toPerson.note = toPerson.note and (toPerson.note .. "\n" .. fromPerson.note) or fromPerson.note
+        end
         forget(fromPerson.id)
     end
 

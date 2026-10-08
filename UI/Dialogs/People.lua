@@ -254,6 +254,135 @@ function PeopleDialogs.ConfirmUnlink(id, guid)
         { id = id, guid = guid })
 end
 
+-- Nickname ---------------------------------------------------------------------------------------
+
+-- The popup's data is the person's ID.
+-- Saves the typed nickname; a refused one keeps the popup open with the reason under its text.
+local function savePersonNickname(popup)
+    local typed = popup:GetEditBox():GetText()
+    local ok, err = People.Rename(popup.data, typed ~= "" and typed or nil)
+    if not ok then
+        popup:SetText(popup.baseText .. "\n\n" .. RED_FONT_COLOR:WrapTextInColorCode(ns.NameErrorMessages[err] or err))
+        popup:Resize()
+        return false
+    end
+    return true
+end
+
+StaticPopupDialogs.WHOSWHO_EDIT_PERSON_NICKNAME = {
+    text = L["Your nickname for %s"] .. "\n\n" .. L["Only you see it. It replaces the name this person is shown under."],
+    hasEditBox = true,
+    maxLetters = ns.Record.MAX_NAME_LENGTH,
+    button1 = L["Save"],
+    button2 = CANCEL,
+    button3 = L["Remove my nickname"],
+    DisplayButton3 = function(_, id) return People.Get(id).customNickname ~= nil end,
+    OnShow = function(popup, id)
+        popup.baseText = popup:GetText()
+        local editBox = popup:GetEditBox()
+        editBox.Instructions:SetText(People.IdentityNickname(id) or "")
+        editBox:SetText(People.Get(id).customNickname or "")
+        editBox:SetFocus()
+    end,
+    OnAccept = function(popup) return not savePersonNickname(popup) end,
+    OnAlt = function(_, id) People.Rename(id, nil) end,
+    EditBoxOnEnterPressed = function(editBox)
+        local popup = editBox:GetParent()
+        if savePersonNickname(popup) then popup:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(editBox) editBox:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+---Asks for my nickname for a person.
+---@param id string
+function PeopleDialogs.EditNickname(id)
+    local person = People.Get(id)
+    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
+    StaticPopup_Show("WHOSWHO_EDIT_PERSON_NICKNAME", nickname, nil, id)
+end
+
+-- Note -------------------------------------------------------------------------------------------
+
+local NOTE_WIDTH, NOTE_HEIGHT = 360, 260
+
+local noteEditor = CreateFrame("Frame", nil, UIParent, "DefaultPanelFlatTemplate")
+noteEditor:SetSize(NOTE_WIDTH, NOTE_HEIGHT)
+noteEditor:SetPoint("CENTER")
+noteEditor:SetFrameStrata("DIALOG")
+noteEditor:SetTitle(L["Note"])
+noteEditor:SetMovable(true)
+noteEditor:SetClampedToScreen(true)
+noteEditor:Hide()
+noteEditor.TitleContainer:EnableMouse(true)
+noteEditor.TitleContainer:RegisterForDrag("LeftButton")
+noteEditor.TitleContainer:SetScript("OnDragStart", function() noteEditor:StartMoving() end)
+noteEditor.TitleContainer:SetScript("OnDragStop", function() noteEditor:StopMovingOrSizing() end)
+noteEditor.CloseButton = CreateFrame("Button", nil, noteEditor, "UIPanelCloseButtonDefaultAnchors")
+PeopleDialogs.NoteEditor = noteEditor
+
+noteEditor.About = noteEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+noteEditor.About:SetPoint("TOPLEFT", SIDE_PADDING, -TOP_PADDING)
+noteEditor.About:SetPoint("TOPRIGHT", -SIDE_PADDING, -TOP_PADDING)
+noteEditor.About:SetJustifyH("LEFT")
+
+local function createNoteButton(text)
+    local button = CreateFrame("Button", nil, noteEditor, "UIPanelButtonTemplate")
+    button:SetText(text)
+    button:SetSize(button:GetTextWidth() + BUTTON_TEXT_PADDING, BUTTON_HEIGHT)
+    return button
+end
+noteEditor.CancelButton = createNoteButton(CANCEL)
+noteEditor.CancelButton:SetPoint("BOTTOMRIGHT", -SIDE_PADDING, SIDE_PADDING)
+noteEditor.SaveButton = createNoteButton(L["Save"])
+noteEditor.SaveButton:SetPoint("RIGHT", noteEditor.CancelButton, "LEFT", -BUTTON_SPACING, 0)
+
+local noteInset = CreateFrame("Frame", nil, noteEditor, "InsetFrameTemplate")
+noteInset:SetPoint("TOPLEFT", noteEditor.About, "BOTTOMLEFT", -4, -8)
+noteInset:SetPoint("BOTTOMRIGHT", -SIDE_PADDING + 4, SIDE_PADDING + BUTTON_HEIGHT + 8)
+
+noteEditor.Text = CreateFrame("Frame", nil, noteInset, "ScrollingEditBoxTemplate")
+noteEditor.Text:SetPoint("TOPLEFT", 8, -6)
+noteEditor.Text:SetPoint("BOTTOMRIGHT", -8 - SCROLL_BAR_WIDTH, 6)
+noteEditor.Text:GetEditBox():SetMaxLetters(People.NOTE_MAX_LENGTH)
+
+local noteBar = CreateFrame("EventFrame", nil, noteInset, "MinimalScrollBar")
+noteBar:SetPoint("TOPLEFT", noteEditor.Text, "TOPRIGHT", 6, 0)
+noteBar:SetPoint("BOTTOMLEFT", noteEditor.Text, "BOTTOMRIGHT", 6, 0)
+ScrollUtil.RegisterScrollBoxWithScrollBar(noteEditor.Text:GetScrollBox(), noteBar)
+
+-- Characters used, of the most a note may hold.
+noteEditor.Count = noteEditor:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+noteEditor.Count:SetPoint("BOTTOMLEFT", SIDE_PADDING, SIDE_PADDING + 6)
+
+local function updateCount()
+    noteEditor.Count:SetText(("%d / %d"):format(strlenutf8(noteEditor.Text:GetInputText()), People.NOTE_MAX_LENGTH))
+end
+noteEditor.Text:RegisterCallback("OnTextChanged", updateCount, noteEditor)
+
+---Opens the editor on my note about a person.
+---@param id string
+function noteEditor:Open(id)
+    self.id = id
+    local person = People.Get(id)
+    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
+    self.About:SetText(L["About %s"]:format(nickname))
+    self.Text:SetText(person.note or "")
+    updateCount()
+    self:Show()
+    self.Text:SetFocus()
+end
+
+noteEditor.SaveButton:SetScript("OnClick", function()
+    People.SetNote(noteEditor.id, noteEditor.Text:GetInputText())
+    noteEditor:Hide()
+end)
+noteEditor.CancelButton:SetScript("OnClick", function() noteEditor:Hide() end)
+
 -- Make main --------------------------------------------------------------------------------------
 
 StaticPopupDialogs.WHOSWHO_MAKE_PERSON_MAIN = {
@@ -329,4 +458,10 @@ ns.Skin.Apply(function(S)
     S.Button(dialog.LinkButton)
     S.Button(dialog.NewPersonButton)
     S.Button(dialog.CancelButton)
+    S.Shell(noteEditor)
+    S.CloseButton(noteEditor.CloseButton)
+    S.Inset(noteInset)
+    S.ScrollBar(noteBar)
+    S.Button(noteEditor.SaveButton)
+    S.Button(noteEditor.CancelButton)
 end)

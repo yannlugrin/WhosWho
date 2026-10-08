@@ -125,6 +125,11 @@ do
     limitInitializer:SetParentInitializer(otherCharactersInitializer,
         function() return ns.settings.tooltip.otherCharacters.enable end)
 end
+Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_TooltipNote",
+    Settings.VarType.Boolean, L["Show notes in tooltips"], ns.Store.DEFAULTS.profile.tooltip.note.enable,
+    function() return ns.settings.tooltip.note.enable end,
+    function(value) ns.settings.tooltip.note.enable = value end),
+    L["Adds the start of your note about the person."])
 
 -- Minimap ----------------------------------------------------------------------------------------
 

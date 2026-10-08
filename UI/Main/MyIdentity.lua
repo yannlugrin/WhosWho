@@ -16,7 +16,7 @@ local CHECKBOX_SIZE = 24
 local SCROLL_BAR_WIDTH = 16
 
 local CROWN_TEXTURE = ns.Glyphs.CROWN_TEXTURE
-local EDIT_TEXTURE = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up"
+local EDIT_TEXTURE = ns.Glyphs.EDIT_TEXTURE
 -- The crown on linked characters other than the main.
 local DIM_CROWN_ALPHA = 0.4
 

@@ -46,6 +46,23 @@ local function otherCharactersLine(person, guid)
     return soft(L["Also: %s"]:format(line))
 end
 
+local NOTE_START_LENGTH = 60
+
+-- The note's first line, shortened to NOTE_START_LENGTH characters, a whole UTF-8 character at a time.
+local function noteStart(note)
+    local firstLine = note:match("^[^\n]*")
+    local text, length = {}, 0
+    for character in firstLine:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        if length == NOTE_START_LENGTH then
+            return table.concat(text) .. "…"
+        end
+        text[#text + 1] = character
+        length = length + 1
+    end
+    local start = table.concat(text)
+    return firstLine ~= note and start .. "…" or start
+end
+
 -- A player's tooltip: the nickname after the name or on its own line, and the person's other characters. Not on
 -- my own characters.
 local function decorate(tooltip, data)
@@ -73,6 +90,10 @@ local function decorate(tooltip, data)
     if settings.tooltip.otherCharacters.enable then
         local line = otherCharactersLine(person, guid)
         if line then tooltip:AddLine(line, nil, nil, nil, true) end
+    end
+
+    if settings.tooltip.note.enable and person.note then
+        tooltip:AddLine(soft(L["Note: %s"]:format(noteStart(person.note))))
     end
 end
 

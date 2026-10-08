@@ -208,9 +208,25 @@ detail.Glyph:SetPoint("TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING - 3)
 
 detail.Nickname = detail:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 detail.Nickname:SetPoint("LEFT", detail.Glyph, "RIGHT", 6, 0)
-detail.Nickname:SetPoint("RIGHT", -DETAIL_PADDING, 0)
 detail.Nickname:SetJustifyH("LEFT")
 detail.Nickname:SetWordWrap(false)
+
+-- A small button with the edit image, after a nickname or a heading.
+local function createEditButton(tooltipText)
+    local button = CreateFrame("Button", nil, detail)
+    button:SetSize(GLYPH_SIZE, GLYPH_SIZE)
+    button:SetNormalTexture(Glyphs.EDIT_TEXTURE)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(tooltipText, HIGHLIGHT_FONT_COLOR:GetRGB())
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", GameTooltip_Hide)
+    return button
+end
+
+detail.EditNicknameButton = createEditButton(L["Edit nickname"])
+detail.EditNicknameButton:SetPoint("LEFT", detail.Nickname, "RIGHT", 6, 0)
 
 -- The nickname that applies without mine.
 detail.BaseNickname = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -223,11 +239,27 @@ detail.CharactersHeading:SetText(L["Characters"])
 detail.ForgetButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
 detail.ForgetButton:SetText(L["Forget"])
 detail.ForgetButton:SetSize(detail.ForgetButton:GetTextWidth() + 40, 22)
-detail.ForgetButton:SetPoint("BOTTOMRIGHT", -8, 8)
+detail.ForgetButton:SetPoint("TOPRIGHT", -8, -8)
+
+-- My note, under the characters at the bottom of the panel, whole: anchored by its bottom and sides only, it is as
+-- tall as its lines, and the characters list takes the space left above it.
+detail.Note = detail:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+detail.Note:SetPoint("BOTTOMLEFT", DETAIL_PADDING, DETAIL_PADDING)
+detail.Note:SetPoint("BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING)
+detail.Note:SetJustifyH("LEFT")
+detail.Note:SetJustifyV("TOP")
+
+detail.NoteHeading = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+detail.NoteHeading:SetPoint("BOTTOMLEFT", detail.Note, "TOPLEFT", 0, 4)
+detail.NoteHeading:SetText(L["Note"])
+
+detail.EditNoteButton = createEditButton(L["Edit note"])
+detail.EditNoteButton:SetPoint("LEFT", detail.NoteHeading, "RIGHT", 6, 0)
 
 local charactersBox = CreateFrame("Frame", nil, detail, "WowScrollBoxList")
 charactersBox:SetPoint("TOPLEFT", detail.CharactersHeading, "BOTTOMLEFT", 0, -4)
-charactersBox:SetPoint("BOTTOMRIGHT", detail.ForgetButton, "TOPRIGHT", -SCROLL_BAR_WIDTH, 8)
+charactersBox:SetPoint("RIGHT", -8 - SCROLL_BAR_WIDTH, 0)
+charactersBox:SetPoint("BOTTOM", detail.NoteHeading, "TOP", 0, 16)
 
 local charactersBar = CreateFrame("EventFrame", nil, detail, "MinimalScrollBar")
 charactersBar:SetPoint("TOPLEFT", charactersBox, "TOPRIGHT", 6, 0)
@@ -372,6 +404,8 @@ end
 ---@field nickname string the name the person is shown under
 ---@field source "confirmed"|"renamed"|"guild"|"unconfirmed"
 ---@field baseNickname string? the nickname that applies without mine, when mine replaces it
+---@field id string
+---@field note string? my note about the person
 ---@field characters WhosWho.PersonDetailCharacter[] in the order shown
 
 ---Shows a person in the detail panel, or the line asking to select one.
@@ -383,7 +417,12 @@ function panel:SetPerson(person)
 
     setGlyph(detail.Glyph, Glyphs.Nickname[person.source])
     detail.Nickname:SetText(person.nickname)
+    -- The nickname keeps its width; the edit button follows it.
+    local nicknameSpace = detail:GetWidth() - 2 * DETAIL_PADDING - GLYPH_SIZE * 2 - 12 - detail.ForgetButton:GetWidth()
+    detail.Nickname:SetWidth(math.min(detail.Nickname:GetUnboundedStringWidth(), nicknameSpace))
     detail.BaseNickname:SetText(person.baseNickname or "")
+    detail.Note:SetFontObject(person.note and "GameFontHighlight" or "GameFontDisable")
+    detail.Note:SetText(person.note or L["No note."])
     charactersBox:SetDataProvider(CreateDataProvider(person.characters))
 end
 
@@ -464,6 +503,7 @@ local function personDetail(person, onlineGuids)
     return {
         nickname = nickname, source = Lists.NicknameSource(person), characters = characters,
         baseNickname = person.customNickname and identityNickname ~= nickname and identityNickname or nil,
+        id = person.id, note = person.note,
     }
 end
 
@@ -525,6 +565,8 @@ panel.ListHeader.Labels.LastSeen:SetScript("OnClick", function() sortBy("LastSee
 
 panel.SearchBox:HookScript("OnTextChanged", function() panel:Refresh() end)
 detail.ForgetButton:SetScript("OnClick", function() ns.PeopleDialogs.ConfirmForget(panel.selectedId) end)
+detail.EditNicknameButton:SetScript("OnClick", function() ns.PeopleDialogs.EditNickname(panel.selectedId) end)
+detail.EditNoteButton:SetScript("OnClick", function() ns.PeopleDialogs.NoteEditor:Open(panel.selectedId) end)
 panel:SetScript("OnShow", function(self)
     self:Refresh()
     -- Online guild members come from the roster, which the game sends again when asked.
