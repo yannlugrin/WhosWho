@@ -56,11 +56,11 @@ end
 
 addSectionHeader(L["Sharing"])
 addSectionText(L["Nothing is shared until a character is linked. Your identity is your nickname and your linked characters."])
-addScopeCheckbox("guild", L["Guild"], L["Guild members who use Who's Who see your identity."])
-addScopeCheckbox("friends", L["Friends"], L["Your friends who use Who's Who see your identity."])
+addScopeCheckbox("guild", L["Guild"], L["Guild members who also have this option on see your identity, and you see theirs."])
+addScopeCheckbox("friends", L["Friends"], L["Friends who also have this option on see your identity, and you see theirs."])
 addScopeCheckbox("group", L["My party or raid"],
-    L["Members of your current party or raid who use Who's Who see your identity."])
-addScopeCheckbox("whispers", L["People I whisper"], L["Anyone you whisper can ask for your identity."])
+    L["Members of your party or raid who also have this option on see your identity, and you see theirs."])
+addScopeCheckbox("whispers", L["People I whisper"], L["When you whisper a player who also has this option on, you see each other's identity."])
 
 -- Display ----------------------------------------------------------------------------------------
 
