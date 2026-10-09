@@ -158,6 +158,6 @@ Right-click a character in the People tab's detail panel, or a person in the lis
 
 ## Still to Test
 
-- Inside an instance and during an encounter: add-on messages, secret values.
+- During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).
 - Guild: two members of one guild get the same club ID (`/dump C_Club.GetGuildClubId()`).
 - Battle.net friends, once a Battle.net round trip is possible.

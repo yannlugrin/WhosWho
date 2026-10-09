@@ -133,7 +133,7 @@ Planned:
 
 ### Secret Values
 
-Forever runs the Midnight-era API: some chat, unit and roster values may be secret. Every value read from the game goes through `issecretvalue` (shimmed to `false` where absent) before any comparison, concatenation or table key. A secret value is only ever displayed, never stored or sent. Outside instances no secret value was seen (chat, roster, friends, units, tooltips, menus); inside instances is *to verify in game*.
+Forever runs the Midnight-era API: some chat, unit and roster values may be secret. Every value read from the game goes through `issecretvalue` (shimmed to `false` where absent) before any comparison, concatenation or table key. A secret value is only ever displayed, never stored or sent. Outside instances no secret value was seen (chat, roster, friends, units, tooltips, menus); inside a dungeon neither, in and out of combat (group members' names and GUIDs, checked in game); during a boss fight is *to verify in game*.
 
 ## Data Model
 
@@ -208,7 +208,7 @@ In chat, `ChatFrameUtil.AddSenderNameFilter` gets each line's decorated sender n
 
 ## Protocol
 
-Measured on build 1.60.1. In instances, still *to verify in game*: whether add-on messages are blocked, which `C_ChatInfo.InChatMessagingLockdown()` tells before sending.
+Measured on build 1.60.1. Forever has no group finder, so every group is a home group: `PARTY` or `RAID`, never `INSTANCE_CHAT`. Inside a dungeon, in and out of combat, add-on messages pass on `PARTY` and `C_ChatInfo.InChatMessagingLockdown()` is false (checked in game); during a boss fight is *to verify in game*.
 
 - A message over 255 characters returns `Success` but is silently dropped: never rely on the send result for size.
 - Byte 0 truncates a message; bytes 1–255 arrive intact.
