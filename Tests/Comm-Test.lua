@@ -220,7 +220,14 @@ local function newEnvironment(session)
         return u.name:match("^(%S+) (.+)$")
     end
     env.UnitClass = function() return nil, nil, c.classID end
-    env.UnitLevel = function() return c.level end
+    env.UnitLevel = function(unit)
+        local u = unitCharacter(unit)
+        return u and u.level
+    end
+    env.UnitIsConnected = function(unit)
+        local u = unitCharacter(unit)
+        return u ~= nil and online(u.name) ~= nil
+    end
     env.IsResting = function() return c.resting == true end
     env.UnitAffectingCombat = function() return c.inCombat == true end
     env.Logout, env.Quit = function() end, function() end
@@ -240,8 +247,14 @@ local function newEnvironment(session)
     env.GetGuildRosterInfo = function(i)
         local member = guildMembers(c.guild)[i]
         local info = { member.name }
-        info[17] = member.guid
+        info[4], info[9], info[17] = member.level, online(member.name) ~= nil, member.guid
         return unpack(info, 1, 17)
+    end
+    -- An offline member last logged in two days and three hours ago.
+    env.GetGuildRosterLastOnline = function(i)
+        local member = guildMembers(c.guild)[i]
+        if online(member.name) then return nil end
+        return 0, 0, 2, 3
     end
     env.C_GuildInfo = {
         GuildRoster = function()
@@ -1337,6 +1350,46 @@ logout(fay)
 logout(bobAltSession)
 bob = login(bobAccount, bobMain)
 run(10)
+
+-- Last seen from what the game shows ---------------------------------------------------------------------
+
+do
+    local People, ruleset = bob.ns.People, bob.ns.Identity.Ruleset(bobMain.guid)
+    -- Gil, in the guild, never logged in this test, and Hal, outside it: two people Bob links himself.
+    local gilMain = character("Gil Main", "Player-1-00007001", WARRIOR, GUILD)
+    local halMain = character("Hal Main", "Player-1-00007002", MAGE)
+    People.Create(gilMain.guid, { name = gilMain.name, ruleset = ruleset, classID = WARRIOR })
+    People.Create(halMain.guid, { name = halMain.name, ruleset = ruleset, classID = MAGE })
+    local function lastSeen(c) return select(2, People.Find(c.guid)).lastSeen end
+
+    select(2, People.Find(annMain.guid)).lastSeen = 1
+    fire(bob, "GUILD_ROSTER_UPDATE")
+    check(lastSeen(annMain) == world.clock, "a guild member online is seen now")
+    check(lastSeen(gilMain) == world.clock - (2 * 86400 + 3 * 3600),
+        "an offline guild member never seen gets its last login from the roster")
+    run(3600)
+    fire(bob, "GUILD_ROSTER_UPDATE")
+    check(lastSeen(gilMain) == world.clock - 3600 - (2 * 86400 + 3 * 3600), "only the first time")
+
+    local hal = login(account("Hal"), halMain)
+    run(1)
+    check(lastSeen(halMain) == nil, "a character Bob doesn't share with stays unseen")
+    whisper(hal, bobMain)
+    check(lastSeen(halMain) == world.clock, "a whisper received is seen now")
+    run(60)
+    world.group = { bobMain, halMain }
+    fire(bob, "GROUP_ROSTER_UPDATE")
+    check(lastSeen(halMain) == world.clock, "so is a connected group member")
+    world.group = {}
+    fire(bob, "GROUP_ROSTER_UPDATE")
+    run(60)
+    bobMain.friends = { halMain }
+    fire(bob, "FRIENDLIST_UPDATE")
+    check(lastSeen(halMain) == world.clock, "and an online friend")
+    bobMain.friends = {}
+    fire(bob, "FRIENDLIST_UPDATE")
+    logout(hal)
+end
 
 -- A removal reaching a player met in a group -------------------------------------------------------------
 

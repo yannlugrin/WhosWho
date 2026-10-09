@@ -548,7 +548,7 @@ function Protocol.LogoutCanceled()
 end
 
 ---GROUP_ROSTER_UPDATE: on joining a group, my announcement to the group, which every member answers with theirs.
-function Protocol.GroupChanged()
+function Protocol.GroupRosterChanged()
     -- The roster can arrive during the loading screen, before PLAYER_LOGIN.
     if wasInGroup == nil then return end
     local inGroup = IsInGroup()

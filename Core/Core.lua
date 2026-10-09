@@ -151,7 +151,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Scopes.WhisperSent(name, select(12, ...))
         ns.Protocol.Whispered(name)
     elseif event == "GROUP_ROSTER_UPDATE" then
-        ns.Protocol.GroupChanged()
+        ns.Scopes.GroupRosterChanged()
+        ns.Protocol.GroupRosterChanged()
     end
 end)
 

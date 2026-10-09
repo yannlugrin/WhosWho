@@ -189,10 +189,15 @@ do
     s = profile({})
     check(s.chat.nickname.enable and s.tooltip.nickname.position == "afterName", "nothing saved: the defaults stay")
 
-    local data = { identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true } } } }
+    local data = {
+        identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true } } },
+        forgotten = { a = 7, b = { rev = 2, at = 50 } },
+    }
     ns.Store.MigrateData(data)
     check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
         and data.identity.chars[G2].removedAt == nil, "a 0.1.0-beta.1 removal revision becomes a removal time")
+    check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
+        "a 0.1.0-beta.1 forgotten revision gets the migration's time")
 end
 
 -- Record validation -------------------------------------------------------------------------------
@@ -312,10 +317,14 @@ do
     P.Confirm(B, G2, 25)
     check(P.Get(B).chars[G2].level == 25 and P.Get(B).chars[G2].lastSeen == 30,
         "a confirmation records the character's level and last seen")
-    check(not P.Activity(G2, 20, 29), "older activity is ignored")
-    check(P.Activity(G2, 26, 31) and P.Get(B).chars[G2].level == 26 and P.Get(B).chars[G2].lastSeen == 31,
-        "newer activity from any source is kept")
-    check(not P.Activity(G1, 10, 40), "activity for an unknown character is ignored")
+    P.Activity({ [G2] = { level = 20, lastSeen = 29 } })
+    check(P.Get(B).chars[G2].level == 25 and P.Get(B).chars[G2].lastSeen == 30, "older activity is ignored")
+    P.Activity({ [G2] = { level = 26, lastSeen = 31 } })
+    check(P.Get(B).chars[G2].level == 26 and P.Get(B).chars[G2].lastSeen == 31, "newer activity from any source is kept")
+    P.Activity({ [G2] = { lastSeen = 32 } })
+    check(P.Get(B).chars[G2].level == 26 and P.Get(B).chars[G2].lastSeen == 32, "without a level, the level stays")
+    P.Activity({ [G1] = { level = 10, lastSeen = 40 } })
+    check(not P.Exists(G1), "activity for an unknown character is ignored")
     P.Accept(makeRecord(B, 2, { G2 }, "Bob"))
     check(P.Get(B).chars[G2].level == 26, "a new revision keeps the character's activity")
     local changeCount = #ns.AutomaticChanges.List()
@@ -404,7 +413,7 @@ do
     check(changes == 1, "a stale record: none")
     local manual = P.Create(G3, INFO)
     P.Rename(manual, "Tanky")
-    P.Activity(G1, 11, 100)
+    P.Activity({ [G1] = { level = 11, lastSeen = 100 } })
     check(changes == 4, "each change of mine and each activity notified once")
     P.Accept(makeRecord(A, 2, { G1, G2, G3 }))
     check(changes == 5 and P.Get(manual) == nil, "a record merging my manual person: one notification")
@@ -665,8 +674,7 @@ do
     P.Accept(makeRecord(A, 1, { G1 }))
     P.Accept(makeRecord(B, 1, { G2 }))
     P.Accept(makeRecord(C, 1, { G3 }))
-    P.Activity(G1, 10, 100)
-    P.Activity(G2, 10, 300)
+    P.Activity({ [G1] = { level = 10, lastSeen = 100 }, [G2] = { level = 10, lastSeen = 300 } })
     local recent = P.MostRecentIds(2)
     check(#recent == 2 and recent[1] == B and recent[2] == A, "the most recently seen people first, cut to the count")
     check(P.MostRecentIds(10)[3] == C, "a person never seen comes last")
@@ -838,6 +846,32 @@ do
     P.Accept(makeRecord(B, 2, { G4 }, "Bob"))
     check(P.Get(B) and P.Get(B).chars[G4] and P.Get(B).chars[G4].state == "confirmed",
         "a character confirming an identity again is stored again")
+end
+
+-- When a person last changed --------------------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A = string.rep("a", 64)
+    clock = 1000
+    local manual = P.Create(G1, INFO)
+    check(P.Get(manual).updatedAt == 1000, "a person I create is dated")
+    clock = 1100
+    P.Rename(manual, "Tanky")
+    check(P.Get(manual).updatedAt == 1100, "so is each of my changes to it")
+    clock = 1200
+    P.Accept(makeRecord(A, 1, { G2, G3 }, "Ann"))
+    check(P.Get(A).updatedAt == 1200, "a record accepted dates the person")
+    clock = 1300
+    P.Confirm(A, G2, 10)
+    check(P.Get(A).updatedAt == 1300, "so does an announcement from one of its characters")
+    clock = 1400
+    P.DeclaredNoIdentity(G3)
+    check(P.Get(A).updatedAt == 1400, "and a character declaring no identity")
+    clock = 1500
+    P.DeclaredNoIdentity(G2)
+    check(ns.data.forgotten[A].rev == 1 and ns.data.forgotten[A].at == 1500, "a forgotten identity keeps when it was forgotten")
 end
 
 if failures > 0 then

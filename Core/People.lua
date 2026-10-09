@@ -20,6 +20,7 @@ ns.People = People
 ---@field note string? my note about this person, never shared; may hold several lines
 ---@field main string GUID of the main character. Another identity can hold a shared person's main.
 ---@field chars table<string, WhosWho.PersonCharacter> by GUID
+---@field updatedAt number? seconds, from time(): the person's last change, by the player or by me
 
 ---@alias WhosWho.CharacterState
 ---| "confirmed"  # in the player's record, and a message sent from that character carried the identity
@@ -142,8 +143,8 @@ function People.IsNewer(id, rev)
     local person = ns.data.people[id]
     if person and person.signedRecord and person.signedRecord.rev >= rev then return false end
 
-    local forgottenRevision = ns.data.forgotten[id]
-    return not (forgottenRevision and forgottenRevision >= rev)
+    local forgotten = ns.data.forgotten[id]
+    return not (forgotten and forgotten.rev >= rev)
 end
 
 ---The nickname the identity itself gives, whatever overrides it: the player's own (shared person), otherwise the
@@ -228,7 +229,7 @@ function People.Create(guid, character)
     local data = ns.data
     local id = "M" .. data.nextManual
     data.nextManual = data.nextManual + 1
-    data.people[id] = { id = id, main = guid, chars = { [guid] = addedCharacter(character) } }
+    data.people[id] = { id = id, main = guid, chars = { [guid] = addedCharacter(character) }, updatedAt = time() }
     indexCharacter(guid, id)
     changed()
 
@@ -247,6 +248,7 @@ function People.AddCharacter(id, guid, character)
     if People.Exists(guid) then return false, "taken" end
 
     person.chars[guid] = addedCharacter(character)
+    person.updatedAt = time()
     indexCharacter(guid, id)
     changed()
 
@@ -275,6 +277,7 @@ function People.RemoveCharacter(id, guid)
     if guid == person.main then return false, "main" end
 
     person.chars[guid] = nil
+    person.updatedAt = time()
     unindexCharacter(guid, id)
     changed()
 
@@ -292,7 +295,7 @@ function People.Rename(id, nickname)
 
     local clean, err = ns.Record.CleanName(nickname)
     if err then return false, err end
-    person.customNickname = clean
+    person.customNickname, person.updatedAt = clean, time()
     changed()
 
     return true
@@ -311,7 +314,7 @@ function People.SetNote(id, note)
 
     note = note and note:match("^%s*(.-)%s*$") or ""
     if strlenutf8(note) > People.NOTE_MAX_LENGTH then return false, "long" end
-    person.note = note ~= "" and note or nil
+    person.note, person.updatedAt = note ~= "" and note or nil, time()
     changed()
 
     return true
@@ -337,7 +340,7 @@ function People.SetMain(id, guid)
     if person.signedRecord then return false, "shared" end
     if not person.chars[guid] then return false, "character" end
 
-    person.main = guid
+    person.main, person.updatedAt = guid, time()
     changed()
 
     return true
@@ -412,7 +415,7 @@ end
 -- Review tab would invite me to add them again by hand. Its revision then makes an older copy relayed later stale.
 local function forgetUnlinked(id, rev)
     forget(id)
-    ns.data.forgotten[id] = rev
+    ns.data.forgotten[id] = { rev = rev, at = time() }
 end
 
 ---Stores a newer revision of a player's record. Its characters that declared no identity are left out. A revision
@@ -449,6 +452,7 @@ function People.Accept(signedRecord)
     sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
     people[signedRecord.id] = sharedPerson
     sharedPerson.signedRecord, sharedPerson.nickname, sharedPerson.main = signedRecord, signedRecord.nickname, signedRecord.main
+    sharedPerson.updatedAt = time()
 
     -- Confirmations of characters this revision now lists, received before it arrived.
     local pending = pendingConfirmations[signedRecord.id] or {}
@@ -485,6 +489,7 @@ function People.Confirm(id, guid, level)
     end
 
     -- Already confirmed in this identity: only its activity changes.
+    person.updatedAt = time()
     local personCharacter = person.chars[guid]
     if personCharacter and personCharacter.state == "confirmed" then
         personCharacter.level, personCharacter.lastSeen = level, time()
@@ -509,6 +514,7 @@ function People.DeclaredNoIdentity(guid)
     if not (person and person.signedRecord and character.state ~= "added") then return end
 
     person.chars[guid] = nil
+    person.updatedAt = time()
     unindexCharacter(guid, person.id)
     for _, other in pairs(person.chars) do
         if other.state ~= "added" then
@@ -520,19 +526,19 @@ function People.DeclaredNoIdentity(guid)
     changed()
 end
 
----Activity of a character from any source, a relay included. Never confirms; kept only when more recent.
----@param guid string
----@param level integer
----@param lastSeen number seconds, from time()
----@return boolean kept false for an unknown character or older activity
-function People.Activity(guid, level, lastSeen)
-    local _, character = People.Find(guid)
-    if not character or (character.lastSeen and character.lastSeen >= lastSeen) then return false end
-
-    character.level, character.lastSeen = level, lastSeen
-    changed()
-
-    return true
+---Activity of characters I hold, from what the game shows (the guild roster, my group, my friend list, whispers):
+---each is kept only when more recent, and never confirms anything. One change for them all.
+---@param activities table<string, { level: integer?, lastSeen: number }> by GUID; lastSeen in seconds, from time()
+function People.Activity(activities)
+    local kept = false
+    for guid, activity in pairs(activities) do
+        local _, character = People.Find(guid)
+        if character and not (character.lastSeen and character.lastSeen >= activity.lastSeen) then
+            character.level, character.lastSeen = activity.level or character.level, activity.lastSeen
+            kept = true
+        end
+    end
+    if kept then changed() end
 end
 
 -- Relationships ----------------------------------------------------------------------------------

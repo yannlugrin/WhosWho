@@ -5,12 +5,17 @@ local addonName, ns = ...
 local Store = {}
 ns.Store = Store
 
+---An identity whose player unlinked every character.
+---@class WhosWho.ForgottenIdentity
+---@field rev integer the revision in which the player unlinked every character
+---@field at number seconds, from time(): when I forgot it
+
 ---Account-wide saved data (WhosWhoDB.global), the table every model module works on.
 ---@class WhosWho.Data
 ---@field identity WhosWho.IdentityData
 ---@field people table<string, WhosWho.Person> by identity ID
 ---@field nextManual integer number of the next manual person ("M<n>")
----@field forgotten table<string, integer> identity ID -> revision in which the player unlinked every character
+---@field forgotten table<string, WhosWho.ForgottenIdentity> by identity ID
 ---@field noIdentity table<string, number> GUID -> when (time()) the character last declared no identity (NOID), until it confirms one
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
@@ -65,8 +70,7 @@ end
 ---@field revisionWaitSeconds number before a change of revision is announced, gathering the changes that follow
 ---@field quickRelogSeconds number a login this soon after the same character's logout announces nothing
 ---@field whisperAnnouncementSeconds number after that, whispering a player sends my announcement again
----@field loginWhispersSeconds number at login, the people the same character whispered this long before its logout get
----the announcement
+---@field loginWhispersSeconds number at login, the people whispered this long before the logout get the announcement
 
 ---An advanced setting: its saved value, otherwise its default. On PLAYER_LOGOUT, AceDB may already have removed the
 ---values equal to their defaults.
@@ -111,6 +115,10 @@ function Store.MigrateData(data)
     -- unknown, so it gets the migration's.
     for _, character in pairs(data.identity.chars) do
         if character.removedInRevision then character.removedAt, character.removedInRevision = time(), nil end
+    end
+    -- 0.1.0-beta.1: a forgotten identity kept only the revision; its time is unknown, so it gets the migration's.
+    for id, forgotten in pairs(data.forgotten) do
+        if type(forgotten) == "number" then data.forgotten[id] = { rev = forgotten, at = time() } end
     end
 end
 

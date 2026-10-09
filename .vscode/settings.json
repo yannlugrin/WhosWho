@@ -60,7 +60,8 @@
         "WHISPER",
         "INVITE",
         "C_PartyInfo",
-        "CreateSettingsCheckboxWithButtonInitializer"
+        "CreateSettingsCheckboxWithButtonInitializer",
+        "GetGuildRosterLastOnline"
     ],
     "Lua.type.weakUnionCheck": true
 }

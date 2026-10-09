@@ -53,6 +53,7 @@ end
 ---@field guid string
 ---@field name string
 ---@field connected boolean
+---@field level integer? known while online
 
 ---Whether no value read from the game is secret. A secret value (Midnight-era API) may only be displayed: never
 ---compared, stored or used as a key.
@@ -103,8 +104,11 @@ function Scopes.Friends()
     local friends = {}
     for i = 1, C_FriendList.GetNumFriends() or 0 do
         local info = C_FriendList.GetFriendInfoByIndex(i)
-        if info and info.guid and info.name and notSecret(info.guid, info.name, info.connected) then
-            friends[#friends + 1] = { guid = info.guid, name = info.name, connected = info.connected == true }
+        if info and info.guid and info.name and notSecret(info.guid, info.name, info.connected, info.level) then
+            local connected = info.connected == true
+            friends[#friends + 1] = {
+                guid = info.guid, name = info.name, connected = connected, level = connected and info.level or nil,
+            }
         end
     end
     return friends
@@ -182,7 +186,9 @@ end
 ---@param guid any
 function Scopes.WhisperReceived(name, guid)
     if not (name and guid and notSecret(name, guid)) then return end
-    saveWhisper(name, guid).receivedAt = time()
+    local now = time()
+    saveWhisper(name, guid).receivedAt = now
+    People.Activity({ [guid] = { lastSeen = now } })
 end
 
 ---A whisper sent (CHAT_MSG_WHISPER_INFORM: arguments 2 and 12): the receiver's GUID, and the Whispers scope.
@@ -193,6 +199,7 @@ function Scopes.WhisperSent(name, guid)
     local now = time()
     saveWhisper(name, guid).sentAt = now
     People.SetWhisperedAt(guid, now)
+    People.Activity({ [guid] = { lastSeen = now } })
 end
 
 ---PLAYER_LOGOUT: removes the whispers neither sent nor received within the whisper window, and clears the older
@@ -209,21 +216,41 @@ end
 
 -- Relationships ----------------------------------------------------------------------------------
 
----GUILD_ROSTER_UPDATE: my current character's guild, and the guild of the characters I hold.
+-- How long ago a guild member last logged in, from the roster: years, months, days and hours, months counted as 30
+-- days.
+local function offlineSeconds(index)
+    local years, months, days, hours = GetGuildRosterLastOnline(index)
+    if not notSecret(years, months, days, hours) then return nil end
+    return (((years or 0) * 12 + (months or 0)) * 30 + (days or 0)) * 86400 + (hours or 0) * 3600
+end
+
+---GUILD_ROSTER_UPDATE: my current character's guild, the guild of the characters I hold, and their activity: seen now
+---while online; an offline one never seen gets its last login, from the roster.
 function Scopes.GuildRosterChanged()
     local count = GetNumGuildMembers()
     local clubId = C_Club.GetGuildClubId()
     -- The roster is empty until the game has loaded it.
     if count == 0 or not clubId then return end
 
-    local memberGuids = {}
+    local memberGuids, activities, now = {}, {}, time()
     for i = 1, count do
+        local _, _, _, level, _, _, _, _, online = GetGuildRosterInfo(i)
         local guid = select(17, GetGuildRosterInfo(i))
-        if guid and notSecret(guid) then memberGuids[guid] = true end
+        if guid and notSecret(guid, level, online) then
+            memberGuids[guid] = true
+            local _, character = People.Find(guid)
+            if character and online then
+                activities[guid] = { level = level, lastSeen = now }
+            elseif character and not character.lastSeen then
+                local offline = offlineSeconds(i)
+                if offline then activities[guid] = { level = level, lastSeen = now - offline } end
+            end
+        end
     end
 
     Identity.SetGuild(UnitGUID("player"), clubId)
     People.UpdateGuildMembers(clubId, memberGuids)
+    People.Activity(activities)
 end
 
 ---PLAYER_GUILD_UPDATE for my character: a guild left, or joined (its roster follows).
@@ -235,11 +262,28 @@ function Scopes.GuildChanged()
     Identity.SetGuild(UnitGUID("player"), nil)
 end
 
----FRIENDLIST_UPDATE: friendOf of the characters I hold, for my current character.
+---FRIENDLIST_UPDATE: friendOf of the characters I hold, for my current character, and the activity of the ones
+---online.
 function Scopes.FriendListChanged()
-    local friendGuids = {}
-    for _, friend in ipairs(Scopes.Friends()) do friendGuids[friend.guid] = true end
+    local friendGuids, activities, now = {}, {}, time()
+    for _, friend in ipairs(Scopes.Friends()) do
+        friendGuids[friend.guid] = true
+        if friend.connected then activities[friend.guid] = { level = friend.level, lastSeen = now } end
+    end
     People.UpdateFriends(UnitGUID("player"), friendGuids)
+    People.Activity(activities)
+end
+
+---GROUP_ROSTER_UPDATE: the activity of the members connected.
+function Scopes.GroupRosterChanged()
+    local activities, now = {}, time()
+    for _, unit in ipairs(groupUnits()) do
+        local guid, connected, level = UnitGUID(unit), UnitIsConnected(unit), UnitLevel(unit)
+        if guid and connected and notSecret(guid, connected, level) then
+            activities[guid] = { level = level, lastSeen = now }
+        end
+    end
+    People.Activity(activities)
 end
 
 ---After an announcement from this character: its guild and friendOf, when it is in my guild or friend list.

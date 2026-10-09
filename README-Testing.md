@@ -156,6 +156,10 @@ Right-click a character in the People tab's detail panel, or a person in the lis
 - The menu shows the character's name as its title, **Whisper**, **Invite**, then the Who's Who section (Make main or Unlink when they apply; no Show person).
 - **Whisper** opens a whisper to that character in the chat box; **Invite** invites it. A character already in my group has no **Invite**. In the list, right-clicking a person whose online character isn't known opens nothing, and the selection doesn't change. No Lua error, and BugSack shows no blocked action.
 
+## Last Seen
+
+In the People tab, a person's last seen moves to now when one of their characters is online in your guild, in your group, online in your friend list, or whispers with you, also for a person you created yourself. A guild member you link while they are offline shows their last login from the roster (to the hour), and keeps it until you see them online.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).
