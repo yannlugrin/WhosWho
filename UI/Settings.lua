@@ -46,13 +46,33 @@ layout:AddInitializer(linkInitializer)
 
 -- Sharing ----------------------------------------------------------------------------------------
 
-local function addScopeCheckbox(scope, name, tooltip)
-    local setting = Settings.RegisterProxySetting(category, "WhosWho_Scope_" .. scope, Settings.VarType.Boolean, name,
+-- While the settings are open, what changing them would send waits until they close.
+SettingsPanel:HookScript("OnShow", function() ns.Protocol.LockSending() end)
+SettingsPanel:HookScript("OnHide", function() ns.Protocol.UnlockSending() end)
+
+local function registerScopeSetting(scope, name)
+    return Settings.RegisterProxySetting(category, "WhosWho_Scope_" .. scope, Settings.VarType.Boolean, name,
         ns.Store.DEFAULTS.profile.scopes[scope],
         function() return ns.Scopes.Get(scope) end,
         function(value) ns.Scopes.Set(scope, value) end)
-    return Settings.CreateCheckbox(category, setting, tooltip)
 end
+
+local function addScopeCheckbox(scope, name, tooltip)
+    return Settings.CreateCheckbox(category, registerScopeSetting(scope, name), tooltip)
+end
+
+StaticPopupDialogs.WHOSWHO_CLEAR_WHISPERS = {
+    text = L["Clear the whisper history?"] .. "\n\n"
+        .. L["Who's Who forgets which players you whispered: until you whisper them again, People I whisper no longer shares with them. This can't be undone."],
+    button1 = L["Clear"],
+    button2 = CANCEL,
+    OnAccept = function() ns.Scopes.ForgetWhispers() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
+}
 
 addSectionHeader(L["Sharing"])
 addSectionText(L["Nothing is shared until a character is linked. Your identity is your nickname and your linked characters."])
@@ -62,8 +82,19 @@ addScopeCheckbox("group", L["My party or raid"],
     L["Members of your party or raid who also have this option on see your identity, and you see theirs."])
 do
     -- The whisper window is greyed out while the Whispers scope is off.
-    local whispersInitializer = addScopeCheckbox("whispers", L["People I whisper"],
-        L["When you whisper a player who also has this option on, you see each other's identity."])
+    -- The history button sits right of the checkbox, usable while the scope is off: whispers are recorded either way.
+    local whispersSetting = registerScopeSetting("whispers", L["People I whisper"])
+    local whispersTooltip = L["When you whisper a player who also has this option on, you see each other's identity. Turning it on shares right away with everyone you whispered within the time below; clear the history first to start from no one."]
+    local function clearHistory() StaticPopup_Show("WHOSWHO_CLEAR_WHISPERS") end
+    local whispersInitializer
+    if CreateSettingsCheckboxWithButtonInitializer then
+        whispersInitializer = CreateSettingsCheckboxWithButtonInitializer(whispersSetting, L["Clear history"], clearHistory,
+            nil, false, whispersTooltip)
+        layout:AddInitializer(whispersInitializer)
+    else
+        whispersInitializer = Settings.CreateCheckbox(category, whispersSetting, whispersTooltip)
+        layout:AddInitializer(CreateSettingsButtonInitializer("", L["Clear history"], clearHistory, nil, true))
+    end
     local whisperHoursInitializer = Settings.CreateDropdown(category, Settings.RegisterProxySetting(category,
         "WhosWho_WhisperHours", Settings.VarType.Number, L["Whispers count for"],
         ns.Store.DEFAULTS.profile.whisperHours,

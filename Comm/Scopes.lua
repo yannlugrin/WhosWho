@@ -251,6 +251,12 @@ function Scopes.SetRelationships(guid, name)
     if friendGuid(name) == guid then People.SetFriendOf(guid, UnitGUID("player")) end
 end
 
+---Clears the whisper history: the saved whispers, and when I last whispered each character I hold.
+function Scopes.ForgetWhispers()
+    ns.data.whispers = {}
+    People.ClearWhisperedBefore(math.huge)
+end
+
 ---After a record is stored: whisperedAt of the characters I whispered that I now hold.
 function Scopes.KeepSentWhispers()
     for guid, whisper in pairs(ns.data.whispers) do

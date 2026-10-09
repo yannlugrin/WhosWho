@@ -59,7 +59,8 @@
         "ChatFrame_SendTell",
         "WHISPER",
         "INVITE",
-        "C_PartyInfo"
+        "C_PartyInfo",
+        "CreateSettingsCheckboxWithButtonInitializer"
     ],
     "Lua.type.weakUnionCheck": true
 }

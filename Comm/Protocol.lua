@@ -15,7 +15,7 @@ local PREFIX = "WhosWho"
 local REVISION_WAIT_SECONDS = 15 -- wait before sending a new revision, gathering the changes that follow
 local REQUEST_WAIT_SECONDS = 5 -- wait before answering GETs, gathering the GETs that follow
 local MAX_WAIT_SECONDS = 300 -- longest wait from its start, however often it is pushed back
-local LOCK_WAIT_SECONDS = 5 -- between two tries while record sending is locked
+local LOCK_WAIT_SECONDS = 5 -- between two tries while sending is locked
 local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players it reached are ignored
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
@@ -96,7 +96,8 @@ local publishedRevision, publishedWithGuildScope
 local requesters = {}
 ---@type table<string, WhosWho.Delivery> by channel (GUILD, PARTY, RAID) or by name (WHISPER)
 local deliveries = {}
-local locked = false
+-- How many holders keep sending locked (Protocol.LockSending).
+local lockCount = 0
 ---@type number? when the pending RECs go out (GetTime), nil while none is pending
 local sendAt
 ---@type number? when the pending wait started (GetTime)
@@ -215,7 +216,7 @@ local function sendRecords()
         return
     end
     -- Held while I edit my identity, and once my logout announcement went out (a logout makes the next login announce).
-    if locked or loggingOut then
+    if lockCount > 0 or loggingOut then
         C_Timer.After(LOCK_WAIT_SECONDS, sendRecords)
         return
     end
@@ -245,14 +246,6 @@ local function scheduleRecordSending(waitSeconds)
     sendAt = math.min(math.max(sendAt, now + waitSeconds), waitStartedAt + MAX_WAIT_SECONDS)
 end
 
----Held while the player edits their identity: RECs wait until it is released.
-function Protocol.LockRecordSending()
-    locked = true
-end
-
-function Protocol.UnlockRecordSending()
-    locked = false
-end
 
 -- Answering announcements ---------------------------------------------------------------------------
 
@@ -462,12 +455,40 @@ end
 -- Turning the Guild scope on makes a change of revision, whose announcement brings the guild's back (announceRevision).
 -- Turning the Whispers scope on sends nothing: it applies to the players I whisper from then on.
 ---@param key "guild"|"friends"|"whispers"|"group"
-local function scopeEnabled(key)
+local function announceScope(key)
     if key == "group" and IsInGroup() then
         announceToChannel(Scopes.GroupChannel())
     elseif key == "friends" then
         announceToFriends(Scopes.Friends())
     end
+end
+
+---@type table<string, true> scopes turned on while sending was locked
+local heldScopes = {}
+
+-- While sending is locked, a scope turned on waits: only the ones still on when it is released are announced.
+local function scopeEnabled(key)
+    if lockCount > 0 then
+        heldScopes[key] = true
+        return
+    end
+    announceScope(key)
+end
+
+---Locks sending until every holder released it: the RECs wait, and so do the announcements of the scopes turned on.
+---Held while the settings are open, so that only what is set when they close goes out.
+function Protocol.LockSending()
+    lockCount = lockCount + 1
+end
+
+function Protocol.UnlockSending()
+    if lockCount == 0 then return end
+    lockCount = lockCount - 1
+    if lockCount > 0 then return end
+    for key in pairs(heldScopes) do
+        if Scopes.Get(key) then announceScope(key) end
+    end
+    heldScopes = {}
 end
 
 ---PLAYER_LOGIN, after the character refresh: registers the prefix, takes the current revision as announced, announces

@@ -16,6 +16,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Whispers count for a time you choose** (3 hours by default, in the settings): the people you whisper stay recognised across a reload or a new login, and get your identity and its updates while you talk to them.
 - **Fewer messages**: a reload, a quick relog of the same character or a canceled logout no longer sends announcements the other players already have.
 - **Unlinked characters stay anonymous**: they never send your identity again, and the players who knew them drop them without being able to tell who they belonged to.
+- **Clear whisper history** next to the Whispers option in the settings. While the settings are open, nothing is sent until you close them.
 
 ### Fixed
 

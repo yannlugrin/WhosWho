@@ -514,14 +514,14 @@ run(1)
 bob = login(bobAccount, bobMain)
 cat = login(catAccount, catMain)
 run(1)
-ann.ns.Protocol.LockRecordSending()
+ann.ns.Protocol.LockSending()
 slash(ann, "nick Ann")
 run(10)
-check(sent({ from = "Ann Main", type = "REC" }) == 0, "nothing goes out while record sending is locked")
+check(sent({ from = "Ann Main", type = "REC" }) == 0, "nothing goes out while sending is locked")
 levelUp(ann)
 run(1)
 check(sent({ type = "GET", target = "Ann Main" }) == 2, "both guild members ask for the new revision")
-ann.ns.Protocol.UnlockRecordSending()
+ann.ns.Protocol.UnlockSending()
 run(20)
 check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1, "the change goes to the guild once unlocked")
 check(sent({ from = "Ann Main", type = "REC", distribution = "WHISPER", target = "Bob Main" }) == 0,
@@ -756,6 +756,9 @@ do
     whisper(bob, eveMain)
     run(3 * 3600)
     check(bob.ns.Scopes.Allows("Eve Main"), "a longer window keeps the player allowed")
+    bob.ns.Scopes.ForgetWhispers()
+    check(not bob.ns.Scopes.Allows("Eve Main") and select(2, bob.ns.People.Find(eveMain.guid)).whisperedAt == nil
+        and next(bobAccount.saved.global.whispers) == nil, "clearing the whisper history stops sharing with them")
     bob.ns.settings.whisperHours = 3
     bob.ns.settings.scopes.whispers = false
 end
@@ -1067,6 +1070,30 @@ slash(ann, "scope group on")
 run(6)
 check(sent({ from = "Ann Main" }) == 0, "outside a group, turning the Group scope on sends nothing")
 slash(ann, "scope group off")
+
+-- The settings are open: sending is locked.
+world.group = { annMain, bobMain }
+bob.ns.settings.scopes.group = true
+ann.ns.Protocol.LockSending()
+clearLog()
+slash(ann, "scope group on")
+slash(ann, "scope group off")
+slash(ann, "scope group on")
+run(6)
+check(sent({ from = "Ann Main", type = "ANNOUNCE" }) == 0, "while sending is locked, a scope turned on waits")
+ann.ns.Protocol.UnlockSending()
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1,
+    "released, the scopes still on are announced, once")
+slash(ann, "scope group off")
+ann.ns.Protocol.LockSending()
+slash(ann, "scope group on")
+slash(ann, "scope group off")
+clearLog()
+ann.ns.Protocol.UnlockSending()
+run(6)
+check(sent({ from = "Ann Main" }) == 0, "a scope turned off again before the release announces nothing")
+world.group = {}
+bob.ns.settings.scopes.group = false
 
 clearLog()
 whisper(ann, eveMain)

@@ -44,7 +44,11 @@ L["Who's Who"] = true
 -- Settings
 L["Link this character"] = true
 L["Who's Who links your characters into one identity, so people recognise you on each character you link, and lets you recognise others across theirs. Identities are shared between players who use Who's Who; for those who don't, you can link their characters yourself."] = true
-L["When you whisper a player who also has this option on, you see each other's identity."] = true
+L["When you whisper a player who also has this option on, you see each other's identity. Turning it on shares right away with everyone you whispered within the time below; clear the history first to start from no one."] = true
+L["Clear history"] = true
+L["Clear the whisper history?"] = true
+L["Who's Who forgets which players you whispered: until you whisper them again, People I whisper no longer shares with them. This can't be undone."] = true
+L["Clear"] = true
 L["Data"] = true
 L["Forget"] = true
 L["Guild members who also have this option on see your identity, and you see theirs."] = true

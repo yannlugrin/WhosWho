@@ -70,6 +70,8 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - A whispers B. A sends `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`, B a `GET`, A the `REC`, and B's answer brings B's record the same way: each `/ww people` shows the other's character, confirmed.
 - On A, link or unlink a character: after 15 s, nothing goes to B (a whispered player is never in a broadcast). A whispers B: the announcement goes out, B sends a `GET` and follows the change.
 - A: `/reload`, then B whispers A: A sends a `GET` (B is still allowed from the saved whisper). `/reload` again, then log out and back in: the same.
+- In A's settings, **Clear history** is on the right of **People I whisper**, usable while it is off. It asks for a confirmation; after it, B whispering A brings no `GET` from A until A whispers B again.
+- Settings open, A grouped with B: turning **My party or raid** on sends nothing until the settings close, then one `1 ANNOUNCE … 1 1 0` on `PARTY`. Turned on then off again before closing: nothing.
 - In A's settings, **Whispers count for** is greyed out while **People I whisper** is off. Set it to **1 hour**; one hour after A's last whisper to B, B whispering A brings no `GET` from A.
 
 ## Reaching Players Who Come Later
