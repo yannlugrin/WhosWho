@@ -129,7 +129,6 @@ Planned:
 - `PLAYER_LOGIN`: decorations, settings.
 - `PLAYER_ENTERING_WORLD`: pruning, throttled.
 - `BN_CHAT_MSG_ADDON`: protocol over Battle.net.
-- `UPDATE_MOUSEOVER_UNIT`, tooltip post-call, whispers: lazy fetch on encounter.
 
 ### Secret Values
 
@@ -225,7 +224,7 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 | Type | Content | Sent |
 |---|---|---|
 | `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement, the revision of the guild list the sender holds | At login, level-up and logout, and after a change of revision, from a linked character, to the audiences of the enabled scopes; to the players a scope turned on, a group or guild joined or a friend added brings into them; to a player I whisper; in answer to an announcement that wants one (see Announcements) |
-| `GET` | identity ID | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend); planned: on encounter (whisper, group, tooltip) |
+| `GET` | identity ID | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend) |
 | `REC` | the signed identity record | In answer to `GET`s (see Sending a Record) |
 | `NOID` | nothing | From a character unlinked from my identity, in place of each of its announcements (see Removals) |
 
