@@ -127,7 +127,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 - A whispers B: right away, `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
 - A whispers B again: nothing more. After a change of A's revision, or 30 minutes after the last one, the next whisper sends the announcement again. Whispering a guild member (Guild scope on) sends none.
-- Once B's character is confirmed on A, A levels up (or changes its revision, or starts a logout): `Sent, WHISPER <B>: 1 ANNOUNCE …`. After a `/reload` of A, the same. After a real logout and login of A, nothing goes to B until A whispers B again.
+- Once B's character is confirmed on A, A levels up (or changes its revision, or starts a logout): `Sent, WHISPER <B>: 1 ANNOUNCE …`. After a `/reload` of A, the same. After a logout and a login of A more than 5 minutes later, A's login announcement goes to B if A whispered B in the 30 minutes before the logout; otherwise, or after playing another character in between, nothing goes to B until A whispers B again.
 - B on another linked character of the same ruleset, confirmed on A, whispers A and A answers: A's next level-up goes to that character only.
 - B whispers A: A sends nothing.
 - On B, `/ww scope whispers on`, then a change of A's revision and A whispers B: B, having whispered A, answers after about 5 s with `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0 0`. B whispering A again sends nothing more: the answer already reached A.

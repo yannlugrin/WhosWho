@@ -367,21 +367,21 @@ function Scopes.GroupReaches(name)
     return Scopes.Get("group") and groupMemberGuid(name) ~= nil
 end
 
--- One character for each shared person the character I play whispered since its login, within the whisper window: the
+-- One character for each shared person the character I play whispered since that time, within the whisper window: the
 -- confirmed character I last whispered with, sent or received, the one they most likely play. A person my guild, group
 -- or friends announcements reach is left out.
+---@param since number? seconds, from time(); nil gives no one
 ---@return string[] names
-local function whisperedPeople()
-    local guid = UnitGUID("player")
-    local loggedInAt, ruleset = Identity.LoggedInAt(guid), Identity.Ruleset(guid)
-    if not (Scopes.Get("whispers") and loggedInAt) then return {} end
+local function whisperedPeople(since)
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    if not (Scopes.Get("whispers") and since) then return {} end
 
-    local whisperedSinceLogin, lastCharacter = {}, {}
+    local whispered, lastCharacter = {}, {}
     for otherGuid, whisper in pairs(ns.data.whispers) do
         local person, character = People.Find(otherGuid)
         if person and character.state == "confirmed" and whisper.ruleset == ruleset then
             local sentAt = whisper.sentAt
-            if sentAt and sentAt >= loggedInAt and withinWhisperWindow(sentAt) then whisperedSinceLogin[person.id] = true end
+            if sentAt and sentAt >= since and withinWhisperWindow(sentAt) then whispered[person.id] = true end
             local at = math.max(sentAt or 0, whisper.receivedAt or 0)
             local last = lastCharacter[person.id]
             if not last or at > last.at then lastCharacter[person.id] = { name = whisper.name, at = at } end
@@ -389,7 +389,7 @@ local function whisperedPeople()
     end
 
     local names = {}
-    for id in pairs(whisperedSinceLogin) do
+    for id in pairs(whispered) do
         local name = lastCharacter[id].name
         if not (Scopes.GuildReaches(name) or Scopes.GroupReaches(name) or Scopes.FriendReaches(name)) then
             names[#names + 1] = name
@@ -398,10 +398,9 @@ local function whisperedPeople()
     return names
 end
 
----Every player my login announcement reaches, each once: the member channels (GUILD, PARTY or RAID), then one message
----to each online friend that no member channel reaches.
+-- The member channels (GUILD, PARTY or RAID), then one message to each online friend that no member channel reaches.
 ---@return WhosWho.Audience
-function Scopes.LoginAudience()
+local function membersAndFriends()
     local memberChannels, names = {}, {}
 
     if Scopes.Get("guild") and IsInGuild() then memberChannels[#memberChannels + 1] = "GUILD" end
@@ -418,11 +417,25 @@ function Scopes.LoginAudience()
     return { memberChannels = memberChannels, names = names }
 end
 
----Every player my other broadcasts reach, each once: the login audience, then one message to each person I whispered
----this session that no other way reaches.
+---Every player my login announcement reaches, each once: my members and friends, then one message to each person the
+---same character whispered in the loginWhispersSeconds setting before its previous logout, when the account's last logout
+---was that character's, that no other way reaches.
+---@return WhosWho.Audience
+function Scopes.LoginAudience()
+    local audience = membersAndFriends()
+    local guid, lastLogout = UnitGUID("player"), Identity.LastLogout()
+    local since = lastLogout and lastLogout.guid == guid and lastLogout.at - ns.Store.Advanced("loginWhispersSeconds") or nil
+    for _, name in ipairs(whisperedPeople(since)) do audience.names[#audience.names + 1] = name end
+    return audience
+end
+
+---Every player my other broadcasts reach, each once: my members and friends, then one message to each person I
+---whispered this session that no other way reaches.
 ---@return WhosWho.Audience
 function Scopes.BroadcastAudience()
-    local audience = Scopes.LoginAudience()
-    for _, name in ipairs(whisperedPeople()) do audience.names[#audience.names + 1] = name end
+    local audience = membersAndFriends()
+    for _, name in ipairs(whisperedPeople(Identity.LoggedInAt(UnitGUID("player")))) do
+        audience.names[#audience.names + 1] = name
+    end
     return audience
 end

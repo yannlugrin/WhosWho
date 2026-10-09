@@ -327,12 +327,13 @@ local function account(name)
     return { name = name }
 end
 
--- how: nil for a login long after the account's last logout (the world's clock does not move while every character of
--- the account is offline), "relog" for a login right after it, "reload" for a /reload, as PLAYER_ENTERING_WORLD tells.
+-- how: nil for a login long after the account's last logout, which is then forgotten (the world's clock does not move
+-- while every character of the account is offline), "relog" for a login right after it, "reload" for a /reload, as
+-- PLAYER_ENTERING_WORLD tells.
 local function login(acc, c, how)
     assert(not online(c.name), c.name .. " is already online")
     local identity = acc.saved and acc.saved.global.identity
-    if not how and identity and identity.lastLogout then identity.lastLogout.at = identity.lastLogout.at - 3600 end
+    if not how and identity then identity.lastLogout = nil end
     -- The UI files are not loaded: no first-login prompt.
     local session = { account = acc, character = c, frames = {}, online = true, ns = { IdentityDialogs = { AskToLink = function() end }, Launcher = { Register = function() end }, Tooltip = { Register = function() end } } }
     c.session = session
@@ -969,6 +970,39 @@ clearLog()
 levelUp(bob)
 run(1)
 check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0, "nor the next ones")
+
+-- Back 6 minutes later (not a quick relog): the people whispered in the 30 minutes before the logout get the login
+-- announcement.
+whisper(bob, eveMain)
+run(1)
+logout(bob)
+run(6 * 60)
+clearLog()
+bob = login(bobAccount, bobMain, "relog")
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
+    "the login announcement goes to the person whispered just before the logout")
+whisper(bob, eveMain)
+run(31 * 60)
+logout(bob)
+run(6 * 60)
+clearLog()
+bob = login(bobAccount, bobMain, "relog")
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0,
+    "not to one whispered more than 30 minutes before it")
+whisper(bob, eveMain)
+run(1)
+logout(bob)
+local bobThird = login(bobAccount, character("Bob Third", "Player-1-0000B003", MAGE), "relog")
+run(1)
+logout(bobThird)
+run(6 * 60)
+clearLog()
+bob = login(bobAccount, bobMain, "relog")
+run(1)
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0,
+    "nor when another character of mine played in between")
 
 -- Eve plays an alt she links, and whispers Bob from it.
 local eveAlt = character("Eve Alt", "Player-1-0000E002", PRIEST)

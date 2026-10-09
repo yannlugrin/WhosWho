@@ -1,6 +1,7 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Codec, Identity, People, RecordVerification, Scopes = ns.Codec, ns.Identity, ns.People, ns.RecordVerification, ns.Scopes
+local Codec, Identity, People, RecordVerification, Scopes, Store =
+    ns.Codec, ns.Identity, ns.People, ns.RecordVerification, ns.Scopes, ns.Store
 
 -- Announcements, record requests (GET) and records (REC) between clients.
 
@@ -12,7 +13,6 @@ ns.Protocol = Protocol
 LibStub("AceComm-3.0"):Embed(Protocol)
 
 local PREFIX = "WhosWho"
-local REVISION_WAIT_SECONDS = 15 -- wait before sending a new revision, gathering the changes that follow
 local REQUEST_WAIT_SECONDS = 5 -- wait before answering GETs, gathering the GETs that follow
 local MAX_WAIT_SECONDS = 300 -- longest wait from its start, however often it is pushed back
 local LOCK_WAIT_SECONDS = 5 -- between two tries while sending is locked
@@ -20,8 +20,7 @@ local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players 
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
 local ANNOUNCEMENT_WAIT_SECONDS = 5 -- before answering announcements, gathering the ones that follow
-local WHISPER_ANNOUNCEMENT_SECONDS = 30 * 60 -- after that, whispering a player sends my announcement again
-local QUICK_RELOG_SECONDS = 5 * 60 -- a login this soon after the same character's logout announces nothing
+-- The delays a player may change are advanced settings (Store.Advanced).
 
 local issecretvalue = issecretvalue or function() return false end
 
@@ -497,7 +496,7 @@ function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
     publishedRevision, publishedWithGuildScope = Identity.Revision(), Scopes.Get("guild")
-    Identity.OnRevisionChanged(function() scheduleRecordSending(REVISION_WAIT_SECONDS) end)
+    Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
     anonymousAtLogin = not Identity.IsLinked(UnitGUID("player"))
     -- The login announcement already reaches a group or guild I am in, and my friends online.
@@ -506,11 +505,12 @@ function Protocol.Start()
 end
 
 ---PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement. Nothing on a quick
----relog: the same character as the account's last logout, less than QUICK_RELOG_SECONDS ago, announcing the revision
+---relog: the same character as the account's last logout, less than the quickRelogSeconds setting ago, announcing the revision
 ---my last announcement to every audience already carried.
 function Protocol.AnnounceLogin()
     local guid, lastLogout = UnitGUID("player"), Identity.LastLogout()
-    local quickRelog = lastLogout and lastLogout.guid == guid and time() - lastLogout.at < QUICK_RELOG_SECONDS
+    local quickRelog = lastLogout and lastLogout.guid == guid
+        and time() - lastLogout.at < Store.Advanced("quickRelogSeconds")
     if quickRelog and Identity.AnnouncedRevision(guid) == Identity.LastBroadcastRevision() then return end
     announce(Scopes.LoginAudience(), UnitLevel("player"), true, true, sendQueued)
 end
@@ -581,7 +581,7 @@ function Protocol.FriendListChanged()
 end
 
 ---CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, sent right away, when
----none reached them this session, the last one carried an older revision, or it left WHISPER_ANNOUNCEMENT_SECONDS ago.
+---none reached them this session, the last one carried an older revision, or it left the whisperAnnouncementSeconds setting ago.
 ---A player my guild, group or friends announcements reach gets none. The player answers with theirs if they allow me.
 ---@param name any
 function Protocol.Whispered(name)
@@ -592,7 +592,8 @@ function Protocol.Whispered(name)
     if not message then return end
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
     local last = announcements[name]
-    if last and last.revision == revision and GetTime() - last.sentAt < WHISPER_ANNOUNCEMENT_SECONDS then return end
+    local announcedRecently = last and GetTime() - last.sentAt < Store.Advanced("whisperAnnouncementSeconds")
+    if announcedRecently and last.revision == revision then return end
 
     sendQueued(message, "WHISPER", name)
     rememberAnnouncement(name, revision)

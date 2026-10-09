@@ -19,6 +19,7 @@ ns.Store = Store
 ---@class WhosWho.Settings
 ---@field scopes { guild: boolean, friends: boolean, whispers: boolean, group: boolean }
 ---@field whisperHours integer the whisper window: how long a whisper counts
+---@field advanced WhosWho.AdvancedSettings delays of the protocol a player may change (no screen yet)
 ---@field chat { nickname: { enable: boolean } } the nickname after the sender's name
 ---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer }, note: { enable: boolean } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted; the start of my note about the person
 ---@field debugMessages boolean every Who's Who message sent or received, printed in chat
@@ -35,6 +36,10 @@ Store.DEFAULTS = {
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },
         whisperHours = 3,
+        advanced = {
+            revisionWaitSeconds = 15, quickRelogSeconds = 5 * 60, whisperAnnouncementSeconds = 30 * 60,
+            loginWhispersSeconds = 30 * 60,
+        },
         chat = { nickname = { enable = true } },
         tooltip = {
             nickname = { enable = true, position = "afterName" },
@@ -53,6 +58,25 @@ local LOGOUT_TABLES = { "people", "whispers" }
 ---@param data table
 local function createLogoutTables(data)
     for _, key in ipairs(LOGOUT_TABLES) do data[key] = data[key] or {} end
+end
+
+---Delays of the protocol a player may change, in seconds (no screen yet).
+---@class WhosWho.AdvancedSettings
+---@field revisionWaitSeconds number before a change of revision is announced, gathering the changes that follow
+---@field quickRelogSeconds number a login this soon after the same character's logout announces nothing
+---@field whisperAnnouncementSeconds number after that, whispering a player sends my announcement again
+---@field loginWhispersSeconds number at login, the people the same character whispered this long before its logout get
+---the announcement
+
+---An advanced setting: its saved value, otherwise its default. On PLAYER_LOGOUT, AceDB may already have removed the
+---values equal to their defaults.
+---@param key "revisionWaitSeconds"|"quickRelogSeconds"|"whisperAnnouncementSeconds"|"loginWhispersSeconds"
+---@return number
+function Store.Advanced(key)
+    local advanced = ns.settings.advanced
+    local value = advanced and advanced[key]
+    if value == nil then return Store.DEFAULTS.profile.advanced[key] end
+    return value
 end
 
 ---Moves settings saved under older keys to the current ones, and removes the older keys.
