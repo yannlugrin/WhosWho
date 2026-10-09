@@ -145,7 +145,7 @@ The game's own settings list: its section headers and controls. Each setting is 
     - **Make main**: a non-main character of a person I created; confirmation (frame 10);
     - **Unlink**: a character I added, not the main of a person I created; confirmation (frame 10).
   - Otherwise: the title **Who's Who**, then **Link character**: opens the person chooser (frame 9), where the character is linked to a person I know or starts a new one. One entry only, so there is no choice to get wrong before seeing the people I know.
-  - In the People tab, right-clicking a character in the detail panel opens the game's player menu (Whisper, Invite and its other actions) with this section.
+  - In the People tab, right-clicking a character in the detail panel, or a person in the list while we know which character they are playing (that character), opens Who's Who's own menu: the character's name as its title, **Whisper**, **Invite** (not for a character already in my group), then this section. (The game's player menu, opened by an add-on, would block its protected actions, such as Copy character name, and blame Who's Who.)
 
   **Share my identity** (sends my identity to that player and adds them to my selected people) only when the "Selected people" sharing option is on.
 - **Notices**: chat lines prefixed "Who's Who:", e.g. "3 people updated from the guild"; the same notice can also show as a toast. Links in notices use the game's bracketed link style.

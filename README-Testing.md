@@ -147,6 +147,13 @@ With A and B knowing each other (see Group), B sets a nickname (`/ww nick Bee`).
 - `/ww nick` on B (back to the main's name), B speaks from its main: no nickname on A's side.
 - A's own lines: never a nickname.
 
+## People Tab Menu
+
+Right-click a character in the People tab's detail panel, or a person in the list who is online (the character they play is shown after the nickname).
+
+- The menu shows the character's name as its title, **Whisper**, **Invite**, then the Who's Who section (Make main or Unlink when they apply; no Show person).
+- **Whisper** opens a whisper to that character in the chat box; **Invite** invites it. A character already in my group has no **Invite**. In the list, right-clicking a person whose online character isn't known opens nothing, and the selection doesn't change. No Lua error, and BugSack shows no blocked action.
+
 ## Still to Test
 
 - Inside an instance and during an encounter: add-on messages, secret values.

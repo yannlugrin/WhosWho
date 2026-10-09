@@ -31,6 +31,7 @@ local addonName, ns = ...
 ---@field PeopleDialogs WhosWho.PeopleDialogs
 ---@field Launcher WhosWho.Launcher
 ---@field Tooltip WhosWho.Tooltip
+---@field UnitMenu WhosWho.UnitMenu
 
 -- Add-on -----------------------------------------------------------------------------------------
 

@@ -119,6 +119,25 @@ end
 ---@field Characters FontString
 ---@field LastSeen FontString
 
+-- Opens a whisper to that player in the chat box, as the game's player menu does.
+local sendTell = ChatFrameUtil and ChatFrameUtil.SendTell or ChatFrame_SendTell
+
+-- A character's right-click menu: one of our own. The game's player menu, opened from add-on code, would run tainted,
+-- and its entries calling protected functions (Copy character name, Target) would be blocked and blamed on Who's Who.
+---@param owner Frame
+---@param name string
+---@param guid string
+local function openCharacterMenu(owner, name, guid)
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(name)
+        root:CreateButton(WHISPER, function() sendTell(name) end)
+        if not ns.Scopes.InMyGroup(guid) then
+            root:CreateButton(INVITE, function() C_PartyInfo.InviteUnit(name) end)
+        end
+        ns.UnitMenu.AddSection(root, { name = name, guid = guid, fromPeoplePanel = true })
+    end)
+end
+
 ---@param row WhosWho.PeopleRow
 local function createPersonRow(row)
     row.Selected = Lists.CreateRowHighlight(row)
@@ -142,7 +161,16 @@ local function createPersonRow(row)
     row.LastSeen = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     Lists.Place(row.LastSeen, row, columnByKey.LastSeen)
 
-    row:SetScript("OnClick", function(self) panel:Select(self:GetElementData().id) end)
+    -- Right-click: the menu of the character the person is playing, when it is known.
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:SetScript("OnClick", function(self, button)
+        local entry = self:GetElementData()
+        if button ~= "RightButton" then
+            panel:Select(entry.id)
+        elseif entry.onlineCharacter then
+            openCharacterMenu(self, entry.onlineCharacter.name, entry.onlineCharacter.guid)
+        end
+    end)
 end
 
 ---A person as the list shows it.
@@ -152,7 +180,7 @@ end
 ---@field source "confirmed"|"renamed"|"guild"|"unconfirmed"
 ---@field characterCount integer
 ---@field lastSeen number? seconds, from time()
----@field onlineCharacter { name: string, classID: integer }? the character the person is playing
+---@field onlineCharacter { guid: string, name: string, classID: integer }? the character the person is playing
 
 -- The grey last seen time is hard to read on the selection bar: it turns white there.
 local function setRowSelected(row, selected)
@@ -299,12 +327,11 @@ local function createCharacterRow(row)
     row.Details = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     row.Details:SetPoint("LEFT", row.StateGlyph, "RIGHT", 4, 0)
 
-    -- Right-click: the game's player menu, as on a name in chat.
     row:EnableMouse(true)
     row:SetScript("OnMouseUp", function(self, button)
         if button ~= "RightButton" then return end
         local character = self:GetElementData()
-        UnitPopup_OpenMenu("FRIEND", { name = character.name, guid = character.guid, fromPeoplePanel = true })
+        openCharacterMenu(self, character.name, character.guid)
     end)
 
     if skin then skin.SquareIcon(row.ClassIcon, iconFrame) end
@@ -452,7 +479,9 @@ local function listEntry(person, onlineGuids)
     for guid, character in pairs(person.chars) do
         characterCount = characterCount + 1
         if character.lastSeen and (not lastSeen or character.lastSeen > lastSeen) then lastSeen = character.lastSeen end
-        if onlineGuids[guid] then onlineCharacter = { name = character.name, classID = character.classID } end
+        if onlineGuids[guid] then
+            onlineCharacter = { guid = guid, name = character.name, classID = character.classID }
+        end
     end
     return {
         id = person.id, nickname = People.Nickname(person.id), source = Lists.NicknameSource(person),

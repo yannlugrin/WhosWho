@@ -56,7 +56,10 @@
         "WorldMapFrame",
         "GameTooltipTextLeft1",
         "MinimalSliderWithSteppersMixin",
-        "UnitPopup_OpenMenu"
+        "ChatFrame_SendTell",
+        "WHISPER",
+        "INVITE",
+        "C_PartyInfo"
     ],
     "Lua.type.weakUnionCheck": true
 }

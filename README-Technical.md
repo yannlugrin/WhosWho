@@ -59,7 +59,7 @@ WhosWho/
 │   └── Decorations/               Additions to the game's own frames
 │       ├── Chat.lua               Sender names in chat lines
 │       ├── Tooltip.lua            Nickname and "Also:" line in player tooltips
-│       └── UnitMenu.lua           Who's Who entry in players' right-click menus
+│       └── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People tab's own menu
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
 │   ├── Glyphs/                    Person, Pencil, Banner, Question, Hourglass: white 32×32, tinted in code

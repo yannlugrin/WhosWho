@@ -4,6 +4,12 @@ local _, ns = ...
 local L = ns.L
 local issecretvalue = issecretvalue or function() return false end
 
+-- The Who's Who section of a player's right-click menu: in the game's menus, and in the People tab's own menu.
+
+---@class WhosWho.UnitMenu
+local UnitMenu = {}
+ns.UnitMenu = UnitMenu
+
 -- The game's right-click menus on a player that get the Who's Who entry.
 local MENUS = {
     "MENU_UNIT_SELF", "MENU_UNIT_PLAYER", "MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_PARTY",
@@ -62,7 +68,10 @@ local function showMyIdentity()
     ns.Main.SelectTab(ns.Main.MyIdentity)
 end
 
-local function addEntry(_, root, contextData)
+---Adds the Who's Who section, after a divider, when it has an entry for that player.
+---@param root table the menu's root description
+---@param contextData table the game's menu context: unit, guid, name and surname, Battle.net account or chat line
+function UnitMenu.AddSection(root, contextData)
     if contextData.unit and not UnitIsFriend("player", contextData.unit) then return end
     local guid = playerGuid(contextData)
     if not guid or issecretvalue(guid) then return end
@@ -104,5 +113,5 @@ local function addEntry(_, root, contextData)
 end
 
 for _, menu in ipairs(MENUS) do
-    Menu.ModifyMenu(menu, addEntry)
+    Menu.ModifyMenu(menu, function(_, root, contextData) UnitMenu.AddSection(root, contextData) end)
 end

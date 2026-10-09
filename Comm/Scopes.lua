@@ -110,6 +110,17 @@ function Scopes.Friends()
     return friends
 end
 
+---Whether that character is another member of my group.
+---@param guid string
+---@return boolean
+function Scopes.InMyGroup(guid)
+    for _, unit in ipairs(groupUnits()) do
+        local unitGuid = UnitGUID(unit)
+        if unitGuid and notSecret(unitGuid) and unitGuid == guid then return true end
+    end
+    return false
+end
+
 local function friendGuid(name)
     local info = C_FriendList.GetFriendInfo(name)
     local guid = info and info.guid
