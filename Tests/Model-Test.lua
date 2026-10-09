@@ -157,7 +157,8 @@ do
     I.Forget()
     check(not I.IsRegistered(G1) and not I.IsRegistered(G2), "forgetting leaves every character unregistered, linked or not")
     check(ns.data.identity.nickname == nil and I.Main() == nil, "forgetting removes the nickname and the main")
-    check(I.AnnouncedRevision(G1) == I.Revision(), "a character unlinked by forgetting announces that revision")
+    check(I.AnnouncedRevision(G1) == nil and I.IsRemoved(G1),
+        "a character unlinked by forgetting announces nothing and declares no identity")
 end
 
 -- Settings migration ------------------------------------------------------------------------------
@@ -187,6 +188,11 @@ do
         and s.tooltipOtherCharacters == nil, "the table form of the other characters setting moves too")
     s = profile({})
     check(s.chat.nickname.enable and s.tooltip.nickname.position == "afterName", "nothing saved: the defaults stay")
+
+    local data = { identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true } } } }
+    ns.Store.MigrateData(data)
+    check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
+        and data.identity.chars[G2].removedAt == nil, "a 0.1.0-beta.1 removal revision becomes a removal time")
 end
 
 -- Record validation -------------------------------------------------------------------------------
@@ -541,7 +547,7 @@ end
 fresh()
 do
     local P, AC = ns.People, ns.AutomaticChanges
-    local A, B, C, D, F = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64), string.rep("d", 64), string.rep("f", 64)
+    local A, B, C, D = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64), string.rep("d", 64)
     local G6, G7, G8 = "Player-70-0000000F", "Player-70-00000010", "Player-70-00000011"
     local function latest() return AC.List()[1] end
 
@@ -583,25 +589,13 @@ do
         and change.toChars[G1] == nil, "taken: confirmed after, and the characters the identity already had")
 
     P.Rename(A, "Annie")
-    P.Accept(makeRecord(A, 2, { G2 }, "Anna"))
-    change = latest()
-    check(change.kind == "dropped" and change.to == nil and change.from.nickname == "Ann"
-        and change.from.customNickname == "Annie", "a dropped character logged, with the nicknames before the revision")
-    check(count(change.chars) == 1 and change.chars[G3] ~= nil, "only the characters this revision dropped")
     before = #AC.List()
-    P.Accept(makeRecord(A, 3, { G2 }, "Anna"))
-    check(#AC.List() == before, "a revision dropping nothing logs nothing")
+    P.Accept(makeRecord(A, 2, { G2 }, "Anna"))
+    check(#AC.List() == before and not P.Exists(G3), "a character the player removed leaves, silently")
 
     P.AddCharacter(A, G8, INFO)
     P.Accept({ v = 1, id = A, rev = 4, chars = {}, guild = { consent = true } })
-    change = latest()
-    check(change.kind == "forgotten" and change.from.nickname == "Anna" and change.from.customNickname == "Annie",
-        "a forgotten identity logged with my nickname for it")
-    check(count(change.chars) == 2 and change.chars[G2].state == "listed" and change.chars[G8].state == "added",
-        "with its characters and my added alts")
-    before = #AC.List()
-    P.Accept({ v = 1, id = F, rev = 1, chars = {}, guild = { consent = true } })
-    check(#AC.List() == before, "forgetting an identity I never had logs nothing")
+    check(#AC.List() == before and P.Get(A) == nil, "an identity whose player unlinked every character is forgotten, silently")
 
     check(AC.UnreadCount() == before, "every change unread")
     AC.MarkRead(latest())
@@ -609,7 +603,9 @@ do
 
     for i = 1, 105 do
         clock = 100 + i
-        AC.Record("dropped", P.Get(B), nil, {})
+        AC.BeginOperation(P.Get(D))
+        AC.Record("moved", P.Get(B), P.Get(D), {})
+        AC.EndOperation()
     end
     check(#AC.List() == 100 and AC.List()[1].time == 205 and AC.List()[100].time == 106,
         "only the 100 most recent changes kept, most recent first")
@@ -625,14 +621,12 @@ do
     P.Accept(makeRecord(B, 1, { G2, G3 }, "Bob"))
     P.AddCharacter(A, G4, INFO)
     P.Accept(makeRecord(B, 2, { G2, G4 }, "Bobby"))
-    local moved, dropped = AC.List()[1], AC.List()[2]
-    check(#AC.List() == 2 and dropped.kind == "dropped" and dropped.chars[G3] ~= nil and moved.kind == "moved"
-        and moved.chars[G4] ~= nil, "a revision dropping one character and taking my alt logs both")
-    check(dropped.from.nickname == "Bob" and moved.from.id == A and moved.to.nickname == "Bobby",
-        "dropped shows the identity before the revision, moved the identity the alt joins")
+    local moved = AC.List()[1]
+    check(#AC.List() == 1 and moved.kind == "moved" and moved.chars[G4] ~= nil,
+        "a revision removing one character and taking my alt logs only the alt")
+    check(moved.from.id == A and moved.to.nickname == "Bobby", "moved shows the identity the alt joins")
     check(count(moved.toChars) == 1 and moved.toChars[G2] and moved.chars[G4].stateAfter == "listed",
-        "already there: the identity's characters after the dropped ones left")
-    check(dropped.toChars == nil and dropped.chars[G3].stateAfter == nil, "a dropped change has no after")
+        "already there: the identity's characters after the removed ones left")
 
     P.Accept(makeRecord(C, 1, { G5 }, "Cee"))
     check(not P.Confirm(B, G5, 10), "a confirmation of a character the record does not list yet waits")
@@ -768,13 +762,12 @@ do
     I.Unlink(G2)
     check(I.AnnouncedRevision(G2) == nil, "a character never linked announces nothing")
     check(I.AnnouncedRevision(G1) == I.Revision(), "a linked character announces the current revision")
+    check(not I.IsRemoved(G2), "a character never linked declares nothing either")
     I.Unlink(G1)
-    local removal = I.Revision()
-    I.SetNickname("Other")
-    check(I.AnnouncedRevision(G1) == removal and removal < I.Revision(),
-        "an unlinked character announces the revision that removed it")
+    check(I.AnnouncedRevision(G1) == nil and I.IsRemoved(G1) and ns.data.identity.chars[G1].removedAt == time(),
+        "an unlinked character announces nothing, it declares no identity, from its removal time")
     I.Link(G1)
-    check(I.AnnouncedRevision(G1) == I.Revision() and ns.data.identity.chars[G1].removedInRevision == nil,
+    check(I.AnnouncedRevision(G1) == I.Revision() and not I.IsRemoved(G1),
         "linked again, it announces the current revision")
 
     local revisionBefore = I.Revision()
@@ -808,6 +801,43 @@ do
     check(not r.shared and r.state == "added" and r.nickname == "Tank Bob", "manual person, main's name as nickname")
     check(R.Resolve(G5) == nil, "unknown character")
 
+end
+
+-- Characters declaring no identity --------------------------------------------------------------------------
+
+fresh()
+do
+    local P, AC = ns.People, ns.AutomaticChanges
+    local A, B = string.rep("a", 64), string.rep("b", 64)
+    P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann"))
+    P.Confirm(A, G1, 10)
+    P.AddCharacter(A, G3, INFO)
+    local before = #AC.List()
+
+    clock = 500
+    P.DeclaredNoIdentity(G2)
+    check(not P.Exists(G2) and P.Get(A) ~= nil and #AC.List() == before,
+        "a listed character declaring no identity leaves its identity, silently")
+    clock = 600
+    P.DeclaredNoIdentity(G2)
+    check(ns.data.noIdentity[G2] == 600, "the time of its last declaration is kept")
+    P.DeclaredNoIdentity(G3)
+    check(P.Exists(G3), "a character I added stays")
+    P.Accept(makeRecord(A, 2, { G1, G2 }, "Ann"))
+    check(not P.Exists(G2), "a record listing it again leaves it out")
+    P.DeclaredNoIdentity(G1)
+    check(P.Get(A) == nil and not P.Exists(G3) and #AC.List() == before,
+        "an identity left without the player's characters is forgotten, my added alt with it, silently")
+    check(not P.IsNewer(A, 2) and P.IsNewer(A, 3), "older copies of it are stale")
+    check(P.Accept(makeRecord(A, 3, { G1, G2 }, "Ann")) == "forgotten" and P.Get(A) == nil,
+        "a revision whose characters all declared no identity stores nothing")
+
+    P.Accept(makeRecord(B, 1, { G4 }, "Bob"))
+    P.DeclaredNoIdentity(G4)
+    P.Confirm(B, G4, 12)
+    P.Accept(makeRecord(B, 2, { G4 }, "Bob"))
+    check(P.Get(B) and P.Get(B).chars[G4] and P.Get(B).chars[G4].state == "confirmed",
+        "a character confirming an identity again is stored again")
 end
 
 if failures > 0 then

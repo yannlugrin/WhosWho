@@ -21,7 +21,7 @@ Open the window with the minimap button, the add-on compartment next to the mini
 ## Privacy
 
 - Nothing leaves your client as long as you haven't linked a character to your identity.
-- A character you unlink keeps telling the players who knew it, when you log in or out on it, that it left your identity, so they drop it even if they were offline when you unlinked it. It still carries your identity's ID.
+- A character you unlink tells the players who knew it, each time you log in on it, that it belongs to no identity, so they drop it, even if they were offline when you unlinked it. That message doesn't carry your identity: nobody can trace the character back to you from it.
 - Who's Who never sends BattleTags or Battle.net account information.
 - Your identity is signed with a key that stays on your computer, so nobody else can change it, even when it is passed along by other players.
 - What a player shares about themselves can't be changed by others. You can still give anyone your own nickname for them; only you see it.

@@ -11,6 +11,7 @@ ns.Store = Store
 ---@field people table<string, WhosWho.Person> by identity ID
 ---@field nextManual integer number of the next manual person ("M<n>")
 ---@field forgotten table<string, integer> identity ID -> revision in which the player unlinked every character
+---@field noIdentity table<string, number> GUID -> when (time()) the character last declared no identity (NOID), until it confirms one
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
 
@@ -28,6 +29,7 @@ Store.DEFAULTS = {
         identity = { rev = 1, chars = {} },
         nextManual = 1,
         forgotten = {},
+        noIdentity = {},
         automaticChanges = {},
     },
     profile = {
@@ -78,12 +80,23 @@ function Store.MigrateSettings(settings)
     settings.tooltipOtherCharacters = nil
 end
 
+---Moves data saved in older formats to the current one.
+---@param data WhosWho.Data
+function Store.MigrateData(data)
+    -- 0.1.0-beta.1: an unlinked character kept the revision that removed it, which it announced; its removal time is
+    -- unknown, so it gets the migration's.
+    for _, character in pairs(data.identity.chars) do
+        if character.removedInRevision then character.removedAt, character.removedInRevision = time(), nil end
+    end
+end
+
 ---Sets ns.db, ns.data and ns.settings. Call on ADDON_LOADED.
 function Store.Init()
     local db = LibStub("AceDB-3.0"):New(addonName .. "DB", Store.DEFAULTS, true)
     ns.db = db
     ns.data = db.global
     createLogoutTables(ns.data)
+    Store.MigrateData(ns.data)
     ns.settings = db.profile
     Store.MigrateSettings(ns.settings)
 end

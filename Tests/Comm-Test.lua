@@ -456,9 +456,11 @@ check(ann.ns.People.Get(annId) == nil, "my own REC coming back from the guild is
 
 -- Login announcement, GET, REC, confirmation -----------------------------------------------------------
 
-local bob = login(bobAccount, bobMain)
-run(1)
+-- Without a linked character, Bob would take nothing that arrives. He links while Ann is offline.
 logout(ann)
+local bob = login(bobAccount, bobMain)
+slash(bob, "link")
+run(30)
 clearLog()
 ann = login(annAccount, annMain)
 run(1)
@@ -497,7 +499,8 @@ check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1, "late
 -- Two requesters on the guild share one REC ----------------------------------------------------------
 
 local cat = login(catAccount, catMain)
-run(1)
+slash(cat, "link")
+run(30)
 slash(ann, "nick Annie")
 -- The revision change reaches both; the next ones come from GETs.
 run(30)
@@ -762,22 +765,30 @@ end
 logout(bob)
 logout(ann)
 ann = login(annAccount, annAlt)
+clearLog()
 slash(ann, "unlink")
--- Past the change's wait, and the GETs its announcement brings.
-run(70)
+run(30)
+check(sent({ from = "Ann Alt", type = "NOID", distribution = "GUILD" }) == 1
+    and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0,
+    "a character unlinked while played declares no identity, without the identity ID")
 bob = login(bobAccount, bobMain)
-run(1)
+run(10)
 check(holderId(bob, annAlt.guid) == annId, "a player offline at the removal still lists the character")
+local changesBefore = #bob.ns.AutomaticChanges.List()
+logout(ann)
 clearLog()
-levelUp(ann)
+ann = login(annAccount, annAlt)
 run(10)
-check(sent({ from = "Bob Main", type = "GET" }) == 1 and not bob.ns.People.Exists(annAlt.guid)
-    and bob.ns.People.Get(annId) ~= nil, "the removed character's announcement brings its removal")
+check(sent({ from = "Ann Alt", type = "NOID" }) == 1 and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0
+    and sent({ from = "Ann Alt", type = "GET" }) == 0 and sent({ from = "Bob Main", type = "GET" }) == 0,
+    "at each login, the removed character declares no identity, and asks nothing")
+check(not bob.ns.People.Exists(annAlt.guid) and bob.ns.People.Get(annId) ~= nil,
+    "the holder removes the character, and keeps the identity")
+check(#bob.ns.AutomaticChanges.List() == changesBefore, "silently")
 clearLog()
-levelUp(ann)
+levelUp(bob)
 run(10)
-check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) > 0 and sent({ from = "Bob Main", type = "GET" }) == 0,
-    "once the removal is known, the removed character's announcement asks nothing")
+check(sent({ from = "Ann Alt" }) == 0, "an anonymous character answers no announcement and asks for no record")
 
 -- Unlinking every character -----------------------------------------------------------------------------
 
@@ -785,33 +796,34 @@ logout(bob)
 logout(ann)
 ann = login(annAccount, annMain)
 slash(ann, "unlink")
-run(10)
+run(30)
 logout(ann)
+run(1)
 bob = login(bobAccount, bobMain)
 run(1)
 check(bob.ns.People.Get(annId) ~= nil, "a player offline at the last removal still holds the identity")
 login(annAccount, annMain)
 run(10)
 check(bob.ns.People.Get(annId) == nil and not bob.ns.People.Exists(annMain.guid),
-    "the last removed character's announcement makes others forget the identity")
+    "the last removed character declaring no identity makes others forget the identity")
 
 -- Debug messages -----------------------------------------------------------------------------------------
 
 local printed = {}
-bob.env.print = function(...) printed[#printed + 1] = table.concat({ ... }, " ") end
-levelUp(annMain.session)
+cat.env.print = function(...) printed[#printed + 1] = table.concat({ ... }, " ") end
+levelUp(bob)
 run(1)
 check(not printed[1], "nothing printed while debug messages are off")
-slash(bob, "debug on")
+slash(cat, "debug on")
 printed = {}
-levelUp(annMain.session)
+levelUp(bob)
 run(1)
 local traced = false
 for _, line in ipairs(printed) do
-    if line:find("Received, GUILD Ann Main: 1 ANNOUNCE " .. annId, 1, true) then traced = true end
+    if line:find("Received, GUILD Bob Main: 1 ANNOUNCE " .. bob.ns.Identity.Id(), 1, true) then traced = true end
 end
 check(traced, "with debug messages on, a received announcement is printed")
-slash(bob, "debug off")
+slash(cat, "debug off")
 
 clearLog()
 slash(dan, "nick Danny")
@@ -1115,7 +1127,7 @@ check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "GUILD" }) == 
     and lastWantsAnnouncement({ from = "Eve Main", distribution = "GUILD" }),
     "joining a guild announces to it right away")
 run(6)
-check(sent({ type = "ANNOUNCE", target = "Eve Main" }) == 2, "and the members answer")
+check(sent({ type = "ANNOUNCE", target = "Eve Main" }) == 3, "and the members answer")
 clearLog()
 fire(eve, "PLAYER_GUILD_UPDATE", "player")
 run(6)
@@ -1176,6 +1188,152 @@ annMain.resting = false
 ann.env.StaticPopupDialogs.QUIT.OnHide({ timeleft = 12 })
 world.group = {}
 ann.ns.settings.scopes.group = false
+
+-- Anonymous characters ---------------------------------------------------------------------------------
+
+-- Dan never linked a character: whatever arrives is ignored.
+danMain.friends = { annMain }
+fire(dan, "FRIENDLIST_UPDATE")
+ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(ann.ns.Identity.SignedRecord()), "WHISPER", "Dan Main")
+run(1)
+check(dan.ns.People.Get(ann.ns.Identity.Id()) == nil, "without any linked character, a REC is not stored")
+-- Dan held Ann's identity from before, as after a Forget me.
+local annBefore = ann.ns.Identity.SignedRecord()
+dan.ns.People.Accept(annBefore)
+slash(ann, "nick Ann For Dan")
+run(30)
+ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(ann.ns.Identity.SignedRecord()), "WHISPER", "Dan Main")
+run(1)
+check(dan.ns.People.Get(ann.ns.Identity.Id()).signedRecord.rev == annBefore.rev,
+    "nor a newer revision of an identity held from before")
+levelUp(ann)
+run(1)
+check(select(2, dan.ns.People.Find(annMain.guid)).state == "listed", "nor a confirmation")
+danMain.friends = {}
+fire(dan, "FRIENDLIST_UPDATE")
+
+-- Bob plays an alt he never linked, in the guild where his main is linked.
+local bobAlt = character("Bob Alt", "Player-1-0000B002", ROGUE, GUILD)
+local fayAccount = account("Fay")
+local fayMain = character("Fay Main", "Player-1-0000F001", PRIEST, GUILD)
+logout(bob)
+local bobAltSession = login(bobAccount, bobAlt)
+run(10)
+local fay = login(fayAccount, fayMain)
+slash(fay, "link")
+run(30)
+local fayId = fay.ns.Identity.Id()
+check(sent({ from = "Bob Alt", type = "GET" }) == 0, "an anonymous character asks for no record")
+
+clearLog()
+slash(ann, "nick Ann Anonymous")
+run(30)
+check(sent({ from = "Bob Alt" }) == 0, "nor for a newer revision of an identity it holds")
+local annSigned = ann.ns.Identity.SignedRecord()
+ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(annSigned), "GUILD")
+run(1)
+check(bobAltSession.ns.People.Nickname(ann.ns.Identity.Id()) == "Ann Anonymous",
+    "it stores a newer revision of an identity it holds that passes")
+
+-- Fay's REC on the guild, answering the others' GETs, already reached Bob's alt.
+bobAltSession.ns.People.Forget(fayId)
+world.group = { bobAlt, fayMain }
+bobAltSession.ns.settings.scopes.group = true
+fay.ns.Protocol:SendCommMessage("WhosWho", fay.ns.Codec.RecordUpdate(fay.ns.Identity.SignedRecord()), "PARTY")
+run(1)
+check(bobAltSession.ns.People.Get(fayId) == nil, "never a new identity from the group")
+fay.ns.Protocol:SendCommMessage("WhosWho", fay.ns.Codec.RecordUpdate(fay.ns.Identity.SignedRecord()), "GUILD")
+run(1)
+check(bobAltSession.ns.People.Get(fayId) ~= nil, "a new identity from the guild where one of my characters is linked")
+world.group = {}
+bobAltSession.ns.settings.scopes.group = false
+
+clearLog()
+fay.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. bobAltSession.ns.Identity.Id(), "WHISPER", "Bob Alt")
+run(10)
+check(sent({ from = "Bob Alt", type = "REC" }) == 0, "an anonymous character answers no GET")
+
+clearLog()
+slash(bobAltSession, "link")
+run(30)
+check(sent({ from = "Bob Alt", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and lastWantsAnnouncement({ from = "Bob Alt", distribution = "GUILD" }),
+    "linking the character I play, anonymous at login, asks for everyone's announcement")
+check(sent({ type = "ANNOUNCE", target = "Bob Alt" }) >= 2, "and the guild members answer")
+clearLog()
+slash(bobAltSession, "nick Bob Again Again")
+run(30)
+check(sent({ from = "Bob Alt", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and not lastWantsAnnouncement({ from = "Bob Alt", distribution = "GUILD" }), "only that first announcement")
+run(40)
+clearLog()
+fay.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. bobAltSession.ns.Identity.Id(), "WHISPER", "Bob Alt")
+run(1)
+slash(bobAltSession, "unlink")
+run(30)
+check(sent({ from = "Bob Alt", type = "REC" }) == 0, "a GET still waiting when I unlink the character I play gets no answer")
+logout(fay)
+logout(bobAltSession)
+bob = login(bobAccount, bobMain)
+run(10)
+
+-- A removal reaching a player met in a group -------------------------------------------------------------
+
+local gusAccount = account("Gus")
+local gusMain = character("Gus Main", "Player-1-00006001", WARRIOR)
+local gus = login(gusAccount, gusMain)
+slash(gus, "link")
+gus.ns.settings.scopes.group, gus.ns.settings.scopes.whispers = true, true
+eve.ns.settings.scopes.group = true
+world.group = { gusMain, eveMain }
+fire(gus, "GROUP_ROSTER_UPDATE")
+fire(eve, "GROUP_ROSTER_UPDATE")
+run(30)
+check(holderId(eve, gusMain.guid) == gus.ns.Identity.Id(), "Eve met Gus in a group")
+world.group = {}
+fire(gus, "GROUP_ROSTER_UPDATE")
+logout(eve)
+slash(gus, "unlink")
+run(30)
+eve = login(eveAccount, eveMain)
+run(10)
+check(eve.ns.People.Exists(gusMain.guid), "Eve, offline at the removal and in no guild or friend list with Gus, still holds it")
+
+clearLog()
+whisper(gus, eveMain)
+run(1)
+check(sent({ from = "Gus Main", type = "NOID", target = "Eve Main" }) == 1, "whispering a player sends NOID")
+check(not eve.ns.People.Exists(gusMain.guid), "and the player drops the character")
+whisper(gus, eveMain)
+run(1)
+check(sent({ from = "Gus Main", type = "NOID" }) == 1, "once per session")
+
+clearLog()
+world.group = { gusMain, eveMain }
+fire(gus, "GROUP_ROSTER_UPDATE")
+run(1)
+check(sent({ from = "Gus Main", type = "NOID", distribution = "PARTY" }) == 1, "joining a group sends NOID to it")
+fire(eve, "GROUP_ROSTER_UPDATE")
+run(6)
+check(sent({ from = "Gus Main", type = "NOID", target = "Eve Main" }) == 1,
+    "and so does the answer to a member joining, even without any linked character")
+check(sent({ from = "Gus Main", type = "ANNOUNCE" }) == 0, "never an announcement")
+
+-- Gus logs in on the character he unlinked, changes his identity from it, then links it again.
+logout(gus)
+gus = login(gusAccount, gusMain)
+run(10)
+slash(gus, "nick Gus Again")
+run(30)
+clearLog()
+slash(gus, "link")
+run(30)
+check(sent({ from = "Gus Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1
+    and lastWantsAnnouncement({ from = "Gus Main", distribution = "PARTY" }),
+    "a NOID sent meanwhile does not use up the request for everyone's announcement")
+world.group = {}
+eve.ns.settings.scopes.group = false
+logout(gus)
 
 -- A quick relog ----------------------------------------------------------------------------------------
 

@@ -4,7 +4,7 @@ local Record = ns.Record
 local LibSerialize, LibDeflate = LibStub("LibSerialize"), LibStub("LibDeflate")
 
 -- Message text: "<version> <type> <fields>". Announcements and GETs are plain text that fits in one message; a REC
--- carries the record serialized, compressed and encoded for the add-on channel.
+-- carries the record serialized, compressed and encoded for the add-on channel; NOID has no fields.
 
 ---@class WhosWho.Codec
 local Codec = {}
@@ -28,7 +28,11 @@ local VERSION = "1"
 ---@field type "REC"
 ---@field signedRecord WhosWho.SignedIdentityRecord structure validated, signature not verified
 
----@alias WhosWho.Message WhosWho.Announcement|WhosWho.RecordRequest|WhosWho.RecordUpdate
+---A character declaring that it belongs to no identity.
+---@class WhosWho.NoIdentity
+---@field type "NOID"
+
+---@alias WhosWho.Message WhosWho.Announcement|WhosWho.RecordRequest|WhosWho.RecordUpdate|WhosWho.NoIdentity
 
 -- Encoding ---------------------------------------------------------------------------------------
 
@@ -55,6 +59,11 @@ end
 function Codec.RecordUpdate(signedRecord)
     local payload = LibDeflate:EncodeForWoWAddonChannel(LibDeflate:CompressDeflate(LibSerialize:Serialize(signedRecord)))
     return ("%s REC %s"):format(VERSION, payload)
+end
+
+---@return string
+function Codec.NoIdentity()
+    return ("%s NOID"):format(VERSION)
 end
 
 -- Decoding ---------------------------------------------------------------------------------------
@@ -96,13 +105,20 @@ local function decodeRecordUpdate(fields)
     return { type = "REC", signedRecord = signedRecord }
 end
 
-local DECODERS = { ANNOUNCE = decodeAnnouncement, GET = decodeRecordRequest, REC = decodeRecordUpdate }
+-- Fields a later version adds are ignored.
+local function decodeNoIdentity()
+    return { type = "NOID" }
+end
+
+local DECODERS = {
+    ANNOUNCE = decodeAnnouncement, GET = decodeRecordRequest, REC = decodeRecordUpdate, NOID = decodeNoIdentity,
+}
 
 ---Unknown versions and types, and malformed fields, give nil.
 ---@param text string
 ---@return WhosWho.Message?
 function Codec.Decode(text)
-    local version, messageType, fields = text:match("^(%d+) (%u+) (.*)$")
+    local version, messageType, fields = text:match("^(%d+) (%u+) ?(.*)$")
     if version ~= VERSION then return nil end
     local decode = DECODERS[messageType]
     return decode and decode(fields)

@@ -47,9 +47,12 @@ end
 
 -- Announcements ----------------------------------------------------------------------------------
 
--- My announcement from the character I play, nil while it never was linked.
+-- My announcement from the character I play; from a character I unlinked, NOID in its place; nil while it never was
+-- linked.
 local function announcementText(level, acceptsGet, wantsAnnouncement)
-    local revision = Identity.AnnouncedRevision(UnitGUID("player"))
+    local guid = UnitGUID("player")
+    if Identity.IsRemoved(guid) then return Codec.NoIdentity() end
+    local revision = Identity.AnnouncedRevision(guid)
     return revision and Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement)
 end
 
@@ -151,8 +154,13 @@ local function fewestMessages(names)
     return bestChoice, bestWhispered
 end
 
--- Every requester my scopes still allow, in the fewest messages.
+-- Every requester my scopes still allow, in the fewest messages. An anonymous character answers nobody: the
+-- requesters ask again at my next announcement.
 local function answerRequesters(recordUpdate)
+    if not Identity.IsLinked(UnitGUID("player")) then
+        requesters = {}
+        return
+    end
     local names = {}
     for name in pairs(requesters) do
         if Scopes.Allows(name) then names[#names + 1] = name end
@@ -165,25 +173,33 @@ local function answerRequesters(recordUpdate)
     for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(), "WHISPER", name) end
 end
 
+-- Whether the character I play was anonymous at login, until its first announcement.
+local anonymousAtLogin = false
+
 -- A change of revision, to every audience: the players holding an older one ask for it. When the Guild scope was
--- turned on since the last one, the guild members send theirs back: until then they ignored mine, and I theirs.
+-- turned on since the last one, the guild members send theirs back: until then they ignored mine, and I theirs. When
+-- the character I play was anonymous at login, everyone sends theirs back: it asked nobody.
 local function announceRevision()
+    local guid = UnitGUID("player")
     local level = UnitLevel("player")
-    local message = announcementText(level, true, false)
+    local wantsAnnouncements = anonymousAtLogin
+    local message = announcementText(level, true, wantsAnnouncements)
     if not message then return end
 
+    -- Only an announcement asks: NOID, from a character I unlinked, leaves the flag for when it is linked again.
+    if Identity.IsLinked(guid) then anonymousAtLogin = false end
     local guildScopeTurnedOn = Scopes.Get("guild") and not publishedWithGuildScope
     publishedWithGuildScope = Scopes.Get("guild")
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do
-        if channel == "GUILD" and guildScopeTurnedOn then
+        if channel == "GUILD" and guildScopeTurnedOn and not wantsAnnouncements then
             sendQueued(announcementText(level, true, true), channel)
         else
             sendQueued(message, channel)
         end
     end
     for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
-    Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(UnitGUID("player")))
+    Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(guid))
 end
 
 local function sendRecords()
@@ -339,26 +355,32 @@ local function receiveAnnouncement(announcement, distribution, sender)
     local id = announcement.id
     if id == Identity.Id() then return end
 
-    local guid = Scopes.SenderGuid(sender, distribution)
-    if guid then
-        People.Confirm(id, guid, announcement.level)
-        Scopes.SetRelationships(guid, sender)
+    -- My answer, whatever the character I play: what it sends, if anything, is decided when the answers go out.
+    if announcement.wantsAnnouncement and Scopes.Allows(sender) then queueAnnouncement(sender) end
+    local linked = Identity.IsLinked(UnitGUID("player"))
+
+    -- An anonymous character only updates the identities I hold, and asks nothing; without any linked character, it
+    -- takes nothing.
+    if not (linked or (People.Get(id) and Identity.LinkedCount() > 0)) then return end
+
+    local senderGuid = Scopes.SenderGuid(sender, distribution)
+    if senderGuid then
+        People.Confirm(id, senderGuid, announcement.level)
+        Scopes.SetRelationships(senderGuid, sender)
     end
 
     if not announcement.acceptsGet then
         -- The owner left: a GET would get no answer, and my announcement would not reach them.
         requests[id] = nil
         announcementRecipients[sender] = nil
-    elseif People.IsNewer(id, announcement.rev) and Scopes.Allows(sender) then
+    elseif linked and People.IsNewer(id, announcement.rev) and Scopes.Allows(sender) then
         requestRecord(id, sender)
     end
-
-    if announcement.wantsAnnouncement and Scopes.Allows(sender) then queueAnnouncement(sender) end
 end
 
 ---@param request WhosWho.RecordRequest
 local function receiveRecordRequest(request, sender)
-    if request.id ~= Identity.Id() or reachedRecently(sender) then return end
+    if request.id ~= Identity.Id() or not Identity.IsLinked(UnitGUID("player")) or reachedRecently(sender) then return end
     requesters[sender] = true
     scheduleRecordSending(REQUEST_WAIT_SECONDS)
 end
@@ -376,6 +398,11 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     local signedRecord = recordUpdate.signedRecord
     if signedRecord.id == Identity.Id() or not sharedChannel(distribution, sender) then return end
     if not People.IsNewer(signedRecord.id, signedRecord.rev) then return end
+    -- An anonymous character stores a new identity only from the guild of one of my linked characters.
+    if not (Identity.IsLinked(UnitGUID("player")) or People.Get(signedRecord.id)
+        or (distribution == "GUILD" and Scopes.LinkedCharacterInGuild())) then
+        return
+    end
 
     RecordVerification.Queue(signedRecord, function(verified)
         if People.Accept(verified) ~= "stale" then
@@ -385,11 +412,19 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     end)
 end
 
+-- A character declaring no identity leaves the shared identity holding it.
+local function receiveNoIdentity(distribution, sender)
+    local guid = Scopes.SenderGuid(sender, distribution)
+    if guid and not Identity.Characters()[guid] then People.DeclaredNoIdentity(guid) end
+end
+
 local function receive(_, text, distribution, sender)
     if issecretvalue(text) or issecretvalue(sender) then return end
     traceReceived(text, distribution, sender)
     local message = Codec.Decode(text)
     if not message then return end
+    -- Without a linked character, I take nothing; a character I unlinked still answers an announcement with NOID.
+    if Identity.LinkedCount() == 0 and message.type ~= "ANNOUNCE" then return end
 
     if message.type == "ANNOUNCE" then
         receiveAnnouncement(message, distribution, sender)
@@ -397,6 +432,8 @@ local function receive(_, text, distribution, sender)
         receiveRecordRequest(message, sender)
     elseif message.type == "REC" then
         receiveRecordUpdate(message, distribution, sender)
+    elseif message.type == "NOID" then
+        receiveNoIdentity(distribution, sender)
     end
 end
 
@@ -433,6 +470,7 @@ function Protocol.Start()
     publishedRevision, publishedWithGuildScope = Identity.Revision(), Scopes.Get("guild")
     Identity.OnRevisionChanged(function() scheduleRecordSending(REVISION_WAIT_SECONDS) end)
     Scopes.OnEnabled(scopeEnabled)
+    anonymousAtLogin = not Identity.IsLinked(UnitGUID("player"))
     -- The login announcement already reaches a group or guild I am in, and my friends online.
     wasInGroup, wasInGuild = IsInGroup(), IsInGuild()
     friendGuids = guidsOf(Scopes.Friends())
@@ -513,11 +551,12 @@ function Protocol.Whispered(name)
     if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
     if not (Scopes.Get("whispers") and Scopes.Allows(name)) then return end
     if Scopes.GuildReaches(name) or Scopes.GroupReaches(name) or Scopes.FriendReaches(name) then return end
+    local message = announcementText(UnitLevel("player"), true, true)
+    if not message then return end
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
-    if not revision then return end
     local last = announcements[name]
     if last and last.revision == revision and GetTime() - last.sentAt < WHISPER_ANNOUNCEMENT_SECONDS then return end
 
-    sendQueued(announcementText(UnitLevel("player"), true, true), "WHISPER", name)
+    sendQueued(message, "WHISPER", name)
     rememberAnnouncement(name, revision)
 end

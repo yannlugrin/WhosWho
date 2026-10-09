@@ -408,36 +408,41 @@ local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
     return true
 end
 
----Stores a newer revision of a player's record. A revision without characters means the player unlinked them all:
----the person is forgotten, my nickname and added alts with it.
+-- Forgets a shared person whose player unlinked every character, my nickname and added alts with it, silently: the
+-- Review tab would invite me to add them again by hand. Its revision then makes an older copy relayed later stale.
+local function forgetUnlinked(id, rev)
+    forget(id)
+    ns.data.forgotten[id] = rev
+end
+
+---Stores a newer revision of a player's record. Its characters that declared no identity are left out. A revision
+---without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my nickname
+---and added alts with it.
 ---@param signedRecord WhosWho.SignedIdentityRecord already validated and verified
 ---@return "updated"|"stale"|"forgotten"
 function People.Accept(signedRecord)
-    local people, forgotten = ns.data.people, ns.data.forgotten
+    local people, noIdentity = ns.data.people, ns.data.noIdentity
     if not People.IsNewer(signedRecord.id, signedRecord.rev) then return "stale" end
     local sharedPerson = people[signedRecord.id]
 
-    if not signedRecord.main then
-        if sharedPerson then
-            AutomaticChanges.Record("forgotten", sharedPerson, nil, sharedPerson.chars)
-            forget(signedRecord.id)
-            changed()
-        end
-        forgotten[signedRecord.id] = signedRecord.rev
+    local recordCharacters = {}
+    for guid, recordCharacter in pairs(signedRecord.chars) do
+        if not noIdentity[guid] then recordCharacters[guid] = recordCharacter end
+    end
+    if not next(recordCharacters) then
+        forgetUnlinked(signedRecord.id, signedRecord.rev)
+        if sharedPerson then changed() end
         return "forgotten"
     end
-    forgotten[signedRecord.id] = nil
+    ns.data.forgotten[signedRecord.id] = nil
 
-    -- Characters the player dropped leave; my added alts stay. Recorded before the revision changes the person.
+    -- Characters the player removed leave, silently; my added alts stay.
     if sharedPerson then
-        local droppedGuids = {}
         for guid, character in pairs(sharedPerson.chars) do
-            if character.state ~= "added" and not signedRecord.chars[guid] then droppedGuids[guid] = true end
-        end
-        if next(droppedGuids) then AutomaticChanges.Record("dropped", sharedPerson, nil, droppedGuids) end
-        for guid in pairs(droppedGuids) do
-            sharedPerson.chars[guid] = nil
-            unindexCharacter(guid, signedRecord.id)
+            if character.state ~= "added" and not recordCharacters[guid] then
+                sharedPerson.chars[guid] = nil
+                unindexCharacter(guid, signedRecord.id)
+            end
         end
     end
 
@@ -451,7 +456,7 @@ function People.Accept(signedRecord)
 
     -- Update or add the characters this revision lists.
     AutomaticChanges.BeginOperation(sharedPerson)
-    for guid, recordCharacter in pairs(signedRecord.chars) do
+    for guid, recordCharacter in pairs(recordCharacters) do
         storeCharacter(sharedPerson, guid, recordCharacter, pending[guid])
     end
     AutomaticChanges.EndOperation()
@@ -468,6 +473,8 @@ end
 ---@return boolean confirmed false while it waits
 function People.Confirm(id, guid, level)
     local person = ns.data.people[id]
+    -- The character declares an identity again.
+    ns.data.noIdentity[guid] = nil
 
     -- The player's record must list the character; otherwise the confirmation waits for the revision that does.
     local recordCharacter = person and person.signedRecord and person.signedRecord.chars[guid]
@@ -490,6 +497,27 @@ function People.Confirm(id, guid, level)
     AutomaticChanges.EndOperation()
     if stored then changed() end
     return stored
+end
+
+---A message from that character declared that it belongs to no identity (NOID): it leaves the shared identity holding it,
+---listed or confirmed, silently; a character I added stays. A shared person left without characters of the player's
+---is forgotten. Records listing it leave it out until a message from it confirms an identity.
+---@param guid string
+function People.DeclaredNoIdentity(guid)
+    ns.data.noIdentity[guid] = time()
+    local person, character = People.Find(guid)
+    if not (person and person.signedRecord and character.state ~= "added") then return end
+
+    person.chars[guid] = nil
+    unindexCharacter(guid, person.id)
+    for _, other in pairs(person.chars) do
+        if other.state ~= "added" then
+            changed()
+            return
+        end
+    end
+    forgetUnlinked(person.id, person.signedRecord.rev)
+    changed()
 end
 
 ---Activity of a character from any source, a relay included. Never confirms; kept only when more recent.

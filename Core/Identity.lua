@@ -26,7 +26,7 @@ ns.Identity = Identity
 ---@field level integer at the end of the last session
 ---@field lastSeen number seconds, from time(): end of the last session (or its start, after a crash)
 ---@field guild integer? club ID of the character's guild (C_Club.GetGuildClubId)
----@field removedInRevision integer? unlinked: the first revision without it, which it announces
+---@field removedAt number? seconds, from time(): when it was unlinked after being linked; it declares no identity (NOID)
 ---@field loggedInAt number? seconds, from time(): when its current or last session started; a /reload keeps it
 
 ---@return WhosWho.IdentityData
@@ -169,6 +169,17 @@ function Identity.SetGuild(guid, clubId)
     if character then character.guild = clubId end
 end
 
+---Whether one of this account's linked characters is in that guild.
+---@param clubId integer
+---@param ruleset WhosWho.Ruleset
+---@return boolean
+function Identity.HasLinkedCharacterInGuild(clubId, ruleset)
+    for _, character in pairs(data().chars) do
+        if character.linked and character.guild == clubId and character.ruleset == ruleset then return true end
+    end
+    return false
+end
+
 ---Whether one of this account's characters is in that guild.
 ---@param clubId integer
 ---@param ruleset WhosWho.Ruleset the ruleset of the character seen in that guild
@@ -180,14 +191,20 @@ function Identity.HasCharacterInGuild(clubId, ruleset)
     return false
 end
 
----The revision a character announces: the current one when linked, the one that removed it when unlinked.
+---The revision a character announces: the current one, while it is linked.
 ---@param guid string
----@return integer? revision nil for a character that never was linked
+---@return integer? revision nil for a character that is not linked
 function Identity.AnnouncedRevision(guid)
     local character = data().chars[guid]
-    if not character then return nil end
-    if character.linked then return data().rev end
-    return character.removedInRevision
+    return character and character.linked and data().rev or nil
+end
+
+---Whether the character was unlinked after being linked: it declares no identity (NOID).
+---@param guid string
+---@return boolean
+function Identity.IsRemoved(guid)
+    local character = data().chars[guid]
+    return character ~= nil and character.removedAt ~= nil
 end
 
 ---@return integer
@@ -241,7 +258,7 @@ local function setLinked(guid, linked)
     if linked and not identity.main then identity.main = guid end
     if not linked and identity.main == guid then identity.main = findFirstLinked(identity) end
     nextRevision()
-    character.removedInRevision = not linked and identity.rev or nil
+    character.removedAt = not linked and time() or nil
 end
 
 ---Adds one of this account's characters to the identity. The first one linked becomes the main.
@@ -257,8 +274,9 @@ function Identity.Unlink(guid)
     setLinked(guid, false)
 end
 
----Unlinks every character and removes the nickname, in one revision: players who hold the identity forget it once
----that revision reaches them. Every character becomes unregistered, so each one is asked again at its next login.
+---Unlinks every character and removes the nickname, in one revision: each unlinked character declares no identity, and
+---players forget the identity once its last character did. Every character becomes unregistered, so each one is asked
+---again at its next login.
 function Identity.Forget()
     local identity = data()
     local unlinked = {}
@@ -270,7 +288,7 @@ function Identity.Forget()
 
     identity.main, identity.nickname = nil, nil
     nextRevision()
-    for _, character in ipairs(unlinked) do character.removedInRevision = identity.rev end
+    for _, character in ipairs(unlinked) do character.removedAt = time() end
 end
 
 -- Main and nickname ------------------------------------------------------------------------------

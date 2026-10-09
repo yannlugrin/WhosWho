@@ -320,6 +320,15 @@ function Scopes.GroupChannel()
     return IsInRaid() and "RAID" or "PARTY"
 end
 
+---Whether one of my linked characters is in my current character's guild, in its ruleset: an anonymous character may
+---store a new identity from that guild.
+---@return boolean
+function Scopes.LinkedCharacterInGuild()
+    local clubId = IsInGuild() and C_Club.GetGuildClubId()
+    if not clubId then return false end
+    return Identity.HasLinkedCharacterInGuild(clubId, Identity.Ruleset(UnitGUID("player")))
+end
+
 ---Whether that player is in my guild and the Guild scope is on: the GUILD channel reaches it.
 ---@param name string
 ---@return boolean

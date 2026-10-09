@@ -44,13 +44,18 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 1. B logs out.
 2. On A, unlink a character, then play that character.
 3. B logs back in; group A and B.
-4. Re-log A.
+4. Re-log A on that character.
 
-- A: `Sent, PARTY: 1 ANNOUNCE <A's ID> <removal rev> …`, then B's `GET`, then a `REC`.
-- B: `/ww people` no longer lists the removed character.
-- A second re-log of A: B sends no `GET` (it already has that revision).
+- A: `Sent, PARTY: 1 NOID`, without A's ID, and no announcement.
+- B: no `GET`; `/ww people` no longer lists the removed character, and B's Review tab shows nothing.
+- A second re-log of A: the same `NOID`, which changes nothing on B.
 
-**Unlinking every character** works the same way: after the last unlink, B, offline at the time, forgets A's identity once the last removed character announces. `/ww people <A's character>` on B then finds no one.
+**Removal reaching a player met in a group.** A and B not in a guild together, not friends; A whispered B and they grouped, so B holds A's character. B logs out; on A, unlink that character (while playing it); B logs back in.
+
+- A whispers B: `Sent, WHISPER <B>: 1 NOID`; B's `/ww people` no longer lists the character. A whispering B again: nothing more.
+- A and B group again: `Sent, PARTY: 1 NOID` from the one joining, and A answers B's group announcement with `1 NOID` by whisper. Never an announcement from A.
+
+**Unlinking every character** works the same way: after the last unlink, B, offline at the time, forgets A's identity once the last removed character sends `NOID`. `/ww people <A's character>` on B then finds no one.
 
 ## Scopes
 

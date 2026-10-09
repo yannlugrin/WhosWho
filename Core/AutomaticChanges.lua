@@ -13,8 +13,6 @@ local KEPT_CHANGES = 100
 ---| "merged"     # my manual identity merged into a player's identity
 ---| "moved"      # an alt I added to a shared identity moved to another player's identity
 ---| "taken"      # a character a player listed, taken by the identity a message from it confirmed
----| "dropped"    # characters a new revision of the player's record no longer lists
----| "forgotten"  # an identity whose player unlinked every character
 
 ---An identity as it was when the change happened.
 ---@class WhosWho.IdentitySnapshot
