@@ -68,7 +68,12 @@ local function announce(audience, level, acceptsGet, wantsAnnouncement, send)
     if acceptsGet then Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(UnitGUID("player"))) end
 end
 
+-- Whether my logout announcement went out, until the logout is canceled: nothing else goes out meanwhile, so it is the
+-- last message the other players get from me.
+local loggingOut = false
+
 local function sendQueued(message, channel, name)
+    if loggingOut then return end
     traceSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name)
 end
@@ -111,6 +116,7 @@ local function reachedRecently(name)
 end
 
 local function sendRecord(message, channel, name)
+    if loggingOut then return end
     local delivery = { revision = Identity.Revision() }
     deliveries[name or channel] = delivery
     traceSent(message, channel, name)
@@ -208,7 +214,8 @@ local function sendRecords()
         C_Timer.After(sendAt - GetTime(), sendRecords)
         return
     end
-    if locked then
+    -- Held while I edit my identity, and once my logout announcement went out (a logout makes the next login announce).
+    if locked or loggingOut then
         C_Timer.After(LOCK_WAIT_SECONDS, sendRecords)
         return
     end
@@ -326,6 +333,7 @@ end
 local requests = {}
 
 local function sendRequest(id, name)
+    if loggingOut then return end
     local message = Codec.RecordRequest(id)
     traceSent(message, "WHISPER", name)
     Protocol:SendCommMessage(PREFIX, message, "WHISPER", name)
@@ -492,9 +500,6 @@ function Protocol.AnnounceLevel(level)
     announce(Scopes.BroadcastAudience(), level, true, false, sendQueued)
 end
 
--- Whether my logout announcement went out, until the logout is canceled.
-local loggingOut = false
-
 ---When the logout or quit countdown starts, and on an immediate logout or quit: once per logout. Sent directly, since
 ---the throttled queue would not empty in time; a GET would get no answer. Nothing on a /reload, and SendAddonMessage
 ---fails during a logout's PLAYER_LOGOUT.
@@ -502,6 +507,17 @@ function Protocol.AnnounceLogout()
     if loggingOut then return end
     loggingOut = true
     announce(Scopes.BroadcastAudience(), UnitLevel("player"), false, false, sendNow)
+end
+
+---PLAYER_LOGOUT (a logout or a /reload): when a REC is still owed (requesters waiting, the wait running, or a REC not
+---left yet), the next login announces again, even on a quick relog: the requesters dropped their GET at my logout
+---announcement.
+function Protocol.SessionEnding()
+    local recordOwed = next(requesters) ~= nil or sendAt ~= nil
+    for _, delivery in pairs(deliveries) do
+        if not delivery.leftAt then recordOwed = true end
+    end
+    if recordOwed then Identity.SetLastBroadcastRevision(nil) end
 end
 
 ---The logout or quit countdown is canceled: nothing is sent, and the next logout is announced again. The players who

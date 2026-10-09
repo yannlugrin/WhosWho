@@ -109,6 +109,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 - A logs out: when the countdown starts, `Sent, PARTY: 1 ANNOUNCE … 0 0 0`. B receives it.
 - A logs out and moves to cancel: nothing after the cancel. A logs out again: the logout announcement goes out again.
+- On A, `/ww nick Test`, then right away log out (countdown): after the logout announcement, nothing more from A, not even the change's announcement 15 s later. A's next login announces it. The same, canceled: the change's announcement goes out after the cancel.
 - `/reload` A: no logout announcement.
 - A logs out in an inn (immediate): B receives `1 ANNOUNCE … 0 0 0`.
 
@@ -118,6 +119,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - A logs out to character select and back in on the same character within 5 minutes: no login announcement either.
 - The same more than 5 minutes later, or after playing another character in between: the login announcement goes out.
 - On A, `/ww nick Test`, then `/reload` within 15 s: the login announcement goes out, carrying the new revision; B sends a `GET`.
+- On A, `/ww nick Test2`; about 16 s later, when B's `GET` arrives, log out in an inn (immediate): A's next login, even right away, announces again, and B sends its `GET` again.
 
 **Whispering.** On A, `/ww scope whispers on`; A and B not grouped, not in a guild together; `/reload` both first, so neither has reached the other this session.
 

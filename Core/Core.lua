@@ -124,6 +124,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
         ns.Identity.LoggedOut(UnitGUID("player"))
+        ns.Protocol.SessionEnding()
         ns.Scopes.ForgetOldWhispers()
     elseif event == "PLAYER_CAMPING" or event == "PLAYER_QUITING" then
         -- The 20-second logout or quit countdown starts.

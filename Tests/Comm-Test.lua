@@ -1375,6 +1375,43 @@ check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 
     "a change of revision not announced before the logout is announced at login")
 run(30)
 
+slash(ann, "nick Ann Owed")
+-- The change is announced at 15 seconds, and a GET arrives; the REC would leave 5 seconds later.
+run(16)
+logout(ann)
+clearLog()
+ann = login(annAccount, annMain, "relog")
+run(1)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1,
+    "a REC still owed at logout: the next login announces again, even right after")
+run(10)
+check(bob.ns.People.Nickname(annId) == "Ann Owed", "and the requester, who dropped its GET at my logout, gets the record")
+
+slash(ann, "nick Ann Leaving")
+run(1)
+fire(ann, "PLAYER_CAMPING")
+clearLog()
+logout(bob)
+bob = login(bobAccount, bobMain)
+run(20)
+check(sent({ from = "Ann Main" }) == 0,
+    "after my logout announcement, nothing else goes out: neither the change's announcement nor an answer to a login")
+logout(ann)
+clearLog()
+ann = login(annAccount, annMain, "relog")
+run(10)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and bob.ns.People.Nickname(annId) == "Ann Leaving", "the next login announces it, even right after")
+
+slash(ann, "nick Ann Staying")
+run(1)
+fire(ann, "PLAYER_CAMPING")
+ann.env.StaticPopupDialogs.CAMP.OnCancel(nil, nil, "clicked")
+clearLog()
+run(30)
+check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and bob.ns.People.Nickname(annId) == "Ann Staying", "a canceled logout lets the change's announcement go out")
+
 -- Announcement format -----------------------------------------------------------------------------------
 
 do
