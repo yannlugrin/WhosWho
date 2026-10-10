@@ -7,6 +7,9 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Fixed
 
 - **Unlinked characters**: receiving one could throw an error.
+- **Joining a guild**: your identity now reaches the guild's members right away, and theirs reach you. The game drops a new member's add-on messages to the guild until their next login, so until then Who's Who whispers each online member instead.
+- **Guild members who just joined** are answered even before your guild roster lists them.
+- **Logging in**: a guild member or friend in your guild whom you whispered before logging out no longer gets your login announcement a second time by whisper.
 
 ## [0.1.0] - 2026-10-10
 

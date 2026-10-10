@@ -63,6 +63,7 @@ local function announce(audience, level, acceptsGet, wantsAnnouncement, send)
     if not message then return end
 
     for _, channel in ipairs(audience.memberChannels) do send(message, channel) end
+    for _, name in ipairs(audience.guildMembers) do send(message, "WHISPER", name) end
     for _, name in ipairs(audience.names) do send(message, "WHISPER", name) end
     if acceptsGet then Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(UnitGUID("player"))) end
 end
@@ -142,7 +143,7 @@ local MEMBER_CHANNEL_CHOICES = {
 local function fewestMessages(names)
     local reachedByGuild, reachedByGroup = {}, {}
     for _, name in ipairs(names) do
-        reachedByGuild[name] = Scopes.GuildReaches(name)
+        reachedByGuild[name] = Scopes.CanSendOnGuild() and Scopes.GuildReaches(name)
         reachedByGroup[name] = Scopes.GroupReaches(name)
     end
 
@@ -196,14 +197,12 @@ local function announceRevision()
     if Identity.IsLinked(guid) then anonymousAtLogin = false end
     local guildScopeTurnedOn = Scopes.Get("guild") and not publishedWithGuildScope
     publishedWithGuildScope = Scopes.Get("guild")
+    local guildMessage = guildScopeTurnedOn and not wantsAnnouncements and announcementText(level, true, true) or message
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do
-        if channel == "GUILD" and guildScopeTurnedOn and not wantsAnnouncements then
-            sendQueued(announcementText(level, true, true), channel)
-        else
-            sendQueued(message, channel)
-        end
+        sendQueued(channel == "GUILD" and guildMessage or message, channel)
     end
+    for _, name in ipairs(audience.guildMembers) do sendQueued(guildMessage, "WHISPER", name) end
     for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
     Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(guid))
 end
@@ -423,6 +422,10 @@ local function receive(_, text, distribution, sender)
     traceReceived(text, distribution, sender)
     local message = Codec.Decode(text)
     if not message then return end
+    -- A member who joined the guild since my roster was read.
+    if distribution == "GUILD" and not Scopes.ReceivedOnGuild(sender) and message.type == "ANNOUNCE" then
+        C_GuildInfo.GuildRoster()
+    end
     -- Without a linked character, I take nothing; a character I unlinked still answers an announcement with NOID.
     if Identity.LinkedCount() == 0 and message.type ~= "ANNOUNCE" then return end
 
@@ -504,7 +507,8 @@ function Protocol.Start()
     friendGuids = guidsOf(Scopes.Friends())
 end
 
----PLAYER_LOGIN, after Protocol.Start: every player it reaches answers with their announcement. Nothing on a quick
+---PLAYER_ENTERING_WORLD of a login or a /reload, after Protocol.Start: every player it reaches answers with their
+---announcement. Nothing on a quick
 ---relog: the same character as the account's last logout, less than the quickRelogSeconds setting ago, announcing the revision
 ---my last announcement to every audience already carried.
 function Protocol.AnnounceLogin()
@@ -559,14 +563,33 @@ function Protocol.GroupRosterChanged()
     announceToChannel(Scopes.GroupChannel())
 end
 
----PLAYER_GUILD_UPDATE for my character: on joining a guild, my announcement to it, which every member answers with
----theirs.
+-- Whether my announcement to the guild I joined waits for its roster: my messages on GUILD reach no one until my next
+-- login (Scopes.CanSendOnGuild), so it goes to each online member, which the roster gives.
+local guildJoinAnnouncementPending = false
+
+---PLAYER_GUILD_UPDATE for my character: on joining a guild, my announcement to it once its roster arrives, which every
+---member answers with theirs.
 function Protocol.GuildChanged()
     if wasInGuild == nil then return end
     local inGuild = IsInGuild()
     local joined = inGuild and not wasInGuild
     wasInGuild = inGuild
-    if joined and Scopes.Get("guild") then announceToChannel("GUILD") end
+    -- A guild update while already in the guild keeps the announcement waiting.
+    if joined then
+        Scopes.GuildJoined()
+        guildJoinAnnouncementPending = Scopes.Get("guild")
+    elseif not inGuild then
+        guildJoinAnnouncementPending = false
+    end
+end
+
+---GUILD_ROSTER_UPDATE, after Scopes.GuildRosterChanged: the announcement to the guild I joined, to each online member.
+function Protocol.GuildRosterChanged()
+    if not guildJoinAnnouncementPending or GetNumGuildMembers() == 0 then return end
+    guildJoinAnnouncementPending = false
+    local message = announcementText(UnitLevel("player"), true, true)
+    if not message then return end
+    for _, name in ipairs(Scopes.OnlineGuildMembers()) do sendQueued(message, "WHISPER", name) end
 end
 
 ---FRIENDLIST_UPDATE, after Scopes.FriendListChanged: my announcement to each friend added, which they answer with theirs.

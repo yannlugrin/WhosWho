@@ -16,6 +16,8 @@ local issecretvalue = issecretvalue or function() return false end
 ---Every player a message for all my enabled scopes reaches.
 ---@class WhosWho.Audience
 ---@field memberChannels WhosWho.Channel[] GUILD, PARTY or RAID: one message reaches every member
+---@field guildMembers string[] the online members of my guild, one message each, in place of GUILD while my messages on
+---it reach no one (Scopes.CanSendOnGuild)
 ---@field names string[] players reached by no member channel, one message each
 
 -- Sources ----------------------------------------------------------------------------------------
@@ -62,6 +64,29 @@ local function notSecret(...)
         if issecretvalue((select(i, ...))) then return false end
     end
     return true
+end
+
+-- Senders of a message on GUILD that my roster did not list then, by name, until it does: the game delivers GUILD
+-- messages only from members of my guild. Emptied when my guild changes.
+---@type table<string, true>
+local unlistedGuildSenders = {}
+
+-- Whether that player is a member of my current guild: in my roster, or a sender on GUILD it does not list yet. Until
+-- the roster loads (at login), a confirmed character of that name last seen in my current character's guild.
+local function guildMember(name)
+    if C_GuildInfo.MemberExistsByName(name) or unlistedGuildSenders[name] then return true end
+    if GetNumGuildMembers() > 0 or not IsInGuild() then return false end
+
+    local ownCharacterGuid = UnitGUID("player")
+    local clubId, ruleset = Identity.GuildId(ownCharacterGuid), Identity.Ruleset(ownCharacterGuid)
+    local person = clubId and ruleset and People.FindConfirmedByName(name, ruleset)
+    if not person then return false end
+    for _, character in pairs(person.chars) do
+        if character.state == "confirmed" and character.name == name and character.ruleset == ruleset then
+            return character.guild == clubId
+        end
+    end
+    return false
 end
 
 -- A member of my current guild, from the roster; stops at the name.
@@ -248,6 +273,9 @@ function Scopes.GuildRosterChanged()
         end
     end
 
+    for name in pairs(unlistedGuildSenders) do
+        if C_GuildInfo.MemberExistsByName(name) then unlistedGuildSenders[name] = nil end
+    end
     Identity.SetGuild(UnitGUID("player"), clubId)
     People.UpdateGuildMembers(clubId, memberGuids)
     People.Activity(activities)
@@ -255,6 +283,7 @@ end
 
 ---PLAYER_GUILD_UPDATE for my character: a guild left, or joined (its roster follows).
 function Scopes.GuildChanged()
+    unlistedGuildSenders = {}
     if IsInGuild() then
         C_GuildInfo.GuildRoster()
         return
@@ -347,7 +376,7 @@ end
 function Scopes.Allows(name)
     local guild, friends = Scopes.Get("guild"), Scopes.Get("friends")
     local whispersOn = Scopes.Get("whispers")
-    if guild and C_GuildInfo.MemberExistsByName(name) then return true end
+    if guild and guildMember(name) then return true end
     if friends and C_FriendList.GetFriendInfo(name) then return true end
     if Scopes.Get("group") and groupMemberGuid(name) then return true end
     if whispersOn then
@@ -390,11 +419,48 @@ function Scopes.LinkedCharacterInGuild()
     return Identity.HasLinkedCharacterInGuild(clubId, Identity.Ruleset(UnitGUID("player")))
 end
 
+---A message from that player came on GUILD, so it is a member of my guild, even when my roster does not list it yet.
+---@param name string
+---@return boolean listed whether my roster lists that player
+function Scopes.ReceivedOnGuild(name)
+    if C_GuildInfo.MemberExistsByName(name) then return true end
+    unlistedGuildSenders[name] = true
+    return false
+end
+
+-- Workaround for a WoW Forever bug (checked in game 2026-10-10): after joining a guild, a character's add-on messages on
+-- GUILD reach no one, not even its own echo, until it logs in again; it still receives the guild's, and its guild chat
+-- works; a /reload does not end it. Until then, what would go on GUILD goes by whisper to each online member. Remove
+-- Scopes.GuildJoined, Scopes.CanSendOnGuild, Identity.GuildJoined and Identity.JoinedGuildSinceLogin, and their
+-- callers, once a character can send on GUILD right after joining.
+
+---PLAYER_GUILD_UPDATE: the character I play joined a guild.
+function Scopes.GuildJoined()
+    Identity.GuildJoined(UnitGUID("player"), C_Club.GetGuildClubId())
+end
+
+---Whether my add-on messages on GUILD reach the guild: not from a character that joined its guild since its last login.
+---@return boolean
+function Scopes.CanSendOnGuild()
+    return not Identity.JoinedGuildSinceLogin(UnitGUID("player"))
+end
+
+---The online members of my guild but me, from the roster.
+---@return string[] names
+function Scopes.OnlineGuildMembers()
+    local names, ownName = {}, ns.UnitWholeName("player")
+    for i = 1, GetNumGuildMembers() do
+        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+        if name and notSecret(name, online) and online and name ~= ownName then names[#names + 1] = name end
+    end
+    return names
+end
+
 ---Whether that player is in my guild and the Guild scope is on: the GUILD channel reaches it.
 ---@param name string
 ---@return boolean
 function Scopes.GuildReaches(name)
-    return Scopes.Get("guild") and C_GuildInfo.MemberExistsByName(name)
+    return Scopes.Get("guild") and guildMember(name)
 end
 
 ---Whether that player is my WoW friend and the Friends scope is on: my announcements to my friends reach it.
@@ -442,13 +508,21 @@ local function whisperedPeople(since)
     return names
 end
 
--- The member channels (GUILD, PARTY or RAID), then one message to each online friend that no member channel reaches.
+-- The member channels (GUILD, PARTY or RAID); in place of GUILD while my messages on it reach no one, one message to
+-- each online guild member that the group channel does not reach; then one message to each online friend that no
+-- member channel reaches.
 ---@return WhosWho.Audience
 local function membersAndFriends()
-    local memberChannels, names = {}, {}
+    local memberChannels, guildMembers, names = {}, {}, {}
 
-    if Scopes.Get("guild") and IsInGuild() then memberChannels[#memberChannels + 1] = "GUILD" end
+    local guild = Scopes.Get("guild") and IsInGuild()
+    if guild and Scopes.CanSendOnGuild() then memberChannels[#memberChannels + 1] = "GUILD" end
     if Scopes.Get("group") and IsInGroup() then memberChannels[#memberChannels + 1] = Scopes.GroupChannel() end
+    if guild and not Scopes.CanSendOnGuild() then
+        for _, name in ipairs(Scopes.OnlineGuildMembers()) do
+            if not Scopes.GroupReaches(name) then guildMembers[#guildMembers + 1] = name end
+        end
+    end
 
     if Scopes.Get("friends") then
         for _, friend in ipairs(Scopes.Friends()) do
@@ -458,7 +532,7 @@ local function membersAndFriends()
         end
     end
 
-    return { memberChannels = memberChannels, names = names }
+    return { memberChannels = memberChannels, guildMembers = guildMembers, names = names }
 end
 
 ---Every player my login announcement reaches, each once: my members and friends, then one message to each person the

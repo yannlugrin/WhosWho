@@ -95,7 +95,10 @@ local function deliver(message)
     if message.onSent then message.onSent() end
 
     local receivers = {}
-    if message.distribution == "GUILD" then
+    -- WoW Forever: a character that joined its guild this session reaches no one on GUILD (see Scopes.CanSendOnGuild).
+    if message.distribution == "GUILD" and message.from.joinedGuild then
+        return
+    elseif message.distribution == "GUILD" then
         for _, c in ipairs(guildMembers(sender.guild)) do receivers[#receivers + 1] = online(c.name) end
     elseif message.distribution == "PARTY" or message.distribution == "RAID" then
         for _, c in ipairs(world.group) do receivers[#receivers + 1] = online(c.name) end
@@ -241,27 +244,41 @@ local function newEnvironment(session)
         end
     end
 
+    -- My roster: empty from the login until the roster I request comes back, session.rosterDelay seconds later; then
+    -- the guild's members, but those in session.rosterUnlisted until the next roster I request comes back.
+    local function roster()
+        local members = {}
+        if not session.rosterLoaded then return members end
+        for _, member in ipairs(guildMembers(c.guild)) do
+            if not (session.rosterUnlisted and session.rosterUnlisted[member.name]) then members[#members + 1] = member end
+        end
+        return members
+    end
+
     env.IsInGuild = function() return c.guild ~= nil end
     env.C_Club = { GetGuildClubId = function() return c.guild end }
-    env.GetNumGuildMembers = function() return #guildMembers(c.guild) end
+    env.GetNumGuildMembers = function() return #roster() end
     env.GetGuildRosterInfo = function(i)
-        local member = guildMembers(c.guild)[i]
+        local member = roster()[i]
         local info = { member.name }
         info[4], info[9], info[17] = member.level, online(member.name) ~= nil, member.guid
         return unpack(info, 1, 17)
     end
     -- An offline member last logged in two days and three hours ago.
     env.GetGuildRosterLastOnline = function(i)
-        local member = guildMembers(c.guild)[i]
+        local member = roster()[i]
         if online(member.name) then return nil end
         return 0, 0, 2, 3
     end
     env.C_GuildInfo = {
         GuildRoster = function()
-            world.timers[#world.timers + 1] = { at = world.clock, session = session, fn = function() fire(session, "GUILD_ROSTER_UPDATE") end }
+            world.timers[#world.timers + 1] = { at = world.clock + (session.rosterDelay or 0), session = session, fn = function()
+                session.rosterLoaded, session.rosterUnlisted = true, nil
+                fire(session, "GUILD_ROSTER_UPDATE")
+            end }
         end,
         MemberExistsByName = function(name)
-            for _, member in ipairs(guildMembers(c.guild)) do
+            for _, member in ipairs(roster()) do
                 if member.name == name then return true end
             end
             return false
@@ -987,6 +1004,7 @@ check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 0, 
 -- Back 6 minutes later (not a quick relog): the people whispered in the 30 minutes before the logout get the login
 -- announcement.
 whisper(bob, eveMain)
+whisper(bob, annMain)
 run(1)
 logout(bob)
 run(6 * 60)
@@ -995,6 +1013,8 @@ bob = login(bobAccount, bobMain, "relog")
 run(1)
 check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Eve Main" }) == 1,
     "the login announcement goes to the person whispered just before the logout")
+check(sent({ from = "Bob Main", type = "ANNOUNCE", target = "Ann Main" }) == 0,
+    "not to a guild member whispered then, whom the announcement on GUILD reaches before the roster loads")
 whisper(bob, eveMain)
 run(31 * 60)
 logout(bob)
@@ -1194,18 +1214,70 @@ check(sent({ from = "Bob Main", type = "ANNOUNCE", distribution = "GUILD" }) == 
     and not lastWantsAnnouncement({ from = "Bob Main", distribution = "GUILD" }),
     "the next change of revision does not")
 
-eveMain.guild = GUILD
+-- Until her next login, Eve's messages on GUILD reach no one: what would go on GUILD goes to each online member.
+eveMain.guild, eve.joinedGuild = GUILD, true
 clearLog()
 fire(eve, "PLAYER_GUILD_UPDATE", "player")
-check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
-    and lastWantsAnnouncement({ from = "Eve Main", distribution = "GUILD" }),
-    "joining a guild announces to it right away")
+fire(eve, "PLAYER_GUILD_UPDATE", "player")
+check(sent({ from = "Eve Main" }) == 0, "joining a guild waits for its roster, through more guild updates")
+run(1)
+check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "WHISPER" }) == 3
+    and sent({ from = "Eve Main", distribution = "GUILD" }) == 0
+    and lastWantsAnnouncement({ from = "Eve Main", distribution = "WHISPER" }),
+    "then announces to each online member, wanting theirs back")
 run(6)
 check(sent({ type = "ANNOUNCE", target = "Eve Main" }) == 3, "and the members answer")
 clearLog()
 fire(eve, "PLAYER_GUILD_UPDATE", "player")
 run(6)
 check(sent({ from = "Eve Main" }) == 0, "a guild update while already in it sends nothing")
+slash(eve, "scope guild off")
+run(30)
+clearLog()
+slash(eve, "scope guild on")
+run(16)
+check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "WHISPER" }) == 3
+    and sent({ from = "Eve Main", distribution = "GUILD" }) == 0
+    and lastWantsAnnouncement({ from = "Eve Main", distribution = "WHISPER" }),
+    "a change of revision in that session goes to each online member too")
+run(30)
+check(sent({ from = "Eve Main", type = "REC" }) > 0 and sent({ from = "Eve Main", distribution = "GUILD" }) == 0,
+    "and so do the RECs answering their GETs")
+
+-- A /reload does not end it: the game still drops her messages on GUILD.
+clearLog()
+eve = reload(eve)
+eve.joinedGuild = true
+run(6)
+logout(eve)
+check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "WHISPER" }) == 3
+    and sent({ from = "Eve Main", distribution = "GUILD" }) == 0,
+    "after a /reload, the logout announcement still goes to each online member")
+
+-- After her next login, Eve sends on GUILD again. The members' rosters list her only once the roster each one
+-- requests comes back, 60 seconds later.
+local membersBeforeEve = {}
+for _, member in ipairs(guildMembers(GUILD)) do
+    local session = online(member.name)
+    if session then
+        session.rosterUnlisted, session.rosterDelay = { ["Eve Main"] = true }, 60
+        membersBeforeEve[#membersBeforeEve + 1] = session
+    end
+end
+clearLog()
+eve = login(eveAccount, eveMain)
+check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1, "the next login announces on GUILD")
+run(6)
+check(sent({ type = "ANNOUNCE", target = "Eve Main" }) == 3,
+    "members whose roster does not list a member yet answer its announcement on the guild")
+check(not membersBeforeEve[1].env.C_GuildInfo.MemberExistsByName("Eve Main"), "before their roster lists her")
+run(60)
+local listed = true
+for _, session in ipairs(membersBeforeEve) do
+    if not session.env.C_GuildInfo.MemberExistsByName("Eve Main") then listed = false end
+    session.rosterDelay = nil
+end
+check(listed, "the announcement requested their roster, which now lists her")
 eveMain.guild = nil
 fire(eve, "PLAYER_GUILD_UPDATE", "player")
 

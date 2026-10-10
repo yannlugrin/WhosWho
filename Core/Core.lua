@@ -113,14 +113,16 @@ frame:SetScript("OnEvent", function(_, event, ...)
         local _, _, classID = UnitClass("player")
         ns.Identity.Refresh(UnitGUID("player"), ns.UnitWholeName("player"), ruleset(), classID, UnitLevel("player"))
         ns.Protocol.Start()
-        ns.Protocol.AnnounceLogin()
         if IsInGuild() then C_GuildInfo.GuildRoster() end
         if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.IdentityDialogs.AskToLink() end
         ns.Launcher.Register()
         ns.Tooltip.Register()
     elseif event == "PLAYER_ENTERING_WORLD" then
-        -- arg1 is isInitialLogin: a login, not a /reload or a loading screen.
-        if arg1 then ns.Identity.LoggedIn(UnitGUID("player")) end
+        -- isInitialLogin: a login, not a /reload or a loading screen. The login announcement waits for it, which tells
+        -- whether a guild joined before ends with this login.
+        local isInitialLogin, isReloadingUi = ...
+        if isInitialLogin then ns.Identity.LoggedIn(UnitGUID("player")) end
+        if isInitialLogin or isReloadingUi then ns.Protocol.AnnounceLogin() end
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.
         ns.Identity.Seen(UnitGUID("player"), UnitLevel("player"))
@@ -139,6 +141,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Protocol.GuildChanged()
     elseif event == "GUILD_ROSTER_UPDATE" then
         ns.Scopes.GuildRosterChanged()
+        ns.Protocol.GuildRosterChanged()
     elseif event == "FRIENDLIST_UPDATE" then
         ns.Scopes.FriendListChanged()
         ns.Protocol.FriendListChanged()

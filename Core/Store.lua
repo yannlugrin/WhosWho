@@ -116,6 +116,10 @@ function Store.MigrateData(data)
     for _, character in pairs(data.identity.chars) do
         if character.removedInRevision then character.removedAt, character.removedInRevision = time(), nil end
     end
+    -- 0.1.0: my character's guild was its club ID.
+    for _, character in pairs(data.identity.chars) do
+        if type(character.guild) == "number" then character.guild = { id = character.guild } end
+    end
     -- 0.1.0-beta.1: a forgotten identity kept only the revision; its time is unknown, so it gets the migration's.
     for id, forgotten in pairs(data.forgotten) do
         if type(forgotten) == "number" then data.forgotten[id] = { rev = forgotten, at = time() } end

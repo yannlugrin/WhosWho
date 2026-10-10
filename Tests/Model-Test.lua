@@ -190,7 +190,7 @@ do
     check(s.chat.nickname.enable and s.tooltip.nickname.position == "afterName", "nothing saved: the defaults stay")
 
     local data = {
-        identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true } } },
+        identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true, guild = 7 } } },
         forgotten = { a = 7, b = { rev = 2, at = 50 } },
     }
     ns.Store.MigrateData(data)
@@ -198,6 +198,8 @@ do
         and data.identity.chars[G2].removedAt == nil, "a 0.1.0-beta.1 removal revision becomes a removal time")
     check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
         "a 0.1.0-beta.1 forgotten revision gets the migration's time")
+    check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
+        and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
 end
 
 -- Record validation -------------------------------------------------------------------------------
@@ -754,6 +756,14 @@ do
     check(not I.HasCharacterInGuild(7, NORMAL), "the same club ID in another ruleset is another guild")
     I.SetGuild(G1, nil)
     check(not I.HasCharacterInGuild(7, PVP), "a guild left")
+    I.LoggedIn(G1)
+    I.GuildJoined(G1, nil)
+    check(I.JoinedGuildSinceLogin(G1), "a guild joined since the login")
+    I.SetGuild(G1, 9)
+    check(I.HasCharacterInGuild(9, PVP) and I.JoinedGuildSinceLogin(G1), "its club ID, from the roster, keeps the join")
+    I.SetGuild(G1, 10)
+    check(not I.JoinedGuildSinceLogin(G1), "another guild's roster has no join time")
+    I.SetGuild(G1, nil)
 
     local changes = 0
     I.OnRevisionChanged(function() changes = changes + 1 end)

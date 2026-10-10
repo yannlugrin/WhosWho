@@ -25,9 +25,13 @@ ns.Identity = Identity
 ---@field linked boolean? nil until the character is registered in the identity, linked or not
 ---@field level integer at the end of the last session
 ---@field lastSeen number seconds, from time(): end of the last session (or its start, after a crash)
----@field guild integer? club ID of the character's guild (C_Club.GetGuildClubId)
+---@field guild WhosWho.OwnCharacterGuild? the character's guild
 ---@field removedAt number? seconds, from time(): when it was unlinked after being linked; it declares no identity (NOID)
 ---@field loggedInAt number? seconds, from time(): when its current or last session started; a /reload keeps it
+
+---@class WhosWho.OwnCharacterGuild
+---@field id integer? club ID (C_Club.GetGuildClubId), nil until the game gives it after joining
+---@field joinedAt number? seconds, from time(): when the character joined it, unknown for a guild it was in before
 
 ---@return WhosWho.IdentityData
 local function data()
@@ -162,12 +166,46 @@ function Identity.Ruleset(guid)
     return character and character.ruleset
 end
 
----Sets or clears the guild of one of this account's characters; does not change the record.
+---Sets or clears the guild of one of this account's characters; does not change the record. The guild it joined keeps
+---its join time.
 ---@param guid string
 ---@param clubId integer?
 function Identity.SetGuild(guid, clubId)
     local character = data().chars[guid]
-    if character then character.guild = clubId end
+    if not character then return end
+    local guild = character.guild
+    if not clubId then
+        character.guild = nil
+    elseif guild and (guild.id == nil or guild.id == clubId) then
+        guild.id = clubId
+    else
+        character.guild = { id = clubId }
+    end
+end
+
+---The club ID of the character's guild, as last seen.
+---@param guid string
+---@return integer?
+function Identity.GuildId(guid)
+    local character = data().chars[guid]
+    return character and character.guild and character.guild.id
+end
+
+---PLAYER_GUILD_UPDATE: the character joined a guild.
+---@param guid string
+---@param clubId integer? nil when the game does not give it yet
+function Identity.GuildJoined(guid, clubId)
+    local character = data().chars[guid]
+    if character then character.guild = { id = clubId, joinedAt = time() } end
+end
+
+---Whether the character joined its guild since its last login, /reloads included.
+---@param guid string
+---@return boolean
+function Identity.JoinedGuildSinceLogin(guid)
+    local character = data().chars[guid]
+    local joinedAt = character and character.guild and character.guild.joinedAt
+    return joinedAt ~= nil and character.loggedInAt ~= nil and joinedAt >= character.loggedInAt
 end
 
 ---Whether one of this account's linked characters is in that guild.
@@ -176,7 +214,9 @@ end
 ---@return boolean
 function Identity.HasLinkedCharacterInGuild(clubId, ruleset)
     for _, character in pairs(data().chars) do
-        if character.linked and character.guild == clubId and character.ruleset == ruleset then return true end
+        if character.linked and character.guild and character.guild.id == clubId and character.ruleset == ruleset then
+            return true
+        end
     end
     return false
 end
@@ -187,7 +227,7 @@ end
 ---@return boolean
 function Identity.HasCharacterInGuild(clubId, ruleset)
     for _, character in pairs(data().chars) do
-        if character.guild == clubId and character.ruleset == ruleset then return true end
+        if character.guild and character.guild.id == clubId and character.ruleset == ruleset then return true end
     end
     return false
 end
