@@ -59,9 +59,7 @@
         "ChatFrame_SendTell",
         "WHISPER",
         "INVITE",
-        "C_PartyInfo",
-        "CreateSettingsCheckboxWithButtonInitializer",
-        "GetGuildRosterLastOnline"
+        "CreateSettingsCheckboxWithButtonInitializer"
     ],
     "Lua.type.weakUnionCheck": true
 }
