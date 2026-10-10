@@ -42,8 +42,7 @@ local function playerGuid(contextData)
     end
     if not contextData.name then return nil end
     local name = wholeName(contextData.name, contextData.surname)
-    local Scopes = ns.Scopes
-    return Scopes.SenderGuid(name, "GUILD") or Scopes.SenderGuid(name, "PARTY") or Scopes.SenderGuid(name, "WHISPER")
+    return ns.Scopes.SenderGuid(name)
 end
 
 -- What a new person needs to know about the character: from its unit when there is one, from its GUID otherwise.

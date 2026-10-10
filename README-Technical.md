@@ -282,15 +282,15 @@ Confirming characters is the core of the system, so one message carries the conf
 
 ### Senders
 
-The sender of an add-on message is its whole name, authenticated by the server; a Battle.net message gives a game account ID instead. A confirmation needs the sender's GUID, taken from what the game itself says about that name, looked up when the announcement arrives:
+The sender of an add-on message is its whole name, authenticated by the server; a Battle.net message gives a game account ID instead. A confirmation needs the sender's GUID, taken from what the game itself says about that name, looked up when the announcement arrives, whatever channel it came on (`Scopes.SenderGuid`): what the sender is to me decides, so a guild member's answer by whisper confirms it as well as its message on `GUILD`. The sources, tried in this order:
 
 | Audience | Source of the sender's GUID |
 |---|---|
 | Guild | the guild roster (`GetGuildRosterInfo`, name and GUID of every member, offline ones included) |
-| Friends | `C_FriendList.GetFriendInfo(name).guid` (*to verify in game*) |
-| Battle.net friends | `C_BattleNet.GetGameAccountInfoByID(id).playerGuid` (*to verify in game*) |
-| Whispers | the saved whispers within the whisper window, sent or received, of the ruleset I play (other player's name and GUID from the whisper chat events, arguments 2 and 12; see Scopes) |
 | Group | the group's units: whole name from `UnitFullName`, GUID from `UnitGUID` (checked in game) |
+| Friends | `C_FriendList.GetFriendInfo(name).guid` (*to verify in game*) |
+| Whispers | the saved whispers within the whisper window, sent or received, of the ruleset I play (other player's name and GUID from the whisper chat events, arguments 2 and 12; see Scopes) |
+| Battle.net friends | `C_BattleNet.GetGameAccountInfoByID(id).playerGuid` (*to verify in game*) |
 
 Names match exactly, never by spelling variants; the roster spells them exactly like the add-on sender (checked in game). Without a match there is no confirmation; the record is still fetched.
 

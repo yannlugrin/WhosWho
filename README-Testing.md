@@ -49,6 +49,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 - A: `Sent, PARTY: 1 NOID`, without A's ID, and no announcement.
 - B: no `GET`; `/ww people` no longer lists the removed character, and B's Review tab shows nothing.
 - A second re-log of A: the same `NOID`, which changes nothing on B.
+- In a guild together instead: A playing the removed character when B logs in answers B's login announcement with `1 NOID` by whisper, which already removes it on B (the roster gives A's GUID).
 
 **Removal reaching a player met in a group.** A and B not in a guild together, not friends; A whispered B and they grouped, so B holds A's character. B logs out; on A, unlink that character (while playing it); B logs back in.
 

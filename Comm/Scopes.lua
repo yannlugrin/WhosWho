@@ -156,21 +156,14 @@ local function friendGuid(name)
     return guid and notSecret(guid) and guid or nil
 end
 
----The GUID of an add-on message's sender, from the one source its channel names: the guild roster for GUILD, the
----group units for PARTY and RAID, my friend list or the saved whispers within the whisper window for WHISPER. Names
----match exactly.
+---The GUID of an add-on message's sender, whatever channel it came on, from what that player is to me: the guild
+---roster, the group units, my friend list, then the saved whispers within the whisper window. Names match exactly.
 ---@param name string "First Surname", as the add-on message gives it
----@param distribution string the channel the message came on
 ---@return string? guid
-function Scopes.SenderGuid(name, distribution)
-    if distribution == "GUILD" then return guildMemberGuid(name) end
-    if distribution == "PARTY" or distribution == "RAID" then return groupMemberGuid(name) end
-    if distribution == "WHISPER" then
-        local guid, whisper = findWhisper(name)
-        local whispered = whisper and (withinWhisperWindow(whisper.sentAt) or withinWhisperWindow(whisper.receivedAt))
-        return friendGuid(name) or (whispered and guid or nil)
-    end
-    return nil
+function Scopes.SenderGuid(name)
+    local guid, whisper = findWhisper(name)
+    local whispered = whisper and (withinWhisperWindow(whisper.sentAt) or withinWhisperWindow(whisper.receivedAt))
+    return guildMemberGuid(name) or groupMemberGuid(name) or friendGuid(name) or (whispered and guid or nil)
 end
 
 ---The characters the game shows me online now: guild members from the roster, friends and group members.

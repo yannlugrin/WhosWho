@@ -769,14 +769,14 @@ do
     bob = login(bobAccount, bobMain)
     run(1)
     check(bob.ns.Scopes.Allows("Eve Main"), "after a reload, the saved whisper still allows the player")
-    check(bob.ns.Scopes.SenderGuid("Eve Main", "WHISPER") == eveMain.guid, "and gives the sender's GUID")
+    check(bob.ns.Scopes.SenderGuid("Eve Main") == eveMain.guid, "and gives the sender's GUID")
     bob.ns.settings.scopes.whispers = false
     check(not bob.ns.Scopes.Allows("Eve Main"), "not once the Whispers scope is off")
     bob.ns.settings.scopes.whispers = true
 
     run(3 * 3600)
     check(not bob.ns.Scopes.Allows("Eve Main"), "past the whisper window, the player is no longer allowed")
-    check(bob.ns.Scopes.SenderGuid("Eve Main", "WHISPER") == nil, "nor gives the sender's GUID")
+    check(bob.ns.Scopes.SenderGuid("Eve Main") == nil, "nor gives the sender's GUID")
     logout(bob)
     check(next(bobAccount.saved.global.whispers) == nil
         and select(2, bob.ns.People.Find(eveMain.guid)).whisperedAt == nil,
@@ -806,9 +806,13 @@ check(sent({ from = "Ann Alt", type = "NOID", distribution = "GUILD" }) == 1
     and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0,
     "a character unlinked while played declares no identity, without the identity ID")
 bob = login(bobAccount, bobMain)
-run(10)
-check(holderId(bob, annAlt.guid) == annId, "a player offline at the removal still lists the character")
 local changesBefore = #bob.ns.AutomaticChanges.List()
+check(holderId(bob, annAlt.guid) == annId, "a player offline at the removal still lists the character at login")
+run(10)
+check(sent({ from = "Ann Alt", type = "NOID", target = "Bob Main" }) == 1
+    and not bob.ns.People.Exists(annAlt.guid) and bob.ns.People.Get(annId) ~= nil,
+    "the removed character's answer to their login, from the roster, removes it, and the identity stays")
+check(#bob.ns.AutomaticChanges.List() == changesBefore, "silently")
 logout(ann)
 clearLog()
 ann = login(annAccount, annAlt)
@@ -816,9 +820,6 @@ run(10)
 check(sent({ from = "Ann Alt", type = "NOID" }) == 1 and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0
     and sent({ from = "Ann Alt", type = "GET" }) == 0 and sent({ from = "Bob Main", type = "GET" }) == 0,
     "at each login, the removed character declares no identity, and asks nothing")
-check(not bob.ns.People.Exists(annAlt.guid) and bob.ns.People.Get(annId) ~= nil,
-    "the holder removes the character, and keeps the identity")
-check(#bob.ns.AutomaticChanges.List() == changesBefore, "silently")
 clearLog()
 levelUp(bob)
 run(10)

@@ -350,7 +350,7 @@ end
 -- Receiving --------------------------------------------------------------------------------------
 
 ---@param announcement WhosWho.Announcement
-local function receiveAnnouncement(announcement, distribution, sender)
+local function receiveAnnouncement(announcement, sender)
     local id = announcement.id
     if id == Identity.Id() then return end
 
@@ -362,7 +362,7 @@ local function receiveAnnouncement(announcement, distribution, sender)
     -- takes nothing.
     if not (linked or (People.Get(id) and Identity.LinkedCount() > 0)) then return end
 
-    local senderGuid = Scopes.SenderGuid(sender, distribution)
+    local senderGuid = Scopes.SenderGuid(sender)
     if senderGuid then
         People.Confirm(id, senderGuid, announcement.level)
         Scopes.SetRelationships(senderGuid, sender)
@@ -412,8 +412,8 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
 end
 
 -- A character declaring no identity leaves the shared identity holding it.
-local function receiveNoIdentity(distribution, sender)
-    local guid = Scopes.SenderGuid(sender, distribution)
+local function receiveNoIdentity(sender)
+    local guid = Scopes.SenderGuid(sender)
     if guid and not Identity.Characters()[guid] then People.DeclaredNoIdentity(guid) end
 end
 
@@ -430,13 +430,13 @@ local function receive(_, text, distribution, sender)
     if Identity.LinkedCount() == 0 and message.type ~= "ANNOUNCE" then return end
 
     if message.type == "ANNOUNCE" then
-        receiveAnnouncement(message, distribution, sender)
+        receiveAnnouncement(message, sender)
     elseif message.type == "GET" then
         receiveRecordRequest(message, sender)
     elseif message.type == "REC" then
         receiveRecordUpdate(message, distribution, sender)
     elseif message.type == "NOID" then
-        receiveNoIdentity(distribution, sender)
+        receiveNoIdentity(sender)
     end
 end
 
