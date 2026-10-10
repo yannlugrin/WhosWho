@@ -423,7 +423,7 @@ local function whisperedPeople(since)
     local whispered, lastCharacter = {}, {}
     for otherGuid, whisper in pairs(ns.data.whispers) do
         local person, character = People.Find(otherGuid)
-        if person and character.state == "confirmed" and whisper.ruleset == ruleset then
+        if person and character and character.state == "confirmed" and whisper.ruleset == ruleset then
             local sentAt = whisper.sentAt
             if sentAt and sentAt >= since and withinWhisperWindow(sentAt) then whispered[person.id] = true end
             local at = math.max(sentAt or 0, whisper.receivedAt or 0)
