@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+
+- **Unlinked characters**: receiving one could throw an error.
+
 ## [0.1.0] - 2026-10-10
 
 First stable release, for World of Warcraft: Forever.

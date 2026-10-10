@@ -511,7 +511,7 @@ end
 function People.DeclaredNoIdentity(guid)
     ns.data.noIdentity[guid] = time()
     local person, character = People.Find(guid)
-    if not (person and person.signedRecord and character.state ~= "added") then return end
+    if not (person and person.signedRecord and character and character.state ~= "added") then return end
 
     person.chars[guid] = nil
     person.updatedAt = time()
