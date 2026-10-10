@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-10
+
 ### Fixed
 
 - **Unlinked characters**: receiving one could throw an error.
@@ -62,6 +64,7 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.1.1...HEAD
+[0.1.1]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.0-beta.1...0.1.0
 [0.1.0-beta.1]: https://github.com/yannlugrin/WhosWho/releases/tag/0.1.0-beta.1
