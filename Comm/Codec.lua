@@ -1,10 +1,10 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Record = ns.Record
+local GuildSettings, Record = ns.GuildSettings, ns.Record
 local LibSerialize, LibDeflate = LibStub("LibSerialize"), LibStub("LibDeflate")
 
--- Message text: "<version> <type> <fields>". Announcements and GETs are plain text that fits in one message; a REC
--- carries the record serialized, compressed and encoded for the add-on channel; NOID has no fields.
+-- Message text: "<version> <type> <fields>". Announcements and GETs are plain text that fits in one message; a REC and
+-- a GSET carry their record serialized, compressed and encoded for the add-on channel; NOID and GSGET have no fields.
 
 ---@class WhosWho.Codec
 local Codec = {}
@@ -19,6 +19,7 @@ local VERSION = "1"
 ---@field level integer the sending character's level
 ---@field acceptsGet boolean whether the sender answers a GET now
 ---@field wantsAnnouncement boolean whether the sender wants the receiver's announcement
+---@field guildSettingsRev integer the revision of the settings record the sender holds for its guild, 0 for none
 
 ---@class WhosWho.RecordRequest
 ---@field type "GET"
@@ -32,7 +33,15 @@ local VERSION = "1"
 ---@class WhosWho.NoIdentity
 ---@field type "NOID"
 
----@alias WhosWho.Message WhosWho.Announcement|WhosWho.RecordRequest|WhosWho.RecordUpdate|WhosWho.NoIdentity
+---A request for the settings record of the guild the sender and the receiver are in.
+---@class WhosWho.GuildSettingsRequest
+---@field type "GSGET"
+
+---@class WhosWho.GuildSettingsUpdate
+---@field type "GSET"
+---@field signedRecord WhosWho.GuildSettingsRecord structure validated, signature not verified
+
+---@alias WhosWho.Message WhosWho.Announcement|WhosWho.RecordRequest|WhosWho.RecordUpdate|WhosWho.NoIdentity|WhosWho.GuildSettingsRequest|WhosWho.GuildSettingsUpdate
 
 -- Encoding ---------------------------------------------------------------------------------------
 
@@ -41,11 +50,12 @@ local VERSION = "1"
 ---@param level integer
 ---@param acceptsGet boolean
 ---@param wantsAnnouncement boolean
+---@param guildSettingsRev integer
 ---@return string
-function Codec.Announcement(id, rev, level, acceptsGet, wantsAnnouncement)
-    -- The last field is the revision of the guild list I hold, 0 until guild lists exist.
-    return ("%s ANNOUNCE %s %d %d %d %d 0"):format(VERSION, id, rev, level, acceptsGet and 1 or 0,
-        wantsAnnouncement and 1 or 0)
+function Codec.Announcement(id, rev, level, acceptsGet, wantsAnnouncement, guildSettingsRev)
+    -- After the flags, the revision of the guild list I hold, 0 until guild lists exist.
+    return ("%s ANNOUNCE %s %d %d %d %d 0 %d"):format(VERSION, id, rev, level, acceptsGet and 1 or 0,
+        wantsAnnouncement and 1 or 0, guildSettingsRev)
 end
 
 ---@param id string
@@ -66,6 +76,18 @@ function Codec.NoIdentity()
     return ("%s NOID"):format(VERSION)
 end
 
+---@return string
+function Codec.GuildSettingsRequest()
+    return ("%s GSGET"):format(VERSION)
+end
+
+---@param signedRecord WhosWho.GuildSettingsRecord
+---@return string
+function Codec.GuildSettingsUpdate(signedRecord)
+    local payload = LibDeflate:EncodeForWoWAddonChannel(LibDeflate:CompressDeflate(LibSerialize:Serialize(signedRecord)))
+    return ("%s GSET %s"):format(VERSION, payload)
+end
+
 -- Decoding ---------------------------------------------------------------------------------------
 
 local function revision(s)
@@ -78,16 +100,17 @@ local function isGuildListRev(s)
     return s == "0" or s:match("^%d+%.%x+$") ~= nil
 end
 
--- Fields a later version adds after the known ones are ignored.
+-- Fields a later version adds after the known ones are ignored. The guild settings revision is missing from 0.1.0's.
 local function decodeAnnouncement(fields)
-    local id, rev, level, acceptsGet, wantsAnnouncement, guildListRev =
-        fields:match("^(%x+) (%d+) (%d%d?%d?) ([01]) ([01]) (%S+)")
+    local id, rev, level, acceptsGet, wantsAnnouncement, guildListRev, guildSettingsRev =
+        fields:match("^(%x+) (%d+) (%d%d?%d?) ([01]) ([01]) (%S+) ?(%d*)")
     if not (Record.IsId(id) and revision(rev) and tonumber(level) >= 1 and isGuildListRev(guildListRev)) then
         return nil
     end
     return {
         type = "ANNOUNCE", id = id, rev = revision(rev), level = tonumber(level),
         acceptsGet = acceptsGet == "1", wantsAnnouncement = wantsAnnouncement == "1",
+        guildSettingsRev = revision(guildSettingsRev) or 0,
     }
 end
 
@@ -110,8 +133,23 @@ local function decodeNoIdentity()
     return { type = "NOID" }
 end
 
+-- Fields a later version adds are ignored.
+local function decodeGuildSettingsRequest()
+    return { type = "GSGET" }
+end
+
+local function decodeGuildSettingsUpdate(fields)
+    local compressed = LibDeflate:DecodeForWoWAddonChannel(fields)
+    local serialized = compressed and LibDeflate:DecompressDeflate(compressed)
+    if not serialized then return nil end
+    local ok, signedRecord = LibSerialize:Deserialize(serialized)
+    if not (ok and GuildSettings.Validate(signedRecord)) then return nil end
+    return { type = "GSET", signedRecord = signedRecord }
+end
+
 local DECODERS = {
     ANNOUNCE = decodeAnnouncement, GET = decodeRecordRequest, REC = decodeRecordUpdate, NOID = decodeNoIdentity,
+    GSGET = decodeGuildSettingsRequest, GSET = decodeGuildSettingsUpdate,
 }
 
 ---Unknown versions and types, and malformed fields, give nil.

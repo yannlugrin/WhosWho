@@ -20,7 +20,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 local ns = {}
 for _, file in ipairs({
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Record.lua",
-    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Comm/Scopes.lua",
+    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Comm/Scopes.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end
@@ -882,6 +882,32 @@ do
     clock = 1500
     P.DeclaredNoIdentity(G2)
     check(ns.data.forgotten[A].rev == 1 and ns.data.forgotten[A].at == 1500, "a forgotten identity keeps when it was forgotten")
+end
+
+-- Guild settings record ------------------------------------------------------------------------------
+
+fresh()
+do
+    local GS, I = ns.GuildSettings, ns.Identity
+    I.EnsureKeys()
+    I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
+    I.Link(G1)
+    check(GS.Revision(7) == 0 and GS.Get(7).enable == false, "a guild without a record has the default settings")
+    local record = GS.Change(7, { enable = true }, G1, 1000)
+    check(GS.Validate(record) and GS.Verify(record) and GS.Get(7).enable and GS.Revision(7) == 1000,
+        "a signed record of the settings verifies and is held")
+    check(GS.Change(7, { enable = false }, G1, 900).rev == 1001, "a later change is always newer, even with an earlier clock")
+
+    local changed = {}
+    for k, v in pairs(record) do changed[k] = v end
+    changed.settings = { enable = false }
+    check(not GS.Verify(changed), "a record changed after signing fails")
+    changed.settings, changed.extra = record.settings, 1
+    check(not GS.Validate(changed), "a record with an unknown field is refused")
+    local lowSigner, highSigner = { rev = 5, signer = ("a"):rep(64) }, { rev = 5, signer = ("b"):rep(64) }
+    check(GS.IsNewerThan({ rev = 6, signer = ("a"):rep(64) }, highSigner)
+        and GS.IsNewerThan(highSigner, lowSigner) and not GS.IsNewerThan(lowSigner, highSigner),
+        "a later revision wins, then the greater signer")
 end
 
 if failures > 0 then

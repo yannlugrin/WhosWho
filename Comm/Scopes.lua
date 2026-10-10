@@ -449,6 +449,18 @@ function Scopes.OnlineGuildMembers()
     return names
 end
 
+---The rank index of that character in my roster, 0 for the guild master.
+---@param guid string
+---@return integer? rankIndex nil when my roster does not list it
+function Scopes.GuildRankIndex(guid)
+    for i = 1, GetNumGuildMembers() do
+        local _, _, rankIndex = GetGuildRosterInfo(i)
+        local memberGuid = select(17, GetGuildRosterInfo(i))
+        if memberGuid and notSecret(memberGuid, rankIndex) and memberGuid == guid then return rankIndex end
+    end
+    return nil
+end
+
 ---Whether that player is in my guild and the Guild scope is on: the GUILD channel reaches it.
 ---@param name string
 ---@return boolean

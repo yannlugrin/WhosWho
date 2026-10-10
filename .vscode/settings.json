@@ -59,7 +59,9 @@
         "ChatFrame_SendTell",
         "WHISPER",
         "INVITE",
-        "CreateSettingsCheckboxWithButtonInitializer"
+        "CreateSettingsCheckboxWithButtonInitializer",
+        "EventUtil",
+        "CommunitiesFrame"
     ],
     "Lua.type.weakUnionCheck": true
 }

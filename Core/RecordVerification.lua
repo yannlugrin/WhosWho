@@ -1,8 +1,8 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Record = ns.Record
 
--- Signature verification queue for received records: one record at a time, spread over frames.
+-- Signature verification queue for received records, identity records and guild settings: one record at a time,
+-- spread over frames.
 
 ---@class WhosWho.RecordVerification
 local RecordVerification = {}
@@ -11,10 +11,16 @@ ns.RecordVerification = RecordVerification
 -- At 16 bits per slice, one verification takes about 33 frames of at most 21 ms each (build 1.60.1).
 local SLICE_BITS = 16
 
+---A kind of signed record: Record for identity records, GuildSettings for guild settings.
+---@class WhosWho.SignedFormat
+---@field Canonical fun(signedRecord: table): string the signed bytes
+---@field Verify fun(signedRecord: table): boolean
+
 ---@class WhosWho.QueuedRecord
----@field signedRecord WhosWho.SignedIdentityRecord
+---@field signedRecord table
+---@field format WhosWho.SignedFormat
 ---@field key string canonical bytes and signature: what the result is about
----@field onVerified fun(signedRecord: WhosWho.SignedIdentityRecord)
+---@field onVerified fun(signedRecord: table)
 
 ---@type WhosWho.QueuedRecord[]
 local queue = {}
@@ -42,7 +48,7 @@ frame:SetScript("OnUpdate", function()
     if not running then
         running = coroutine.create(function()
             ns.Crypto.Ed25519.SetSlicing(SLICE_BITS)
-            return Record.Verify(verification.signedRecord)
+            return verification.format.Verify(verification.signedRecord)
         end)
     end
 
@@ -57,10 +63,11 @@ end)
 
 ---Verifies a record's signature in the background and calls onVerified once it holds. A record already verified this
 ---session is answered at once; one already in the queue is not queued again.
----@param signedRecord WhosWho.SignedIdentityRecord structure validated
----@param onVerified fun(signedRecord: WhosWho.SignedIdentityRecord)
-function RecordVerification.Queue(signedRecord, onVerified)
-    local key = Record.Canonical(signedRecord) .. signedRecord.sig
+---@param signedRecord table structure validated
+---@param format WhosWho.SignedFormat
+---@param onVerified fun(signedRecord: table)
+function RecordVerification.Queue(signedRecord, format, onVerified)
+    local key = format.Canonical(signedRecord) .. signedRecord.sig
     if results[key] ~= nil then
         if results[key] then onVerified(signedRecord) end
         return
@@ -68,6 +75,6 @@ function RecordVerification.Queue(signedRecord, onVerified)
     if queued[key] then return end
 
     queued[key] = true
-    queue[#queue + 1] = { signedRecord = signedRecord, key = key, onVerified = onVerified }
+    queue[#queue + 1] = { signedRecord = signedRecord, format = format, key = key, onVerified = onVerified }
     frame:Show()
 end

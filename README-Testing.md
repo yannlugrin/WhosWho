@@ -163,6 +163,16 @@ Right-click a character in the People tab's detail panel, or a person in the lis
 
 In the People tab, a person's last seen moves to now when one of their characters is online in your guild, in your group, online in your friend list, or whispers with you, also for a person you created yourself. A guild member you link while they are offline shows their last login from the roster (to the hour), and keeps it until you see them online.
 
+## Guild Settings
+
+Needs a guild where A is the guild master or an officer and B a member below; both linked, Guild scope on, B holding A's identity with A's character confirmed.
+
+- B opens the guild panel: no Who's Who tab. A opens it: the tab under the game's own, its checkbox off.
+- A ticks **Enable Who's Who for the guild**; after 5 s: `Sent, GUILD: 1 GSET …`. B: `Received, GUILD <A's name>: 1 GSET …`, then `/dump WhosWhoDB.global.guildSettings` on B shows the record with `enable = true`.
+- A unticks and ticks again within 5 s: one `GSET`, with the last state.
+- B logs out; A changes the setting; B logs back in: A's answer to B's login announcement ends with A's revision, B sends `Sent, WHISPER <A's name>: 1 GSGET`, A answers `1 GSET …` by whisper, and B holds the new record.
+- With the Guild scope off on A, or on an unlinked character of A's: the checkbox is greyed out, its tooltip says why.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).

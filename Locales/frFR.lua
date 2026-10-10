@@ -14,6 +14,7 @@ L["Friends"] = "Amis"
 L["Group"] = "Groupe"
 L["Guild"] = "Guilde"
 L["Linked characters: %d"] = "Personnages liés : %d"
+L["Who's Who for the guild: %s"] = "Who's Who pour la guilde : %s"
 L["linked"] = "lié"
 L["linked, main"] = "lié, principal"
 L["Link this character first: /ww link"] = "Liez d'abord ce personnage : /ww link"
@@ -208,3 +209,7 @@ L["Only you see it. It replaces the name this person is shown under."] = "Vous s
 L["Remove my nickname"] = "Retirer mon surnom"
 L["About %s"] = "À propos de %s"
 L["Note: %s"] = "Note : %s"
+
+-- Guild panel
+L["Enable Who's Who for the guild"] = "Activer Who's Who pour la guilde"
+L["Link this character and share with your guild to change the guild's settings."] = "Liez ce personnage et partagez avec votre guilde pour modifier les paramètres de la guilde."

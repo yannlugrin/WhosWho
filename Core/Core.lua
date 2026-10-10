@@ -20,6 +20,7 @@ local addonName, ns = ...
 ---@field People WhosWho.People
 ---@field Resolver WhosWho.Resolver
 ---@field RecordVerification WhosWho.RecordVerification
+---@field GuildSettings WhosWho.GuildSettings
 ---@field Codec WhosWho.Codec
 ---@field Scopes WhosWho.Scopes
 ---@field Protocol WhosWho.Protocol
@@ -181,6 +182,10 @@ ns.Commands.status = function()
     end
     ns.Print(L["This character: %s"]:format(state))
     ns.Print(L["Linked characters: %d"]:format(ns.Identity.LinkedCount()))
+    if IsInGuild() then
+        local enabled = ns.GuildSettings.Get(ns.Identity.GuildId(guid)).enable
+        ns.Print(L["Who's Who for the guild: %s"]:format(enabled and L["on"] or L["off"]))
+    end
 end
 
 ns.Commands.link = function()

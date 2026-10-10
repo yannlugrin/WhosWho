@@ -85,6 +85,13 @@ function Record.IsId(s)
     return isHex(s, 64)
 end
 
+---A signature: 128 lowercase hex characters.
+---@param s any
+---@return boolean
+function Record.IsSignature(s)
+    return isHex(s, 128)
+end
+
 ---@param s any
 ---@return boolean
 function Record.IsGuid(s)
@@ -145,7 +152,7 @@ function Record.Validate(record)
     if not Record.IsId(record.id) then return false, "id" end
     if not isRevision(record.rev) then return false, "rev" end
     if record.nickname ~= nil and not isName(record.nickname) then return false, "nickname" end
-    if record.sig ~= nil and not isHex(record.sig, 128) then return false, "sig" end
+    if record.sig ~= nil and not Record.IsSignature(record.sig) then return false, "sig" end
     if type(record.chars) ~= "table" then return false, "chars" end
     if type(record.guild) ~= "table" or not hasOnlyFields(record.guild, GUILD_FIELDS)
         or type(record.guild.consent) ~= "boolean" then

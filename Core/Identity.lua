@@ -438,6 +438,14 @@ function Identity.SignedRecord()
     return record
 end
 
+---Signs bytes with my identity's key (about 120 ms in game).
+---@param bytes string
+---@return string sig 128 hex characters
+function Identity.Sign(bytes)
+    local identity = data()
+    return ns.Crypto.ToHex(ns.Crypto.Ed25519.Sign(bytes, ns.Crypto.FromHex(identity.seed), ns.Crypto.FromHex(identity.id)))
+end
+
 ---The Guild scope changed: it is the record's guild consent, so the record gets a new revision.
 function Identity.GuildScopeChanged()
     nextRevision()

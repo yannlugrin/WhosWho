@@ -9,7 +9,7 @@ dofile(root .. "/Tests/Support/Bit.lua")
 local FILES = {
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua",
     "Core/Core.lua", "Core/Store.lua", "Core/Record.lua", "Core/Identity.lua", "Core/AutomaticChanges.lua",
-    "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua",
+    "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua",
     "Comm/Codec.lua", "Comm/Scopes.lua", "Comm/Protocol.lua",
 }
 local chunks = {}
@@ -261,7 +261,7 @@ local function newEnvironment(session)
     env.GetGuildRosterInfo = function(i)
         local member = roster()[i]
         local info = { member.name }
-        info[4], info[9], info[17] = member.level, online(member.name) ~= nil, member.guid
+        info[3], info[4], info[9], info[17] = member.rankIndex or 5, member.level, online(member.name) ~= nil, member.guid
         return unpack(info, 1, 17)
     end
     -- An offline member last logged in two days and three hours ago.
@@ -738,7 +738,7 @@ end
 
 do
     local function eveSends(text) eve.ns.Protocol:SendCommMessage("WhosWho", text, "WHISPER", "Bob Main") end
-    local function eveAnnouncement() return eve.ns.Codec.Announcement(eveId, eve.ns.Identity.Revision(), eveMain.level, true) end
+    local function eveAnnouncement() return eve.ns.Codec.Announcement(eveId, eve.ns.Identity.Revision(), eveMain.level, true, false, 0) end
     local function eveRecord() return eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord()) end
 
     bob.ns.settings.scopes.whispers = true
@@ -1599,13 +1599,58 @@ run(30)
 check(sent({ from = "Ann Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
     and bob.ns.People.Nickname(annId) == "Ann Staying", "a canceled logout lets the change's announcement go out")
 
+-- Guild settings ---------------------------------------------------------------------------------------
+
+-- A guild of its own: Hal is an officer (rank index 1), Ivy and Joe are members (rank index 3).
+local GUILD2 = 31000001
+local halAccount, ivyAccount, joeAccount = account("Hal"), account("Ivy"), account("Joe")
+local halMain = character("Hal Main", "Player-1-0000F101", MAGE, GUILD2)
+local ivyMain = character("Ivy Main", "Player-1-0000F201", PRIEST, GUILD2)
+local joeMain = character("Joe Main", "Player-1-0000F301", ROGUE, GUILD2)
+halMain.rankIndex, ivyMain.rankIndex, joeMain.rankIndex = 1, 3, 3
+local hal = login(halAccount, halMain)
+slash(hal, "link")
+local ivy = login(ivyAccount, ivyMain)
+slash(ivy, "link")
+run(60)
+check(state(ivy, halMain.guid) == "confirmed", "Ivy knows Hal")
+
+clearLog()
+hal.ns.Protocol.ChangeGuildSettings({ enable = true })
+run(1)
+check(sent({ from = "Hal Main", type = "GSET" }) == 0, "a change of the guild settings waits for the ones that follow")
+run(5)
+check(sent({ from = "Hal Main", type = "GSET", distribution = "GUILD" }) == 1, "then goes to the guild")
+check(ivy.ns.GuildSettings.Get(GUILD2).enable, "a member takes the settings an officer signed")
+
+clearLog()
+local joe = login(joeAccount, joeMain)
+slash(joe, "link")
+run(60)
+check(sent({ from = "Joe Main", type = "GSGET" }) == 1, "a member joining later asks one member for the settings")
+check(state(joe, halMain.guid) == "confirmed", "the officer's whispered answer confirms him: he is in the roster")
+check(joe.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Revision(GUILD2) == hal.ns.GuildSettings.Revision(GUILD2),
+    "and the settings, verified before his record came, are taken once it confirms him")
+
+clearLog()
+ivy.ns.Protocol.ChangeGuildSettings({ enable = false })
+run(10)
+check(sent({ from = "Ivy Main", type = "GSET", distribution = "GUILD" }) == 1
+    and hal.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Get(GUILD2).enable,
+    "settings signed by a member below the officers are refused")
+logout(hal)
+logout(ivy)
+logout(joe)
+
 -- Announcement format -----------------------------------------------------------------------------------
 
 do
     local Codec, id = ann.ns.Codec, ann.ns.Identity.Id()
-    local decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false))
-    check(decoded and decoded.type == "ANNOUNCE" and decoded.rev == 3 and decoded.acceptsGet and not decoded.wantsAnnouncement,
-        "an announcement decodes, its guild list revision 0")
+    local decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false, 1791403200))
+    check(decoded and decoded.type == "ANNOUNCE" and decoded.rev == 3 and decoded.acceptsGet and not decoded.wantsAnnouncement
+        and decoded.guildSettingsRev == 1791403200, "an announcement decodes, its guild list revision 0")
+    decoded = Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0")
+    check(decoded and decoded.guildSettingsRev == 0, "an announcement from 0.1.0, without guild settings, holds none")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 1791403200.9f2c41ab") ~= nil,
         "a guild list revision <time>.<hash> is accepted")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0 later fields") ~= nil, "fields a later version adds are ignored")

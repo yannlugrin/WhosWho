@@ -1,9 +1,9 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Codec, Identity, People, RecordVerification, Scopes, Store =
-    ns.Codec, ns.Identity, ns.People, ns.RecordVerification, ns.Scopes, ns.Store
+local Codec, GuildSettings, Identity, People, Record, RecordVerification, Scopes, Store =
+    ns.Codec, ns.GuildSettings, ns.Identity, ns.People, ns.Record, ns.RecordVerification, ns.Scopes, ns.Store
 
--- Announcements, record requests (GET) and records (REC) between clients.
+-- Announcements, record requests (GET) and records (REC) between clients, and the guild settings (GSGET, GSET).
 
 ---@class WhosWho.Protocol
 ---@field RegisterComm fun(self, prefix: string, method: function)
@@ -20,6 +20,7 @@ local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players 
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
 local ANNOUNCEMENT_WAIT_SECONDS = 5 -- before answering announcements, gathering the ones that follow
+local GUILD_SETTINGS_WAIT_SECONDS = 5 -- before a change of the guild settings goes out, gathering the ones that follow
 -- The delays a player may change are advanced settings (Store.Advanced).
 
 local issecretvalue = issecretvalue or function() return false end
@@ -28,9 +29,9 @@ local issecretvalue = issecretvalue or function() return false end
 
 local L = ns.L
 
--- A REC's payload is binary: only its size is shown.
+-- The payload of a REC or a GSET is binary: only its size is shown.
 local function describe(text)
-    local recordUpdate = text:match("^%d+ REC ")
+    local recordUpdate = text:match("^%d+ REC ") or text:match("^%d+ GSET ")
     return recordUpdate and L["%s(%d bytes)"]:format(recordUpdate, #text) or text
 end
 
@@ -52,7 +53,8 @@ local function announcementText(level, acceptsGet, wantsAnnouncement)
     local guid = UnitGUID("player")
     if Identity.IsRemoved(guid) then return Codec.NoIdentity() end
     local revision = Identity.AnnouncedRevision(guid)
-    return revision and Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement)
+    return revision and Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement,
+        GuildSettings.Revision(Identity.GuildId(guid)))
 end
 
 -- My announcement to that audience, in its order: at logout, the client drops the messages past its limit. One that
@@ -347,6 +349,56 @@ local function requestRecord(id, name)
     C_Timer.After(REQUEST_DELAY_SECONDS, retry)
 end
 
+-- Guild settings --------------------------------------------------------------------------------
+
+---@type { rev: integer, sentAt: number }? my GSGET in flight: the revision it asks for, and when it left (GetTime)
+local guildSettingsRequest
+
+-- One GSGET to a member who announced newer guild settings; another member announcing them gets none while it waits.
+local function requestGuildSettings(name, rev)
+    local request = guildSettingsRequest
+    if request and request.rev >= rev and GetTime() - request.sentAt < REQUEST_DELAY_SECONDS then return end
+    guildSettingsRequest = { rev = rev, sentAt = GetTime() }
+    sendQueued(Codec.GuildSettingsRequest(), "WHISPER", name)
+end
+
+---@type WhosWho.GuildSettingsRecord? the newest verified record held back until its signing character is confirmed and
+---in my roster, tried again as they change
+local pendingGuildSettings
+
+local function acceptGuildSettings(signedRecord)
+    local result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid))
+    if result == "accepted" then
+        guildSettingsRequest = nil
+    elseif result == "pending"
+        and not (pendingGuildSettings and GuildSettings.IsNewerThan(pendingGuildSettings, signedRecord)) then
+        pendingGuildSettings = signedRecord
+    end
+end
+
+local function retryPendingGuildSettings()
+    local signedRecord = pendingGuildSettings
+    if not signedRecord then return end
+    pendingGuildSettings = nil
+    acceptGuildSettings(signedRecord)
+end
+
+local guildSettingsWaiting = false
+
+-- My current guild's settings, to its members: on GUILD, or to each online member while my messages on it reach no
+-- one (Scopes.CanSendOnGuild).
+local function sendGuildSettings()
+    guildSettingsWaiting = false
+    local signedRecord = GuildSettings.Record(Identity.GuildId(UnitGUID("player")))
+    if not (signedRecord and Scopes.Get("guild") and IsInGuild()) then return end
+    local message = Codec.GuildSettingsUpdate(signedRecord)
+    if Scopes.CanSendOnGuild() then
+        sendQueued(message, "GUILD")
+        return
+    end
+    for _, name in ipairs(Scopes.OnlineGuildMembers()) do sendQueued(message, "WHISPER", name) end
+end
+
 -- Receiving --------------------------------------------------------------------------------------
 
 ---@param announcement WhosWho.Announcement
@@ -356,6 +408,10 @@ local function receiveAnnouncement(announcement, sender)
 
     -- My answer, whatever the character I play: what it sends, if anything, is decided when the answers go out.
     if announcement.wantsAnnouncement and Scopes.Allows(sender) then queueAnnouncement(sender) end
+    if announcement.guildSettingsRev > GuildSettings.Revision(Identity.GuildId(UnitGUID("player")))
+        and Scopes.GuildReaches(sender) then
+        requestGuildSettings(sender, announcement.guildSettingsRev)
+    end
     local linked = Identity.IsLinked(UnitGUID("player"))
 
     -- An anonymous character only updates the identities I hold, and asks nothing; without any linked character, it
@@ -403,12 +459,29 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
         return
     end
 
-    RecordVerification.Queue(signedRecord, function(verified)
+    RecordVerification.Queue(signedRecord, Record, function(verified)
         if People.Accept(verified) ~= "stale" then
             requests[verified.id] = nil
             Scopes.KeepSentWhispers()
         end
     end)
+end
+
+-- A member of my current guild asking for its settings.
+local function receiveGuildSettingsRequest(sender)
+    local signedRecord = GuildSettings.Record(Identity.GuildId(UnitGUID("player")))
+    if signedRecord and Scopes.GuildReaches(sender) then
+        sendQueued(Codec.GuildSettingsUpdate(signedRecord), "WHISPER", sender)
+    end
+end
+
+-- Settings of my current guild, from any of its members: the signature and the signer's rank decide.
+---@param update WhosWho.GuildSettingsUpdate
+local function receiveGuildSettingsUpdate(update, sender)
+    local signedRecord = update.signedRecord
+    if not (Scopes.GuildReaches(sender) and signedRecord.guild == Identity.GuildId(UnitGUID("player"))) then return end
+    if not GuildSettings.IsNewer(signedRecord) then return end
+    RecordVerification.Queue(signedRecord, GuildSettings, acceptGuildSettings)
 end
 
 -- A character declaring no identity leaves the shared identity holding it.
@@ -437,6 +510,10 @@ local function receive(_, text, distribution, sender)
         receiveRecordUpdate(message, distribution, sender)
     elseif message.type == "NOID" then
         receiveNoIdentity(sender)
+    elseif message.type == "GSGET" then
+        receiveGuildSettingsRequest(sender)
+    elseif message.type == "GSET" then
+        receiveGuildSettingsUpdate(message, sender)
     end
 end
 
@@ -501,6 +578,7 @@ function Protocol.Start()
     publishedRevision, publishedWithGuildScope = Identity.Revision(), Scopes.Get("guild")
     Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
+    People.OnChanged(retryPendingGuildSettings)
     anonymousAtLogin = not Identity.IsLinked(UnitGUID("player"))
     -- The login announcement already reaches a group or guild I am in, and my friends online.
     wasInGroup, wasInGuild = IsInGroup(), IsInGuild()
@@ -583,13 +661,27 @@ function Protocol.GuildChanged()
     end
 end
 
----GUILD_ROSTER_UPDATE, after Scopes.GuildRosterChanged: the announcement to the guild I joined, to each online member.
+---GUILD_ROSTER_UPDATE, after Scopes.GuildRosterChanged: guild settings held back until their signer is in my roster,
+---and the announcement to the guild I joined, to each online member.
 function Protocol.GuildRosterChanged()
+    retryPendingGuildSettings()
     if not guildJoinAnnouncementPending or GetNumGuildMembers() == 0 then return end
     guildJoinAnnouncementPending = false
     local message = announcementText(UnitLevel("player"), true, true)
     if not message then return end
     for _, name in ipairs(Scopes.OnlineGuildMembers()) do sendQueued(message, "WHISPER", name) end
+end
+
+---Signs new settings for my current guild, from the character I play, and sends them to its members once the changes
+---that follow have gathered. For the guild master and the officers.
+---@param settings WhosWho.GuildSettingsValues
+function Protocol.ChangeGuildSettings(settings)
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    if not clubId then return end
+    GuildSettings.Change(clubId, settings, UnitGUID("player"), GetServerTime())
+    if guildSettingsWaiting then return end
+    guildSettingsWaiting = true
+    C_Timer.After(GUILD_SETTINGS_WAIT_SECONDS, sendGuildSettings)
 end
 
 ---FRIENDLIST_UPDATE, after Scopes.FriendListChanged: my announcement to each friend added, which they answer with theirs.

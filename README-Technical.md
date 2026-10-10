@@ -2,7 +2,7 @@
 
 Architecture notes and contribution guidance for developers working on Who's Who. For end-user documentation, see [README.md](README.md).
 
-> **Status: in development.** The model layer (Core/), the signature verification queue and the comm protocol (announcements, GET, REC) are built and tested offline; Battle.net, guild identities, the rank gate and UI are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
+> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC) and the guild settings (GSGET, GSET) are built and tested offline; Battle.net, guild identities and lists, the rank gate for relayed identities and UI are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
 
 ## File Map
 
@@ -37,7 +37,8 @@ WhosWho/
 │   ├── AutomaticChanges.lua       Changes to my links made by Who's Who on its own, for the Review tab
 │   ├── People.lua                 Other players' identities: records as received, characters with state and activity, manual identities
 │   ├── Resolver.lua               One answer per character, by precedence
-│   └── RecordVerification.lua     Signature verification queue for received records, sliced over frames
+│   ├── RecordVerification.lua     Signature verification queue for received records and guild settings, sliced over frames
+│   └── GuildSettings.lua          A guild's settings: the record its guild master or an officer signs, held per guild
 ├── Comm/
 │   ├── Codec.lua                  Message text: version, type, fields; REC serialized, compressed, encoded
 │   ├── Scopes.lua                 Who may receive what, channels, audiences, senders' GUIDs, guild and friendOf
@@ -59,7 +60,8 @@ WhosWho/
 │   └── Decorations/               Additions to the game's own frames
 │       ├── Chat.lua               Sender names in chat lines
 │       ├── Tooltip.lua            Nickname and "Also:" line in player tooltips
-│       └── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People tab's own menu
+│       ├── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People tab's own menu
+│       └── GuildTab.lua           Who's Who tab in the guild panel, for the guild master and officers: the guild's settings
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
 │   ├── Glyphs/                    Person, Pencil, Banner, Question, Hourglass: white 32×32, tinted in code
@@ -84,7 +86,7 @@ Planned:
 
 ```
 ├── Core/
-│   └── Trust.lua                  Rank gate and the guild configuration sent by officers
+│   └── Trust.lua                  Rank gate for relayed identities
 ├── Comm/
 └── UI/
     └── PersonEditor.lua           Create and edit a manual identity, add alts
@@ -225,10 +227,12 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 
 | Type | Content | Sent |
 |---|---|---|
-| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement, the revision of the guild list the sender holds | At login, level-up and logout, and after a change of revision, from a linked character, to the audiences of the enabled scopes; to the players a scope turned on, a group or guild joined or a friend added brings into them; to a player I whisper; in answer to an announcement that wants one (see Announcements) |
+| `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement, the revision of the guild list the sender holds, the revision of the guild settings the sender holds | At login, level-up and logout, and after a change of revision, from a linked character, to the audiences of the enabled scopes; to the players a scope turned on, a group or guild joined or a friend added brings into them; to a player I whisper; in answer to an announcement that wants one (see Announcements) |
 | `GET` | identity ID | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend) |
 | `REC` | the signed identity record | In answer to `GET`s (see Sending a Record) |
 | `NOID` | nothing | From a character unlinked from my identity, in place of each of its announcements (see Removals) |
+| `GSGET` | nothing | To one member of my guild who announced newer guild settings, by whisper (see Guild Settings) |
+| `GSET` | the signed guild settings record | When the guild master or an officer changes them, to the guild; in answer to a `GSGET`, by whisper |
 
 The 30 and 60 second values below are starting values, to adjust in game.
 
@@ -249,7 +253,7 @@ What an anonymous character does with what arrives depends on my account:
 
 ### Announcements
 
-`1 ANNOUNCE <id> <rev> <level> <acceptsGet> <wantsAnnouncement> <guildListRev>`, each flag being `1` or `0`; about 94 bytes, one message. `guildListRev` is the revision of the guild list the sender holds, `<server time>.<hash>`, or `0` without one; it is always `0` until guild lists are built (see Guild Sharing). Fields after these are ignored, so a later version can add some without breaking this one.
+`1 ANNOUNCE <id> <rev> <level> <acceptsGet> <wantsAnnouncement> <guildListRev> <guildSettingsRev>`, each flag being `1` or `0`; about 105 bytes, one message. `guildSettingsRev` is the revision of the settings record the sender holds for its current guild, `0` without one; 0.1.0 sends no such field, read as `0`. `guildListRev` is the revision of the guild list the sender holds, `<server time>.<hash>`, or `0` without one; it is always `0` until guild lists are built (see Guild Sharing). Fields after these are ignored, so a later version can add some without breaking this one.
 
 Confirming characters is the core of the system, so one message carries the confirmation, the activity and the revision, and every announcement carries the identity.
 
@@ -359,7 +363,7 @@ My own identity ID is ignored. An anonymous character stores less (see Linked an
 Decided, not built. The record (`guild.consent`) and the announcement (`guildListRev`) already carry what it needs, so building it needs no format change; its own messages are new types, which this version ignores.
 
 - **Consent.** A record is passed on to a guild only when its `guild.consent` is true: the owner's Guild scope. A player who shares with friends only is never spread through their guild.
-- **Guild settings record.** Signed by a member of the trusted rank: whether linking characters in the guild is enforced, and the rank trusted for relayed identities (see Rank Gate). It names the signing character; a member accepts it only if that character is a confirmed character of the signing identity, in the guild, at the trusted rank in the member's own roster. Its revision is the server time when signed; the most recent wins, ties broken by signer ID. A change of the trusted rank must be signed by a member of the rank already held.
+- **Guild settings record.** Built: see Guild Settings. Later settings: whether linking characters in the guild is enforced, the rank trusted for relayed identities (see Rank Gate), and which ranks may change the settings.
 - **Enforced linking** (a later setting): with the Guild scope on, every character of mine in the guild is in the record the guild gets, linked or not; everyone else still gets my linked characters only.
 - **Guild lists.** Each member keeps its own list: for each identity with consent and a confirmed character in the guild, and each guild-made identity, its ID and the highest revision the member holds. The list's revision is `<server time>.<hash>`: when it last gained a newer identity revision, and a short hash of its content. The announcement carries it.
   - Mine older (or the same time with a lower hash): I ask **one** member who announced a newer list for it, take the highest revision per identity, fetch the records I lack (one `GET` may name several), then give my list a new time, so members holding an older list ask me in turn.
@@ -367,6 +371,20 @@ Decided, not built. The record (`guild.consent`) and the announcement (`guildLis
   - Lists are hints, not data: every record is still verified with its owner's signature, so lists are not signed. A revision nobody delivers is dropped after the usual retry.
 - **Relayed records.** From a guild member who is not the record's owner: a newer revision of an identity I hold is accepted from any member; an identity I don't hold yet only from a member of the trusted rank, stored with every character listed until I see one. A record sent by the owner's own character is handled as today.
 - **Guild-made identities**, for players without the add-on: one record each, signed by the member of the trusted rank who wrote it, revision = server time, the most recent wins. A player's own identity takes precedence, as over my manual identities.
+
+### Guild Settings
+
+A guild's settings (`GuildSettings`, for now `enable` only) are one record per guild, signed with the identity key of its guild master or one of its officers (rank index 0 or 1: `GuildSettings.LOWEST_RANK_INDEX`), and changed only from the guild panel's Who's Who tab, which those ranks alone see (`Protocol.ChangeGuildSettings`).
+
+```
+v, guild (club ID), settings = { enable }, signer (identity ID), signerGuid (the character it was signed from),
+rev (server time when signed, or one more than the record held when that is not later), sig
+```
+
+- **Sent**: a change goes to the guild once `GUILD_SETTINGS_WAIT_SECONDS` (5) have passed, gathering the changes that follow, as one `GSET` on `GUILD` (to each online member while my messages on `GUILD` reach no one, see Workarounds). Nothing goes out with the Guild scope off, and the tab's checkbox needs a linked character and the Guild scope: the members check the signer through its confirmed character.
+- **Asked for**: every announcement carries `guildSettingsRev`, the revision held for the sender's current guild. A member of my guild announcing a later one than mine gets one `GSGET` by whisper; another member announcing it gets none while that one waits (`REQUEST_DELAY_SECONDS`). The member asked answers with its record by whisper. Members holding an older one do nothing: the older side asks. At login, the answers to my announcement bring the revisions of every online member, so at most one `GSGET` and one `GSET` follow.
+- **Received**: from any member of my current guild, about it (`Scopes.GuildReaches`), relayed or not. A record not newer than mine (`GuildSettings.IsNewer`: a later revision, or the same one from a greater signer ID) is dropped before its signature is checked; the others go through the verification queue, then `GuildSettings.Accept` with the signing character's rank index in my own roster (`Scopes.GuildRankIndex`): refused above `LOWEST_RANK_INDEX`; held back when the signing character is not a confirmed character of the signing identity yet, or not in my roster yet; accepted otherwise. The newest record held back is tried again at each change of `People` and each roster update (memory only, lost at a `/reload`).
+- **Not built**: checking the signer's rank again when the roster changes later, so a demoted signer's record stays until a newer one.
 
 ### Own Messages
 
@@ -377,7 +395,7 @@ Recognised by content: an announcement or a `REC` carrying my identity ID is min
 ### Rank Gate
 
 - Guild ranks are compared by **index** (0 = guild master); a threshold means "this rank and every rank above".
-- The trusted rank is set in the guild settings record (see Guild Sharing); without one, it is rank index 1 (the guild master and officers). Nothing is written in the guild info text.
+- The trusted rank will be set in the guild settings record (see Guild Sharing); without one, it is rank index 1 (the guild master and officers). The settings themselves are signed by rank index 0 or 1 only (see Guild Settings). Nothing is written in the guild info text.
 - **Receivers** look the sender, or the signing character, up in their own roster. A claim of rank is never trusted.
 
 ### Signatures
@@ -386,7 +404,7 @@ Recognised by content: an announcement or a `REC` carrying my identity ID is min
 
 - Ed25519 (RFC 8032) over SHA-512, pure Lua 5.1 on doubles, TweetNaCl algorithms. Curve constants are computed at load and checked by the vectors.
 - In game (build 1.60.1): public key 120 ms, sign 122 ms, verify 249 ms. Offline under PUC Lua 5.1 it is about 2.5× faster.
-- `Ed25519.SetSlicing(bits)` makes scalar multiplication yield inside a coroutine. At 16 bits per slice, one verify takes 33 frames at most 21 ms each. `RecordVerification.Queue(signedRecord, onVerified)` always runs this way, one record at a time in a background queue (a frame's `OnUpdate`, hidden when idle). Its result is cached for the session by canonical bytes and signature, not by identity and revision, so a forged copy of a revision cannot block the genuine one.
+- `Ed25519.SetSlicing(bits)` makes scalar multiplication yield inside a coroutine. At 16 bits per slice, one verify takes 33 frames at most 21 ms each. `RecordVerification.Queue(signedRecord, format, onVerified)` always runs this way, for identity records (`Record`) and guild settings (`GuildSettings`), one record at a time in a background queue (a frame's `OnUpdate`, hidden when idle). Its result is cached for the session by canonical bytes and signature, not by identity and revision, so a forged copy of a revision cannot block the genuine one.
 - Not constant-time; side channels are out of scope in a game client.
 - Possible improvement: faster field arithmetic, about 1.5–2× expected; not needed while verification is spread over frames.
 - Key generation: `math.randomseed` does not exist on Forever (add-ons cannot seed `math.random`); the seed is SHA-512 over several local entropy sources.
@@ -413,6 +431,7 @@ people      { [identityID or "M<n>"] = { id (the same as the key), signedRecord 
                                    updatedAt } }
             guild (club ID), friendOf and whisperedAt: what my characters saw; only confirmed characters count (see Scopes)
 whispers    { [other character's GUID] = { name, ruleset, sentAt, receivedAt } }   within the whisper window (see Scopes)
+guildSettings  { [club ID] = signed guild settings record }   the latest accepted for each guild (see Guild Settings)
 nextManual  number of the next manual identity ("M<n>")
 forgotten   { [identityID] = { rev (the revision in which the player unlinked every character), at (when I forgot them) } }
 noIdentity  { [guid] = time of the last NOID received }   characters that declared no identity, until they confirm one again

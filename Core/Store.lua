@@ -19,6 +19,7 @@ ns.Store = Store
 ---@field noIdentity table<string, number> GUID -> when (time()) the character last declared no identity (NOID), until it confirms one
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
+---@field guildSettings table<integer, WhosWho.GuildSettingsRecord> by club ID: the latest record accepted for each guild
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
@@ -37,6 +38,7 @@ Store.DEFAULTS = {
         forgotten = {},
         noIdentity = {},
         automaticChanges = {},
+        guildSettings = {},
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },

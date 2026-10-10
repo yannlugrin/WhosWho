@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+
+- **Guild settings**: the guild master and officers get a Who's Who tab in the guild panel, to enable Who's Who for the guild. The setting reaches every member who uses Who's Who, signed so that only those ranks can change it; `/ww status` shows it. It changes nothing else yet: sharing identities across the guild comes next.
+
 ## [0.1.1] - 2026-10-10
 
 ### Fixed

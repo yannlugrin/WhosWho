@@ -14,6 +14,7 @@ L["Friends"] = true
 L["Group"] = true
 L["Guild"] = true
 L["Linked characters: %d"] = true
+L["Who's Who for the guild: %s"] = true
 L["linked"] = true
 L["linked, main"] = true
 L["Link this character first: /ww link"] = true
@@ -208,3 +209,7 @@ L["Only you see it. It replaces the name this person is shown under."] = true
 L["Remove my nickname"] = true
 L["About %s"] = true
 L["Note: %s"] = true
+
+-- Guild panel
+L["Enable Who's Who for the guild"] = true
+L["Link this character and share with your guild to change the guild's settings."] = true
