@@ -55,5 +55,5 @@ First beta, for World of Warcraft: Forever.
 - **French translation.**
 
 [Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...HEAD
-[0.1.0]: https://github.com/yannlugrin/WhosWho/releases/tag/0.1.0
+[0.1.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.0-beta.1...0.1.0
 [0.1.0-beta.1]: https://github.com/yannlugrin/WhosWho/releases/tag/0.1.0-beta.1

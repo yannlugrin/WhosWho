@@ -4,15 +4,17 @@ Link all your characters into one identity, choose who can see it, and recognise
 
 For **World of Warcraft: Forever**. Source code, issues and releases: [github.com/yannlugrin/WhosWho](https://github.com/yannlugrin/WhosWho).
 
-> **In development.** This is a beta: sharing identities between players works, with the My identity and People windows, the settings and the commands below. What is marked *coming* isn't built yet. Please report what goes wrong (see [Reporting a problem](#reporting-a-problem)).
+> **In development.** What is marked *coming* isn't built yet. Please report what goes wrong or any suggestion (see [Reporting a problem](#reporting-a-problem)).
 
 ## Features
 
 - **One identity for all your characters.** Link the characters you play and pick your main: you're shown under its name, or under a nickname if you set one. The first time you log in on a character, Who's Who asks whether to link it. Manage it all in the **My identity** tab, or with `/ww link`, `/ww main` and `/ww nick`.
 - **You decide who sees it.** Share with your guild, your friends, your party or raid, or the people you whisper. Guild and friends are on by default, and nothing is shared until you link a character.
 - **Recognise people across their alts.** When someone shares their identity with you, the **People** tab lists them with their characters, who is online and when you last saw them. Their nickname shows next to their name in chat and in their tooltip, on every character they linked, and the tooltip lists their other characters.
-- **Always up to date.** Your identity reaches the people you share with when you log in, level up, log out, join a group or a guild, add a friend, turn a sharing option on or whisper someone, and people who come online or join your group later get it too.
-- *Coming:* **Link players who don't use the add-on.** Group someone's characters and give them a nickname, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
+- **Your own nickname and notes.** In the People tab, give anyone your own nickname for them and write notes about them, seen only by you, or forget them. The start of the note shows in their tooltip.
+- **Always up to date.** Your identity reaches the people you share with when you log in, level up, log out, join a group or a guild, add a friend, turn a sharing option on or whisper someone, and people who come online or join your group later get it too. The people you whisper keep getting it for a time you choose in the settings (3 hours by default).
+- **Link players who don't use the add-on.** Start a person from one of their characters and link their other characters to them, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
+- **Right-click any player**, from their unit frame, the guild roster, your friends, recent contacts or their name in chat, to link their character to a person, show that person, make it their main or unlink it.
 - *Coming:* **Your whole guild, known to everyone.** Guild members pass on to each other the identities guildmates shared, so you recognise every guildmate who uses Who's Who, even one you've never been online with.
 - *Coming:* **Review** what Who's Who changed on its own, for example when a player you linked yourself starts sharing their own identity.
 

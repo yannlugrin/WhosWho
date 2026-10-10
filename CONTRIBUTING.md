@@ -61,14 +61,19 @@ Update the documents your change touches, in the same pull request:
 
 ## Releasing (maintainers)
 
-1. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and date, `## [0.1.0-beta.1] - 2026-10-07`, add an empty `## [Unreleased]` above it, and update the links at the bottom.
-2. Commit, then tag the commit with the version itself (`0.1.0-beta.1`, no `v`), as an annotated tag whose message is that version's section of the changelog, heading included: the same text the release notes get. From the repository root (Git Bash):
+1. In `CHANGELOG.md`, rename `## [Unreleased]` to the version and date, `## [0.1.0] - 2026-10-10`, add an empty `## [Unreleased]` above it, and update the links at the bottom: `[Unreleased]` compares the new version with `HEAD`, and the new version compares the previous one with it (`[0.1.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.0-beta.1...0.1.0`); only the first version links to its tag.
+2. Read the documents in full against that version's section, and fix them in the release commit:
+   - [README.md](README.md): the status note at the top, every *Coming* mark (a feature built in this version loses it), the features and the commands. The README goes into the package.
+   - [README-Technical.md](README-Technical.md), [README-Design.md](README-Design.md), [README-Testing.md](README-Testing.md): their status lines and what they mark as planned.
+3. Commit, then tag the commit with the version itself (`0.1.0`, no `v`), as an annotated tag whose message is `Who's Who <version>`, a blank line, then that version's section of the changelog, without its `## [...]` heading: the same text the release notes get. From the repository root (Git Bash):
    ```
-   version=0.1.0-beta.1
-   { echo "Who's Who $version"; awk -v heading="## [$version]" '
-       index($0, heading) == 1 { found = 1; print; next }
+   version=0.1.0
+   { echo "Who's Who $version"; echo; awk -v heading="## [$version]" '
+       index($0, heading) == 1 { found = 1; next }
        found && (/^## \[/ || /^\[[^]]*\]: /) { exit }
-       found { print }' CHANGELOG.md | tr -d '\r'; } | git tag -a "$version" --cleanup=verbatim -F -
+       found { print }' CHANGELOG.md | tr -d '\r'; } | git tag -a "$version" --cleanup=whitespace -F -
    ```
-   Then push the branch and the tag. A tag containing `alpha` or `beta` makes an alpha or beta release; any other tag, a full release.
-3. `.github/workflows/package.yml` packages the add-on and uploads it to CurseForge, then creates the GitHub release (a pre-release for alpha and beta) with that version's section of the changelog. It stops if the changelog has no section for the tag.
+   Check it with `git for-each-ref "refs/tags/$version" --format='%(contents)'` and compare it with the previous tag's, then push the branch and the tag. A tag containing `alpha` or `beta` makes an alpha or beta release; any other tag, a full release.
+4. `.github/workflows/package.yml` packages the add-on and uploads it to CurseForge, then creates the GitHub release (a pre-release for alpha and beta) with that version's section of the changelog. It stops if the changelog has no section for the tag.
+
+A pushed tag is final: never delete it or push it again. Deleting it turns its GitHub release into a draft, and pushing it again uploads the package a second time. A mistake found after the push is fixed in the next version.
