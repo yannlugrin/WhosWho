@@ -4,6 +4,19 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-10
+
+First stable release, for World of Warcraft: Forever.
+
+Who's Who links your characters into one identity and lets you recognise the people you play with on all their characters:
+
+- **One identity for all your characters**, with a main and a nickname, shared only with the players you choose: your guild, your friends, your group or the players you whisper. It is signed with a key that stays on your computer, so nobody else can change it.
+- **People you know**, in the People tab, with their characters, who is online, your own nickname for them and your private notes. Characters of players who don't use Who's Who can be linked to them by hand.
+- **Recognised everywhere**: their nickname in chat and in tooltips, the other characters they play, and a right-click menu on any player to link, show or unlink their character.
+- **Settings** in Options → AddOns, slash commands under `/ww`, a minimap button, and a French translation.
+
+Changes since 0.1.0-beta.1:
+
 ### Added
 
 - **Tooltips**: the nickname of the people you know, after their name or on its own line, and an "Also:" line with their other characters, each adjustable in the settings.
@@ -41,5 +54,6 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.1.0-beta.1...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/yannlugrin/WhosWho/releases/tag/0.1.0
 [0.1.0-beta.1]: https://github.com/yannlugrin/WhosWho/releases/tag/0.1.0-beta.1
