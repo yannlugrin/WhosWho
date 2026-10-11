@@ -31,6 +31,7 @@ Core\People.lua
 Core\Resolver.lua
 Core\RecordVerification.lua
 Core\GuildSettings.lua
+Core\GuildList.lua
 
 Comm\Codec.lua
 Comm\Scopes.lua

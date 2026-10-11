@@ -161,7 +161,7 @@ Right-click a character in the People tab's detail panel, or a person in the lis
 
 ## Last Seen
 
-In the People tab, a person's last seen moves to now when one of their characters is online in your guild, in your group, online in your friend list, or whispers with you, also for a person you created yourself. A guild member you link while they are offline shows their last login from the roster (to the hour), and keeps it until you see them online.
+In the People tab, a person's last seen moves to now when one of their characters is online in your guild, in your group, online in your friend list, or whispers with you, also for a person you created yourself. A guild member you link while they are offline shows their level from the roster and no last seen time until you see them online.
 
 ## Guild Settings
 
@@ -172,6 +172,14 @@ Needs a guild where A is the guild master or an officer and B a member below; bo
 - A unticks and ticks again within 5 s: one `GSET`, with the last state.
 - B logs out; A changes the setting; B logs back in: A's answer to B's login announcement ends with A's revision, B sends `Sent, WHISPER <A's name>: 1 GSGET`, A answers `1 GSET …` by whisper, and B holds the new record.
 - With the Guild scope off on A, or on an unlinked character of A's: the checkbox is greyed out, its tooltip says why.
+
+## Guild Lists
+
+Needs a guild with Who's Who enabled (see Guild Settings): A an officer, B and C members, all linked with the Guild scope on.
+
+- With A, B and C online and knowing each other, a login of any of them: no `GLGET` (their lists have the same hash).
+- C logs out. D, a new member, links and logs in with A and B online: D sends one `Sent, WHISPER <A>: 1 GLGET` (the officer), A answers `1 GLIST …` by whisper, then D asks A for C's identity (`1 GET <C's ID>`), A answers with C's `REC`, and `/ww people <C's character>` on D shows it `listed by the guild`. When C logs back in, its announcement confirms it.
+- A turns Who's Who off then on for the guild: `Sent, GUILD: 1 GSET …` then `Sent, GUILD: 1 ANNOUNCE …` ending with A's list revision; members holding the same list send nothing.
 
 ## Still to Test
 

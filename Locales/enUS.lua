@@ -19,6 +19,7 @@ L["linked"] = true
 L["linked, main"] = true
 L["Link this character first: /ww link"] = true
 L["listed"] = true
+L["listed by the guild"] = true
 L["No one known with a character named %s."] = true
 L["No one known yet."] = true
 L["off"] = true

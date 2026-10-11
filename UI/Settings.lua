@@ -205,7 +205,10 @@ StaticPopupDialogs.WHOSWHO_FORGET_EVERYONE_ELSE = {
         .. L["Who's Who forgets every person you know about. This can't be undone."],
     button1 = L["Forget"],
     button2 = CANCEL,
-    OnAccept = function() ns.People.ForgetAll() end,
+    OnAccept = function()
+        ns.People.ForgetAll()
+        ns.GuildList.Forget()
+    end,
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,

@@ -9,7 +9,7 @@ dofile(root .. "/Tests/Support/Bit.lua")
 local FILES = {
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua",
     "Core/Core.lua", "Core/Store.lua", "Core/Record.lua", "Core/Identity.lua", "Core/AutomaticChanges.lua",
-    "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua",
+    "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua", "Core/GuildList.lua",
     "Comm/Codec.lua", "Comm/Scopes.lua", "Comm/Protocol.lua",
 }
 local chunks = {}
@@ -263,12 +263,6 @@ local function newEnvironment(session)
         local info = { member.name }
         info[3], info[4], info[9], info[17] = member.rankIndex or 5, member.level, online(member.name) ~= nil, member.guid
         return unpack(info, 1, 17)
-    end
-    -- An offline member last logged in two days and three hours ago.
-    env.GetGuildRosterLastOnline = function(i)
-        local member = roster()[i]
-        if online(member.name) then return nil end
-        return 0, 0, 2, 3
     end
     env.C_GuildInfo = {
         GuildRoster = function()
@@ -738,7 +732,7 @@ end
 
 do
     local function eveSends(text) eve.ns.Protocol:SendCommMessage("WhosWho", text, "WHISPER", "Bob Main") end
-    local function eveAnnouncement() return eve.ns.Codec.Announcement(eveId, eve.ns.Identity.Revision(), eveMain.level, true, false, 0) end
+    local function eveAnnouncement() return eve.ns.Codec.Announcement(eveId, eve.ns.Identity.Revision(), eveMain.level, true, false, nil, nil, 0) end
     local function eveRecord() return eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord()) end
 
     bob.ns.settings.scopes.whispers = true
@@ -1436,13 +1430,11 @@ do
     local function lastSeen(c) return select(2, People.Find(c.guid)).lastSeen end
 
     select(2, People.Find(annMain.guid)).lastSeen = 1
+    gilMain.level = 42
     fire(bob, "GUILD_ROSTER_UPDATE")
     check(lastSeen(annMain) == world.clock, "a guild member online is seen now")
-    check(lastSeen(gilMain) == world.clock - (2 * 86400 + 3 * 3600),
-        "an offline guild member never seen gets its last login from the roster")
-    run(3600)
-    fire(bob, "GUILD_ROSTER_UPDATE")
-    check(lastSeen(gilMain) == world.clock - 3600 - (2 * 86400 + 3 * 3600), "only the first time")
+    check(lastSeen(gilMain) == nil and select(2, People.Find(gilMain.guid)).level == 42,
+        "an offline guild member gets its level from the roster, and no last seen time")
 
     local hal = login(account("Hal"), halMain)
     run(1)
@@ -1635,20 +1627,92 @@ check(joe.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Revision(
 clearLog()
 ivy.ns.Protocol.ChangeGuildSettings({ enable = false })
 run(10)
-check(sent({ from = "Ivy Main", type = "GSET", distribution = "GUILD" }) == 1
-    and hal.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Get(GUILD2).enable,
+check(sent({ from = "Ivy Main", type = "GSET" }) == 0 and ivy.ns.GuildSettings.Get(GUILD2).enable,
+    "a member below the officers signs no settings")
+-- A modified client signs them anyway.
+local ivyRecord = ivy.ns.GuildSettings.Change(GUILD2, { enable = false }, ivyMain.guid, os.time())
+ivy.ns.Protocol:SendCommMessage("WhosWho", ivy.ns.Codec.GuildSettingsUpdate(ivyRecord), "GUILD")
+run(10)
+check(hal.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Get(GUILD2).enable,
     "settings signed by a member below the officers are refused")
-logout(hal)
+clearLog()
+levelUp(ivy)
+run(10)
+check(sent({ type = "GSGET", target = "Ivy Main" }) == 0, "and their revision is never asked for")
+
+-- Guild lists: Who's Who is enabled for the guild.
+local function listHash(session)
+    local guid = session.character.guid
+    local GuildList = session.ns.GuildList
+    return GuildList.Hash(GuildList.Entries(GUILD2, session.ns.Identity.Ruleset(guid)))
+end
+check(listHash(hal) == listHash(ivy) and listHash(ivy) == listHash(joe), "members who know each other hold the same list")
+
+-- Kim joins the guild's lists while Ivy is offline: Hal, an officer, relays Ivy's identity to her.
+local kimAccount, leaAccount = account("Kim"), account("Lea")
+local kimMain = character("Kim Main", "Player-1-0000F401", WARRIOR, GUILD2)
+local leaMain = character("Lea Main", "Player-1-0000F501", MAGE, GUILD2)
+kimMain.rankIndex, leaMain.rankIndex = 3, 3
 logout(ivy)
+clearLog()
+local kim = login(kimAccount, kimMain)
+slash(kim, "link")
+run(60)
+check(sent({ from = "Kim Main", type = "GLGET" }) == 1 and sent({ from = "Kim Main", type = "GLGET", target = "Hal Main" }) == 1,
+    "a member whose list is older asks one member for its list, an officer when one holds it")
+check(sent({ from = "Hal Main", type = "GLIST", target = "Kim Main" }) == 1, "the officer answers by whisper")
+check(state(kim, ivyMain.guid) == "guild" and holderId(kim, ivyMain.guid) == ivy.ns.Identity.Id(),
+    "an identity she didn't hold comes from the officer, listed by the guild")
+check(select(2, kim.ns.People.Find(ivyMain.guid)).level == ivyMain.level
+    and select(2, kim.ns.People.Find(ivyMain.guid)).lastSeen == nil,
+    "with its level from the roster, and no last seen time: she never saw it")
+check(listHash(kim) == listHash(hal), "and her list is then the officer's")
+
+-- Lea joins too, then forgets Ivy's identity: Kim, below the officers, cannot pass it back to her; Hal can.
+local lea = login(leaAccount, leaMain)
+slash(lea, "link")
+run(60)
+local ivyId = ivy.ns.Identity.Id()
+check(state(lea, ivyMain.guid) == "guild", "another member joining gets it the same way")
+lea.ns.People.Forget(ivyId)
+local ivyRecordText = kim.ns.Codec.RecordUpdate(kim.ns.People.Get(ivyId).signedRecord)
+kim.ns.Protocol:SendCommMessage("WhosWho", ivyRecordText, "WHISPER", "Lea Main")
+run(5)
+check(lea.ns.People.Get(ivyId) == nil, "an identity she doesn't hold, relayed by a member below the officers, is refused")
+hal.ns.Protocol:SendCommMessage("WhosWho", ivyRecordText, "WHISPER", "Lea Main")
+run(5)
+check(state(lea, ivyMain.guid) == "guild", "and taken from an officer")
+
+-- Hal turns Who's Who off for the guild, then on again.
+hal.ns.Protocol.ChangeGuildSettings({ enable = false })
+run(10)
+check(not kim.ns.GuildSettings.Get(GUILD2).enable, "turned off for the guild")
+clearLog()
+hal.ns.Protocol.ChangeGuildSettings({ enable = true })
+run(10)
+check(sent({ from = "Hal Main", type = "GSET", distribution = "GUILD" }) == 1
+    and sent({ from = "Hal Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and not lastWantsAnnouncement({ from = "Hal Main", distribution = "GUILD" }),
+    "turning it on sends the settings, then one announcement that asks for none back")
+check(sent({ type = "ANNOUNCE", target = "Hal Main" }) == 0 and sent({ type = "GLGET" }) == 0,
+    "members holding the officer's list send nothing")
+logout(hal)
+logout(kim)
+logout(lea)
 logout(joe)
 
 -- Announcement format -----------------------------------------------------------------------------------
 
 do
     local Codec, id = ann.ns.Codec, ann.ns.Identity.Id()
-    local decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false, 1791403200))
+    local decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false, nil, nil, 1791403200))
     check(decoded and decoded.type == "ANNOUNCE" and decoded.rev == 3 and decoded.acceptsGet and not decoded.wantsAnnouncement
-        and decoded.guildSettingsRev == 1791403200, "an announcement decodes, its guild list revision 0")
+        and decoded.guildListAt == nil and decoded.guildSettingsRev == 1791403200, "an announcement decodes, without a guild list")
+    decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false, 1791403300, "9f2c41ab", 0))
+    check(decoded and decoded.guildListAt == 1791403300 and decoded.guildListHash == "9f2c41ab", "with a guild list, its revision")
+    check(#Codec.Decode(Codec.RecordRequest({ id, id, id })).ids == 3 and Codec.Decode("1 GET " .. id).ids[1] == id
+        and Codec.Decode(Codec.RecordRequest({ id, id, id }) .. " " .. id) == nil,
+        "a GET names one to three identities, as 0.1.0's one")
     decoded = Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0")
     check(decoded and decoded.guildSettingsRev == 0, "an announcement from 0.1.0, without guild settings, holds none")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 1791403200.9f2c41ab") ~= nil,

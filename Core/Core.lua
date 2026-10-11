@@ -21,6 +21,7 @@ local addonName, ns = ...
 ---@field Resolver WhosWho.Resolver
 ---@field RecordVerification WhosWho.RecordVerification
 ---@field GuildSettings WhosWho.GuildSettings
+---@field GuildList WhosWho.GuildList
 ---@field Codec WhosWho.Codec
 ---@field Scopes WhosWho.Scopes
 ---@field Protocol WhosWho.Protocol
@@ -223,7 +224,9 @@ ns.Commands.scope = function(rest)
 end
 
 local PEOPLE_LISTED = 10
-local STATE_NAMES = { confirmed = L["confirmed"], listed = L["listed"], added = L["added by you"] }
+local STATE_NAMES = {
+    confirmed = L["confirmed"], listed = L["listed"], guild = L["listed by the guild"], added = L["added by you"],
+}
 
 local function printPerson(person)
     local origin = person.signedRecord and L["shared, revision %d"]:format(person.signedRecord.rev) or L["created by you"]

@@ -20,7 +20,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 local ns = {}
 for _, file in ipairs({
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Record.lua",
-    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Comm/Scopes.lua",
+    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Core/GuildList.lua", "Comm/Scopes.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end
@@ -908,6 +908,41 @@ do
     check(GS.IsNewerThan({ rev = 6, signer = ("a"):rep(64) }, highSigner)
         and GS.IsNewerThan(highSigner, lowSigner) and not GS.IsNewerThan(lowSigner, highSigner),
         "a later revision wins, then the greater signer")
+end
+
+-- Guild list ---------------------------------------------------------------------------------------
+
+fresh()
+do
+    local GL, P = ns.GuildList, ns.People
+    local A, B, C, D = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64), string.rep("d", 64)
+    P.Accept(makeRecord(A, 2, { G1 }, "Ann"))
+    P.Confirm(A, G1, 10)
+    P.Accept(makeRecord(B, 3, { G2 }, "Bob"))
+    local withoutConsent = makeRecord(C, 1, { G3 })
+    withoutConsent.guild.consent = false
+    P.Accept(withoutConsent)
+    P.Confirm(C, G3, 10)
+    P.UpdateGuildMembers(7, { [G1] = true, [G2] = true, [G3] = true })
+    local entries = GL.Entries(7, NORMAL)
+    check(entries[A] == 2 and entries[B] == nil and entries[C] == nil,
+        "a guild list holds the consenting identities with a confirmed character in the guild")
+    check(next(GL.Entries(7, PVP)) == nil and next(GL.Entries(8, NORMAL)) == nil, "of that guild, in that ruleset")
+
+    local at, hash = GL.Revision(7, NORMAL, 1000)
+    check(at == 0 and #hash == 8, "my first list is older than anyone's")
+    P.Confirm(B, G2, 10)
+    local changedAt, changedHash = GL.Revision(7, NORMAL, 1100)
+    check(changedAt == 1100 and changedHash ~= hash and GL.Revision(7, NORMAL, 1200) == 1100,
+        "a change of its content gives it the time of the change, kept until the next one")
+    GL.Forget()
+    check(GL.Revision(7, NORMAL, 1300) == 0, "once forgotten, my next list is a first one again")
+    check(GL.IsLater(5, "00", 4, "ff") and GL.IsLater(5, "ab", 5, "aa") and not GL.IsLater(5, "aa", 5, "ab"),
+        "a later time wins, then the greater hash")
+
+    local held, unknown = GL.Missing({ [A] = 3, [B] = 3, [C] = 2, [D] = 1 })
+    check(#held == 2 and held[1] == A and held[2] == C and #unknown == 1 and unknown[1] == D,
+        "another list's newer revisions: of identities I hold, and of ones I don't")
 end
 
 if failures > 0 then

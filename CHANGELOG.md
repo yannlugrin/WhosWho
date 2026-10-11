@@ -6,7 +6,12 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ### Added
 
-- **Guild settings**: the guild master and officers get a Who's Who tab in the guild panel, to enable Who's Who for the guild. The setting reaches every member who uses Who's Who, signed so that only those ranks can change it; `/ww status` shows it. It changes nothing else yet: sharing identities across the guild comes next.
+- **Guild settings**: the guild master and officers get a Who's Who tab in the guild panel, to enable Who's Who for the guild. The setting reaches every member who uses Who's Who, signed so that only those ranks can change it; `/ww status` shows it.
+- **Your whole guild, known to everyone**: once Who's Who is enabled for the guild, members pass on to each other the identities guildmates shared with their guild, so you recognise every guildmate who uses Who's Who, even one you've never been online with. An identity only an officer passed on to you shows as listed by the guild until the player confirms it.
+
+### Changed
+
+- **Last seen**: a guild member you haven't seen online no longer gets a last seen time from the guild roster, only their level.
 
 ## [0.1.1] - 2026-10-10
 

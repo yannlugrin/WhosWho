@@ -25,6 +25,7 @@ ns.People = People
 ---@alias WhosWho.CharacterState
 ---| "confirmed"  # in the player's record, and a message sent from that character carried the identity
 ---| "listed"     # in the player's record, not confirmed yet
+---| "guild"      # in the player's record, received from a trusted member of my guild, not from the player; not confirmed yet
 ---| "added"      # added by me
 
 ---@class WhosWho.PersonCharacter: WhosWho.Character
@@ -372,8 +373,8 @@ end
 
 -- Puts one of a record's characters in `toPerson`, and removes it from the person it no longer belongs to.
 -- `confirmedLevel` is given when a message from the character proved it (its level then); without it, another
--- player's identity keeps the character.
-local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
+-- player's identity keeps the character. `fromGuild`: the record came from my guild, not from the player.
+local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel, fromGuild)
     -- Another player keeps a character they declared, unless this is a confirmation.
     local fromPersonId = index()[guid]
     local fromPerson = fromPersonId and fromPersonId ~= toPerson.id and ns.data.people[fromPersonId] or nil
@@ -399,11 +400,13 @@ local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel)
         forget(fromPerson.id)
     end
 
-    -- The character itself, its entry moved from the identity it left, with the record's data: listed, or confirmed
-    -- once proven.
+    -- The character itself, its entry moved from the identity it left, with the record's data: listed (by the guild
+    -- for a record it relayed, unless the player's own record already listed it), or confirmed once proven.
     local character = toPerson.chars[guid] or fromCharacter or {}
     character.name, character.ruleset, character.classID = recordCharacter.name, recordCharacter.ruleset, recordCharacter.classID
-    if character.state ~= "confirmed" then character.state = "listed" end
+    if character.state ~= "confirmed" and not (fromGuild and character.state == "listed") then
+        character.state = fromGuild and "guild" or "listed"
+    end
     if confirmedLevel then character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time() end
     toPerson.chars[guid] = character
     indexCharacter(guid, toPerson.id)
@@ -422,8 +425,9 @@ end
 ---without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my nickname
 ---and added alts with it.
 ---@param signedRecord WhosWho.SignedIdentityRecord already validated and verified
+---@param fromGuild boolean? relayed by a member of my guild, not sent by the player: the new characters are "guild"
 ---@return "updated"|"stale"|"forgotten"
-function People.Accept(signedRecord)
+function People.Accept(signedRecord, fromGuild)
     local people, noIdentity = ns.data.people, ns.data.noIdentity
     if not People.IsNewer(signedRecord.id, signedRecord.rev) then return "stale" end
     local sharedPerson = people[signedRecord.id]
@@ -461,7 +465,7 @@ function People.Accept(signedRecord)
     -- Update or add the characters this revision lists.
     AutomaticChanges.BeginOperation(sharedPerson)
     for guid, recordCharacter in pairs(recordCharacters) do
-        storeCharacter(sharedPerson, guid, recordCharacter, pending[guid])
+        storeCharacter(sharedPerson, guid, recordCharacter, pending[guid], fromGuild)
     end
     AutomaticChanges.EndOperation()
     changed()
@@ -526,16 +530,24 @@ function People.DeclaredNoIdentity(guid)
     changed()
 end
 
----Activity of characters I hold, from what the game shows (the guild roster, my group, my friend list, whispers):
----each is kept only when more recent, and never confirms anything. One change for them all.
----@param activities table<string, { level: integer?, lastSeen: number }> by GUID; lastSeen in seconds, from time()
+---Activity of characters I hold, from what the game shows (the guild roster, my group, my friend list, whispers): a
+---last seen time is kept only when more recent, a level only when higher. Without a last seen time, the game shows the
+---character without my seeing it (a guild member offline in the roster). Never confirms anything. One change for them
+---all.
+---@param activities table<string, { level: integer?, lastSeen: number? }> by GUID; lastSeen in seconds, from time()
 function People.Activity(activities)
     local kept = false
     for guid, activity in pairs(activities) do
         local _, character = People.Find(guid)
-        if character and not (character.lastSeen and character.lastSeen >= activity.lastSeen) then
-            character.level, character.lastSeen = activity.level or character.level, activity.lastSeen
-            kept = true
+        if character then
+            if activity.lastSeen and not (character.lastSeen and character.lastSeen >= activity.lastSeen) then
+                character.lastSeen = activity.lastSeen
+                kept = true
+            end
+            if activity.level and not (character.level and character.level >= activity.level) then
+                character.level = activity.level
+                kept = true
+            end
         end
     end
     if kept then changed() end

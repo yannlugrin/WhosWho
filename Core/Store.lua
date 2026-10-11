@@ -20,6 +20,7 @@ ns.Store = Store
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
 ---@field guildSettings table<integer, WhosWho.GuildSettingsRecord> by club ID: the latest record accepted for each guild
+---@field guildLists table<integer, WhosWho.GuildListRevision> by club ID: my list's revision for each guild
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
@@ -39,6 +40,7 @@ Store.DEFAULTS = {
         noIdentity = {},
         automaticChanges = {},
         guildSettings = {},
+        guildLists = {},
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },

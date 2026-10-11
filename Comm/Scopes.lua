@@ -13,49 +13,7 @@ local issecretvalue = issecretvalue or function() return false end
 
 ---@alias WhosWho.Channel "GUILD"|"PARTY"|"RAID"|"WHISPER"
 
----Every player a message for all my enabled scopes reaches.
----@class WhosWho.Audience
----@field memberChannels WhosWho.Channel[] GUILD, PARTY or RAID: one message reaches every member
----@field guildMembers string[] the online members of my guild, one message each, in place of GUILD while my messages on
----it reach no one (Scopes.CanSendOnGuild)
----@field names string[] players reached by no member channel, one message each
-
 -- Sources ----------------------------------------------------------------------------------------
-
----A whisper with another character, saved in ns.data.whispers by its GUID.
----@class WhosWho.Whisper
----@field name string
----@field ruleset integer Record.RULESET, the same as my character's: whispers never cross rulesets
----@field sentAt number? seconds, from time(): when one of my characters last whispered it
----@field receivedAt number? seconds, from time(): when one of my characters last received a whisper from it
-
--- The whisper window, in seconds. On PLAYER_LOGOUT, AceDB may already have removed the values equal to their defaults.
-local function whisperWindow()
-    return (ns.settings.whisperHours or ns.Store.DEFAULTS.profile.whisperHours) * 3600
-end
-
--- Whether a whisper at that time still counts.
----@param at number?
-local function withinWhisperWindow(at)
-    return at ~= nil and time() - at < whisperWindow()
-end
-
--- The saved whisper with that player on the ruleset I play.
----@return string? guid
----@return WhosWho.Whisper? whisper
-local function findWhisper(name)
-    local ruleset = Identity.Ruleset(UnitGUID("player"))
-    for guid, whisper in pairs(ns.data.whispers) do
-        if whisper.name == name and whisper.ruleset == ruleset then return guid, whisper end
-    end
-    return nil, nil
-end
-
----@class WhosWho.Friend
----@field guid string
----@field name string
----@field connected boolean
----@field level integer? known while online
 
 ---Whether no value read from the game is secret. A secret value (Midnight-era API) may only be displayed: never
 ---compared, stored or used as a key.
@@ -101,6 +59,38 @@ local function guildMemberGuid(name)
     return nil
 end
 
+---A message from that player came on GUILD, so it is a member of my guild, even when my roster does not list it yet.
+---@param name string
+---@return boolean listed whether my roster lists that player
+function Scopes.ReceivedOnGuild(name)
+    if C_GuildInfo.MemberExistsByName(name) then return true end
+    unlistedGuildSenders[name] = true
+    return false
+end
+
+---The rank index of that character in my roster, 0 for the guild master.
+---@param guid string
+---@return integer? rankIndex nil when my roster does not list it
+function Scopes.GuildRankIndex(guid)
+    for i = 1, GetNumGuildMembers() do
+        local _, _, rankIndex = GetGuildRosterInfo(i)
+        local memberGuid = select(17, GetGuildRosterInfo(i))
+        if memberGuid and notSecret(memberGuid, rankIndex) and memberGuid == guid then return rankIndex end
+    end
+    return nil
+end
+
+---The online members of my guild but me, from the roster.
+---@return string[] names
+function Scopes.OnlineGuildMembers()
+    local names, ownName = {}, ns.UnitWholeName("player")
+    for i = 1, GetNumGuildMembers() do
+        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+        if name and notSecret(name, online) and online and name ~= ownName then names[#names + 1] = name end
+    end
+    return names
+end
+
 -- The units of the other members of my group (in a raid, mine too).
 local function groupUnits()
     local units = {}
@@ -123,6 +113,23 @@ local function groupMemberGuid(name)
     return nil
 end
 
+---Whether that character is another member of my group.
+---@param guid string
+---@return boolean
+function Scopes.InMyGroup(guid)
+    for _, unit in ipairs(groupUnits()) do
+        local unitGuid = UnitGUID(unit)
+        if unitGuid and notSecret(unitGuid) and unitGuid == guid then return true end
+    end
+    return false
+end
+
+---@class WhosWho.Friend
+---@field guid string
+---@field name string
+---@field connected boolean
+---@field level integer? known while online
+
 ---My WoW friends. Empty on PLAYER_LOGOUT: the friend list is already cleared.
 ---@return WhosWho.Friend[]
 function Scopes.Friends()
@@ -139,49 +146,39 @@ function Scopes.Friends()
     return friends
 end
 
----Whether that character is another member of my group.
----@param guid string
----@return boolean
-function Scopes.InMyGroup(guid)
-    for _, unit in ipairs(groupUnits()) do
-        local unitGuid = UnitGUID(unit)
-        if unitGuid and notSecret(unitGuid) and unitGuid == guid then return true end
-    end
-    return false
-end
-
 local function friendGuid(name)
     local info = C_FriendList.GetFriendInfo(name)
     local guid = info and info.guid
     return guid and notSecret(guid) and guid or nil
 end
 
----The GUID of an add-on message's sender, whatever channel it came on, from what that player is to me: the guild
----roster, the group units, my friend list, then the saved whispers within the whisper window. Names match exactly.
----@param name string "First Surname", as the add-on message gives it
----@return string? guid
-function Scopes.SenderGuid(name)
-    local guid, whisper = findWhisper(name)
-    local whispered = whisper and (withinWhisperWindow(whisper.sentAt) or withinWhisperWindow(whisper.receivedAt))
-    return guildMemberGuid(name) or groupMemberGuid(name) or friendGuid(name) or (whispered and guid or nil)
+---A whisper with another character, saved in ns.data.whispers by its GUID.
+---@class WhosWho.Whisper
+---@field name string
+---@field ruleset integer Record.RULESET, the same as my character's: whispers never cross rulesets
+---@field sentAt number? seconds, from time(): when one of my characters last whispered it
+---@field receivedAt number? seconds, from time(): when one of my characters last received a whisper from it
+
+-- The whisper window, in seconds. On PLAYER_LOGOUT, AceDB may already have removed the values equal to their defaults.
+local function whisperWindow()
+    return (ns.settings.whisperHours or ns.Store.DEFAULTS.profile.whisperHours) * 3600
 end
 
----The characters the game shows me online now: guild members from the roster, friends and group members.
----@return table<string, true> by GUID
-function Scopes.OnlineGuids()
-    local guids = {}
-    for i = 1, GetNumGuildMembers() do
-        local online, guid = select(9, GetGuildRosterInfo(i)), select(17, GetGuildRosterInfo(i))
-        if online and guid and notSecret(online, guid) then guids[guid] = true end
+-- Whether a whisper at that time still counts.
+---@param at number?
+local function withinWhisperWindow(at)
+    return at ~= nil and time() - at < whisperWindow()
+end
+
+-- The saved whisper with that player on the ruleset I play.
+---@return string? guid
+---@return WhosWho.Whisper? whisper
+local function findWhisper(name)
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    for guid, whisper in pairs(ns.data.whispers) do
+        if whisper.name == name and whisper.ruleset == ruleset then return guid, whisper end
     end
-    for _, friend in ipairs(Scopes.Friends()) do
-        if friend.connected then guids[friend.guid] = true end
-    end
-    for _, unit in ipairs(groupUnits()) do
-        local online, guid = UnitIsConnected(unit), UnitGUID(unit)
-        if online and guid and notSecret(online, guid) then guids[guid] = true end
-    end
-    return guids
+    return nil, nil
 end
 
 -- The saved whisper with that character, created when missing. A name names one character per ruleset: a whisper
@@ -232,18 +229,44 @@ function Scopes.ForgetOldWhispers()
     People.ClearWhisperedBefore(time() - whisperWindow())
 end
 
--- Relationships ----------------------------------------------------------------------------------
-
--- How long ago a guild member last logged in, from the roster: years, months, days and hours, months counted as 30
--- days.
-local function offlineSeconds(index)
-    local years, months, days, hours = GetGuildRosterLastOnline(index)
-    if not notSecret(years, months, days, hours) then return nil end
-    return (((years or 0) * 12 + (months or 0)) * 30 + (days or 0)) * 86400 + (hours or 0) * 3600
+---Clears the whisper history: the saved whispers, and when I last whispered each character I hold.
+function Scopes.ForgetWhispers()
+    ns.data.whispers = {}
+    People.ClearWhisperedBefore(math.huge)
 end
 
+---The GUID of an add-on message's sender, whatever channel it came on, from what that player is to me: the guild
+---roster, the group units, my friend list, then the saved whispers within the whisper window. Names match exactly.
+---@param name string "First Surname", as the add-on message gives it
+---@return string? guid
+function Scopes.SenderGuid(name)
+    local guid, whisper = findWhisper(name)
+    local whispered = whisper and (withinWhisperWindow(whisper.sentAt) or withinWhisperWindow(whisper.receivedAt))
+    return guildMemberGuid(name) or groupMemberGuid(name) or friendGuid(name) or (whispered and guid or nil)
+end
+
+---The characters the game shows me online now: guild members from the roster, friends and group members.
+---@return table<string, true> by GUID
+function Scopes.OnlineGuids()
+    local guids = {}
+    for i = 1, GetNumGuildMembers() do
+        local online, guid = select(9, GetGuildRosterInfo(i)), select(17, GetGuildRosterInfo(i))
+        if online and guid and notSecret(online, guid) then guids[guid] = true end
+    end
+    for _, friend in ipairs(Scopes.Friends()) do
+        if friend.connected then guids[friend.guid] = true end
+    end
+    for _, unit in ipairs(groupUnits()) do
+        local online, guid = UnitIsConnected(unit), UnitGUID(unit)
+        if online and guid and notSecret(online, guid) then guids[guid] = true end
+    end
+    return guids
+end
+
+-- Relationships ----------------------------------------------------------------------------------
+
 ---GUILD_ROSTER_UPDATE: my current character's guild, the guild of the characters I hold, and their activity: seen now
----while online; an offline one never seen gets its last login, from the roster.
+---while online; offline, its level only.
 function Scopes.GuildRosterChanged()
     local count = GetNumGuildMembers()
     local clubId = C_Club.GetGuildClubId()
@@ -256,13 +279,7 @@ function Scopes.GuildRosterChanged()
         local guid = select(17, GetGuildRosterInfo(i))
         if guid and notSecret(guid, level, online) then
             memberGuids[guid] = true
-            local _, character = People.Find(guid)
-            if character and online then
-                activities[guid] = { level = level, lastSeen = now }
-            elseif character and not character.lastSeen then
-                local offline = offlineSeconds(i)
-                if offline then activities[guid] = { level = level, lastSeen = now - offline } end
-            end
+            activities[guid] = { level = level, lastSeen = online and now or nil }
         end
     end
 
@@ -284,15 +301,21 @@ function Scopes.GuildChanged()
     Identity.SetGuild(UnitGUID("player"), nil)
 end
 
----FRIENDLIST_UPDATE: friendOf of the characters I hold, for my current character, and the activity of the ones
----online.
-function Scopes.FriendListChanged()
-    local friendGuids, activities, now = {}, {}, time()
-    for _, friend in ipairs(Scopes.Friends()) do
-        friendGuids[friend.guid] = true
-        if friend.connected then activities[friend.guid] = { level = friend.level, lastSeen = now } end
+---After a record is stored: the guild and the level of its characters my roster lists, as an announcement from them
+---would have set them had it come before the record; not a last seen time, the record says nothing of when I saw them.
+---@param signedRecord WhosWho.SignedIdentityRecord
+function Scopes.KeepGuildMembers(signedRecord)
+    local clubId = IsInGuild() and C_Club.GetGuildClubId()
+    if not clubId then return end
+    local activities = {}
+    for i = 1, GetNumGuildMembers() do
+        local _, _, _, level = GetGuildRosterInfo(i)
+        local guid = select(17, GetGuildRosterInfo(i))
+        if guid and notSecret(guid, level) and signedRecord.chars[guid] then
+            People.SetGuild(guid, clubId)
+            activities[guid] = { level = level }
+        end
     end
-    People.UpdateFriends(UnitGUID("player"), friendGuids)
     People.Activity(activities)
 end
 
@@ -308,6 +331,18 @@ function Scopes.GroupRosterChanged()
     People.Activity(activities)
 end
 
+---FRIENDLIST_UPDATE: friendOf of the characters I hold, for my current character, and the activity of the ones
+---online.
+function Scopes.FriendListChanged()
+    local friendGuids, activities, now = {}, {}, time()
+    for _, friend in ipairs(Scopes.Friends()) do
+        friendGuids[friend.guid] = true
+        if friend.connected then activities[friend.guid] = { level = friend.level, lastSeen = now } end
+    end
+    People.UpdateFriends(UnitGUID("player"), friendGuids)
+    People.Activity(activities)
+end
+
 ---After an announcement from this character: its guild and friendOf, when it is in my guild or friend list.
 ---@param guid string
 ---@param name string
@@ -315,12 +350,6 @@ function Scopes.SetRelationships(guid, name)
     local clubId = IsInGuild() and C_Club.GetGuildClubId()
     if clubId and C_GuildInfo.MemberExistsByName(name) then People.SetGuild(guid, clubId) end
     if friendGuid(name) == guid then People.SetFriendOf(guid, UnitGUID("player")) end
-end
-
----Clears the whisper history: the saved whispers, and when I last whispered each character I hold.
-function Scopes.ForgetWhispers()
-    ns.data.whispers = {}
-    People.ClearWhisperedBefore(math.huge)
 end
 
 ---After a record is stored: whisperedAt of the characters I whispered that I now hold.
@@ -397,10 +426,11 @@ function Scopes.Allows(name)
     return false
 end
 
----My group's channel: RAID in a raid, PARTY otherwise.
----@return WhosWho.Channel
-function Scopes.GroupChannel()
-    return IsInRaid() and "RAID" or "PARTY"
+---Whether that player is in my guild and the Guild scope is on: the GUILD channel reaches it.
+---@param name string
+---@return boolean
+function Scopes.GuildReaches(name)
+    return Scopes.Get("guild") and guildMember(name)
 end
 
 ---Whether one of my linked characters is in my current character's guild, in its ruleset: an anonymous character may
@@ -412,21 +442,11 @@ function Scopes.LinkedCharacterInGuild()
     return Identity.HasLinkedCharacterInGuild(clubId, Identity.Ruleset(UnitGUID("player")))
 end
 
----A message from that player came on GUILD, so it is a member of my guild, even when my roster does not list it yet.
----@param name string
----@return boolean listed whether my roster lists that player
-function Scopes.ReceivedOnGuild(name)
-    if C_GuildInfo.MemberExistsByName(name) then return true end
-    unlistedGuildSenders[name] = true
-    return false
-end
-
 -- Workaround for a WoW Forever bug (checked in game 2026-10-10): after joining a guild, a character's add-on messages on
 -- GUILD reach no one, not even its own echo, until it logs in again; it still receives the guild's, and its guild chat
 -- works; a /reload does not end it. Until then, what would go on GUILD goes by whisper to each online member. Remove
 -- Scopes.GuildJoined, Scopes.CanSendOnGuild, Identity.GuildJoined and Identity.JoinedGuildSinceLogin, and their
 -- callers, once a character can send on GUILD right after joining.
-
 ---PLAYER_GUILD_UPDATE: the character I play joined a guild.
 function Scopes.GuildJoined()
     Identity.GuildJoined(UnitGUID("player"), C_Club.GetGuildClubId())
@@ -438,34 +458,17 @@ function Scopes.CanSendOnGuild()
     return not Identity.JoinedGuildSinceLogin(UnitGUID("player"))
 end
 
----The online members of my guild but me, from the roster.
----@return string[] names
-function Scopes.OnlineGuildMembers()
-    local names, ownName = {}, ns.UnitWholeName("player")
-    for i = 1, GetNumGuildMembers() do
-        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
-        if name and notSecret(name, online) and online and name ~= ownName then names[#names + 1] = name end
-    end
-    return names
-end
-
----The rank index of that character in my roster, 0 for the guild master.
----@param guid string
----@return integer? rankIndex nil when my roster does not list it
-function Scopes.GuildRankIndex(guid)
-    for i = 1, GetNumGuildMembers() do
-        local _, _, rankIndex = GetGuildRosterInfo(i)
-        local memberGuid = select(17, GetGuildRosterInfo(i))
-        if memberGuid and notSecret(memberGuid, rankIndex) and memberGuid == guid then return rankIndex end
-    end
-    return nil
-end
-
----Whether that player is in my guild and the Guild scope is on: the GUILD channel reaches it.
+---Whether that player is in my group and the Group scope is on: the group channel reaches it.
 ---@param name string
 ---@return boolean
-function Scopes.GuildReaches(name)
-    return Scopes.Get("guild") and guildMember(name)
+function Scopes.GroupReaches(name)
+    return Scopes.Get("group") and groupMemberGuid(name) ~= nil
+end
+
+---My group's channel: RAID in a raid, PARTY otherwise.
+---@return WhosWho.Channel
+function Scopes.GroupChannel()
+    return IsInRaid() and "RAID" or "PARTY"
 end
 
 ---Whether that player is my WoW friend and the Friends scope is on: my announcements to my friends reach it.
@@ -475,12 +478,14 @@ function Scopes.FriendReaches(name)
     return Scopes.Get("friends") and friendGuid(name) ~= nil
 end
 
----Whether that player is in my group and the Group scope is on: the group channel reaches it.
----@param name string
----@return boolean
-function Scopes.GroupReaches(name)
-    return Scopes.Get("group") and groupMemberGuid(name) ~= nil
-end
+-- Audiences --------------------------------------------------------------------------------------
+
+---Every player a message for all my enabled scopes reaches.
+---@class WhosWho.Audience
+---@field memberChannels WhosWho.Channel[] GUILD, PARTY or RAID: one message reaches every member
+---@field guildMembers string[] the online members of my guild, one message each, in place of GUILD while my messages on
+---it reach no one (Scopes.CanSendOnGuild)
+---@field names string[] players reached by no member channel, one message each
 
 -- One character for each shared person the character I play whispered since that time, within the whisper window: the
 -- confirmed character I last whispered with, sent or received, the one they most likely play. A person my guild, group
