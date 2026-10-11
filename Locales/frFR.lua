@@ -161,6 +161,9 @@ L["Unconfirmed / Added by me"] = "Non confirmé / Ajouté par moi"
 L["People"] = "Personnes"
 L["Search names or characters"] = "Chercher un nom ou un personnage"
 L["Show"] = "Afficher"
+L["Guild mates"] = "Membres de la guilde"
+L["Everyone else"] = "Tous les autres"
+L["No one"] = "Personne"
 L["All"] = "Tous"
 L["Last seen"] = "Vu"
 L["Chars"] = "Pers."
@@ -210,6 +213,7 @@ L["Only you see it. It replaces the name this person is shown under."] = "Vous s
 L["Remove my nickname"] = "Retirer mon surnom"
 L["About %s"] = "À propos de %s"
 L["Note: %s"] = "Note : %s"
+L["Battle.net: %s"] = "Battle.net : %s"
 
 -- Guild panel
 L["Enable Who's Who for the guild"] = "Activer Who's Who pour la guilde"

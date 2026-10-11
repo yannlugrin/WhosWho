@@ -30,23 +30,28 @@ panel.FilterLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall
 panel.FilterLabel:SetPoint("LEFT", panel.SearchBox, "RIGHT", 12, 0)
 panel.FilterLabel:SetText(L["Show"])
 
--- The filters in the order the dropdown lists them; the dropdown keeps the chosen one in panel.filter.
+-- The filters in the order the dropdown lists them; the dropdown keeps the checked ones in panel.filters. A person
+-- is shown when one of the checked filters takes them.
 local FILTERS = {
-    { key = "all", label = L["All"] },
-    { key = "confirmed", label = L["Confirmed"] },
-    { key = "renamed", label = L["Renamed"] },
-    { key = "guild", label = L["Guild"] },
-    { key = "unconfirmed", label = L["Unconfirmed"] },
+    { key = "friends", label = L["Friends"] },
+    { key = "guildMates", label = L["Guild mates"] },
+    { key = "others", label = L["Everyone else"] },
 }
-panel.filter = "all"
+panel.filters = { friends = true, guildMates = true, others = true }
 
 panel.FilterDropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
 panel.FilterDropdown:SetWidth(FILTER_WIDTH)
 panel.FilterDropdown:SetPoint("LEFT", panel.FilterLabel, "RIGHT", 6, 0)
+panel.FilterDropdown:SetDefaultText(L["No one"])
+-- With every filter checked, "All"; otherwise the dropdown lists the checked ones.
+panel.FilterDropdown:SetSelectionText(function(selections)
+    if #selections == #FILTERS then return L["All"] end
+    return nil
+end)
 panel.FilterDropdown:SetupMenu(function(_, root)
     for _, filter in ipairs(FILTERS) do
-        root:CreateRadio(filter.label, function() return panel.filter == filter.key end, function()
-            panel.filter = filter.key
+        root:CreateCheckbox(filter.label, function() return panel.filters[filter.key] end, function()
+            panel.filters[filter.key] = not panel.filters[filter.key]
             panel:Refresh()
         end)
     end
@@ -90,6 +95,22 @@ local People = ns.People
 -- people, then the most recently seen; equal ones by name.
 local sortKey, sortAscending = "LastSeen", false
 
+-- Whether one of the person's characters is a WoW friend of one of my characters, or played by a Battle.net friend.
+local function isFriend(person)
+    for _, character in pairs(person.chars) do
+        if character.friendOf or character.bnetFriend then return true end
+    end
+    return false
+end
+
+-- Whether one of the person's characters is in my current character's guild: the people of the Guild tab.
+local function isGuildMate(person, clubId, ruleset)
+    for _, character in pairs(person.chars) do
+        if character.guild == clubId and character.ruleset == ruleset then return true end
+    end
+    return false
+end
+
 ---Selects a person: their row is marked and the detail panel shows them; nil clears the selection.
 ---@param id string?
 function panel:Select(id)
@@ -106,10 +127,16 @@ function panel:Refresh()
 
     local text = self.SearchBox:GetText():lower()
     local onlineGuids = ns.Scopes.OnlineGuids()
+    local ownGuid = UnitGUID("player")
+    local clubId, ruleset = IsInGuild() and ns.Identity.GuildId(ownGuid), ns.Identity.Ruleset(ownGuid)
+    local filters = self.filters
     local entries, selectedShown = {}, false
     for _, person in pairs(people) do
-        local entry = PersonBrowser.ListEntry(person, onlineGuids)
-        if (self.filter == "all" or entry.source == self.filter) and Lists.MatchesSearch(person, text) then
+        local friend, guildMate = isFriend(person), clubId and isGuildMate(person, clubId, ruleset)
+        local filtered = friend and filters.friends or guildMate and filters.guildMates
+            or not friend and not guildMate and filters.others
+        if filtered and Lists.MatchesSearch(person, text) then
+            local entry = PersonBrowser.ListEntry(person, onlineGuids)
             -- The character the person is playing, after the nickname.
             local online = entry.onlineCharacter
             entry.nicknameAside = online and Lists.ClassColoredName(online.name, online.classID) or nil
@@ -123,11 +150,11 @@ function panel:Refresh()
     self:Select(selectedShown and browser.selectedId or nil)
 end
 
----Opens the main window on this tab with a person selected and in view, clearing the search and filter that could
+---Opens the main window on this tab with a person selected and in view, clearing the search and filters that could
 ---hide them.
 ---@param id string
 function panel:ShowPerson(id)
-    self.filter = "all"
+    for _, filter in ipairs(FILTERS) do self.filters[filter.key] = true end
     self.FilterDropdown:GenerateMenu()
     self.SearchBox:SetText("")
     browser.selectedId = id

@@ -21,7 +21,7 @@ read_globals = {
     "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR",
     "PanelTemplates_TabResize", "PanelTemplates_SetNumTabs", "PanelTemplates_SetTab", "CreateScrollBoxListLinearView",
     "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline", "MenuUtil", "GameTooltip", "GameTooltip_Hide", "HIGHLIGHT_FONT_COLOR", "GRAY_FONT_COLOR", "RED_FONT_COLOR", "GameTooltipTextLeft1", "MinimalSliderWithSteppersMixin", "UnitIsFriend", "GetPlayerInfoByGUID", "C_PlayerInfo", "PlayerLocation", "ChatFrame_SendTell", "CreateSettingsCheckboxWithButtonInitializer", "WHISPER", "INVITE", "C_PartyInfo", "CreateColor", "Mixin", "ScrollBoxConstants",
-    "Ambiguate", "BNGetNumFriends", "BNSendGameData", "BNET_CLIENT_WOW",
+    "Ambiguate", "BNConnected", "BNGetNumFriends", "C_EventUtils", "BNSendGameData", "BNET_CLIENT_WOW",
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
     "GetGuildRosterInfo", "GetGuildRosterLastOnline", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumClasses", "GetNumGuildMembers", "GetServerTime", "GetTime",
     "GuildControlGetNumRanks", "GuildControlGetRankName", "GuildRoster", "IsInGroup", "IsInGuild", "IsInInstance", "IsInRaid", "IsResting",

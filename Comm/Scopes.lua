@@ -343,6 +343,27 @@ function Scopes.FriendListChanged()
     People.Activity(activities)
 end
 
+---BN_FRIEND_LIST_SIZE_CHANGED, BN_FRIEND_INFO_CHANGED: bnetFriend of the characters I hold, from my Battle.net
+---friends: the character each one plays in WoW, and the BattleTags of all of them.
+function Scopes.BnetFriendListChanged()
+    local count = BNConnected() and BNGetNumFriends() or 0
+    -- The list is empty while Battle.net is disconnected or until the game has loaded it.
+    if count == 0 then return end
+
+    local characterTags, battleTags = {}, {}
+    for i = 1, count do
+        local account = C_BattleNet.GetFriendAccountInfo(i)
+        local battleTag = account and account.battleTag
+        if battleTag and notSecret(battleTag) then
+            battleTags[battleTag] = true
+            local game = account.gameAccountInfo
+            local guid = game and game.clientProgram == BNET_CLIENT_WOW and game.playerGuid
+            if guid and notSecret(guid) then characterTags[guid] = battleTag end
+        end
+    end
+    People.UpdateBnetFriends(characterTags, battleTags)
+end
+
 ---After an announcement from this character: its guild and friendOf, when it is in my guild or friend list.
 ---@param guid string
 ---@param name string

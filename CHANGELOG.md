@@ -12,6 +12,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ### Changed
 
+- **People tab filter**: show your friends, your guild mates, everyone else, or any mix of them, instead of filtering by how an identity was confirmed. A Battle.net friend's BattleTag shows in their detail panel.
 - **Last seen**: a guild member you haven't seen online no longer gets a last seen time from the guild roster, only their level.
 
 ## [0.1.1] - 2026-10-10

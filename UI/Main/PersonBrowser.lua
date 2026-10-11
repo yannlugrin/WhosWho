@@ -98,6 +98,7 @@ end
 ---@field nickname string the name the person is shown under
 ---@field source "confirmed"|"renamed"|"guild"|"unconfirmed"
 ---@field baseNickname string? the nickname that applies without mine, when mine replaces it
+---@field battleTag string? BattleTag of my Battle.net friend seen playing one of the person's characters
 ---@field id string
 ---@field note string? my note about the person
 ---@field own boolean my own identity: no nickname, note or Forget of mine
@@ -142,6 +143,14 @@ function Browser:SetPerson(person)
     local nicknameSpace = detail:GetWidth() - 2 * DETAIL_PADDING - GLYPH_SIZE * 2 - 12 - detail.ForgetButton:GetWidth()
     detail.Nickname:SetWidth(math.min(detail.Nickname:GetUnboundedStringWidth(), nicknameSpace))
     detail.BaseNickname:SetText(person.baseNickname or "")
+    -- After the base nickname, or in its place.
+    detail.BattleTag:ClearAllPoints()
+    if person.baseNickname then
+        detail.BattleTag:SetPoint("LEFT", detail.BaseNickname, "RIGHT", 12, 0)
+    else
+        detail.BattleTag:SetPoint("TOPLEFT", detail.Nickname, "BOTTOMLEFT", 0, -2)
+    end
+    detail.BattleTag:SetText(person.battleTag and L["Battle.net: %s"]:format(person.battleTag) or "")
 
     for _, region in ipairs(detail.personalRegions) do region:SetShown(not person.own) end
     detail.Note:SetFontObject(person.note and "GameFontHighlight" or "GameFontDisable")
@@ -305,6 +314,8 @@ function PersonBrowser.Create(panel, listTop)
     -- The nickname that applies without mine.
     detail.BaseNickname = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     detail.BaseNickname:SetPoint("TOPLEFT", detail.Nickname, "BOTTOMLEFT", 0, -2)
+
+    detail.BattleTag = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 
     detail.CharactersHeading = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     detail.CharactersHeading:SetPoint("TOPLEFT", DETAIL_PADDING, -56)
@@ -512,8 +523,9 @@ end
 ---@param onlineGuids table<string, true>
 ---@return WhosWho.PersonDetail
 function PersonBrowser.PersonDetail(person, onlineGuids)
-    local characters = {}
+    local characters, battleTag = {}, nil
     for guid, character in pairs(person.chars) do
+        battleTag = battleTag or character.bnetFriend
         characters[#characters + 1] = {
             guid = guid,
             name = character.name, classID = character.classID, state = character.state, main = guid == person.main,
@@ -525,6 +537,7 @@ function PersonBrowser.PersonDetail(person, onlineGuids)
 
     return {
         nickname = People.Nickname(person.id), source = Lists.NicknameSource(person), characters = characters,
-        baseNickname = PersonBrowser.BaseNickname(person), id = person.id, note = person.note, own = false,
+        baseNickname = PersonBrowser.BaseNickname(person), battleTag = battleTag, id = person.id, note = person.note,
+        own = false,
     }
 end

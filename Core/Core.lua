@@ -91,6 +91,10 @@ frame:RegisterEvent("FRIENDLIST_UPDATE")
 frame:RegisterEvent("CHAT_MSG_WHISPER")
 frame:RegisterEvent("CHAT_MSG_WHISPER_INFORM")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- Forever throws on registering an event it doesn't know.
+for _, event in ipairs({ "BN_FRIEND_LIST_SIZE_CHANGED", "BN_FRIEND_INFO_CHANGED" }) do
+    if C_EventUtils and C_EventUtils.IsEventValid(event) then frame:RegisterEvent(event) end
+end
 -- Resting, logout and quit are immediate: no countdown.
 local function onLogoutOrQuit()
     if IsResting() and not UnitAffectingCombat("player") then ns.Protocol.AnnounceLogout() end
@@ -147,6 +151,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "FRIENDLIST_UPDATE" then
         ns.Scopes.FriendListChanged()
         ns.Protocol.FriendListChanged()
+    elseif event == "BN_FRIEND_LIST_SIZE_CHANGED" or event == "BN_FRIEND_INFO_CHANGED" then
+        ns.Scopes.BnetFriendListChanged()
     elseif event == "CHAT_MSG_WHISPER" then
         -- The sender's name and GUID.
         ns.Scopes.WhisperReceived(select(2, ...), select(12, ...))

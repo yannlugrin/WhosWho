@@ -34,6 +34,7 @@ ns.People = People
 ---@field lastSeen number? seconds, from time()
 ---@field guild integer? club ID of the guild in which one of my characters saw it
 ---@field friendOf table<string, true>? GUIDs of my characters that have it as a WoW friend
+---@field bnetFriend string? BattleTag of my Battle.net friend seen playing it; kept locally, never sent
 ---@field whisperedAt number? seconds, from time(): when one of my characters last whispered it
 
 ---A character I add, as I know it.
@@ -604,6 +605,22 @@ function People.UpdateFriends(ownCharacterGuid, friendGuids)
             elseif character.friendOf then
                 character.friendOf[ownCharacterGuid] = nil
                 if not next(character.friendOf) then character.friendOf = nil end
+            end
+        end
+    end
+end
+
+---Applies my Battle.net friend list: the characters my friends play get their BattleTag; a character loses it once
+---its BattleTag is no longer in the list.
+---@param characterTags table<string, string> BattleTag by GUID of the character played
+---@param battleTags table<string, true> every friend's BattleTag, online or not
+function People.UpdateBnetFriends(characterTags, battleTags)
+    for _, person in pairs(ns.data.people) do
+        for guid, character in pairs(person.chars) do
+            if characterTags[guid] then
+                character.bnetFriend = characterTags[guid]
+            elseif character.bnetFriend and not battleTags[character.bnetFriend] then
+                character.bnetFriend = nil
             end
         end
     end

@@ -159,6 +159,16 @@ Right-click a character in the People tab's detail panel, or a person in the lis
 - The menu shows the character's name as its title, **Whisper**, **Invite**, then the Who's Who section (Make main or Unlink when they apply; no Show person).
 - **Whisper** opens a whisper to that character in the chat box; **Invite** invites it. A character already in my group has no **Invite**. In the list, right-clicking a person whose online character isn't known opens nothing, and the selection doesn't change. No Lua error, and BugSack shows no blocked action.
 
+## People Tab Filter
+
+Needs B a WoW friend of one of my characters, C a member of my current character's guild, E neither; all three known.
+
+- **Show** lists Friends, Guild mates and Everyone else, all checked: the dropdown reads "All", and B, C and E are listed.
+- Unchecking Guild mates hides C, and every person the Guild tab lists, unless they are also a friend; the dropdown names the checked ones. Unchecking Friends hides B; unchecking Everyone else hides E. All unchecked: "No one", an empty list.
+- On a character in another guild, or in none, C counts as Everyone else.
+- A Battle.net friend's character, once seen while they play it, counts as Friends, also after they log off; their detail panel shows "Battle.net: <BattleTag>" under the nickname, after the original nickname when mine replaces it. Removing them from my Battle.net friends moves it to Everyone else.
+- **Show person** (from a player's menu) on a hidden person checks all three again.
+
 ## Guild Tab
 
 Needs a guild with Who's Who enabled (see Guild Settings): A and B members, both linked with the Guild scope on; C a member without Who's Who; D, B's alt, in the guild while B's main is not.

@@ -721,6 +721,13 @@ do
     P.UpdateFriends(ME2, {})
     check(character(G1).friendOf == nil, "no friendOf once no character of mine has it as a friend")
 
+    P.UpdateBnetFriends({ [G1] = "Ann#1" }, { ["Ann#1"] = true })
+    check(character(G1).bnetFriend == "Ann#1", "a character a Battle.net friend plays gets their BattleTag")
+    P.UpdateBnetFriends({}, { ["Ann#1"] = true })
+    check(character(G1).bnetFriend == "Ann#1", "it keeps it while the friend is offline")
+    P.UpdateBnetFriends({}, {})
+    check(character(G1).bnetFriend == nil, "it loses it once the BattleTag is no longer in the list")
+
     P.SetWhisperedAt(G1, 40)
     P.SetWhisperedAt(G1, 45)
     check(character(G1).whisperedAt == 45, "whisperedAt keeps the last whisper")

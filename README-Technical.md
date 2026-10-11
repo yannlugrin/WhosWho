@@ -124,6 +124,7 @@ Implemented:
 - `PLAYER_LEVEL_UP`: the same refresh, with the new level from the event (`UnitLevel` still returns the old one); announcement.
 - `GUILD_ROSTER_UPDATE`: my current character's guild in `Identity`, `guild` of the characters I hold (see Scopes), and their activity (see Data Model); sends nothing.
 - `FRIENDLIST_UPDATE`: `friendOf` of the characters I hold, for my current character (see Scopes), and the activity of the ones online; then `Protocol.FriendListChanged`, the announcement to a friend added (see Announcements).
+- `BN_FRIEND_LIST_SIZE_CHANGED`, `BN_FRIEND_INFO_CHANGED`: `bnetFriend` of the characters I hold (`Scopes.BnetFriendListChanged`). Registered only when the client knows them (`C_EventUtils.IsEventValid`).
 - `PLAYER_GUILD_UPDATE` (player): a guild left clears my current character's guild; a guild joined requests the roster; then `Protocol.GuildChanged`, the announcement on joining a guild (see Announcements).
 - `CHAT_MSG_WHISPER`: the sender's name and GUID, saved for the senders' GUIDs only (see Scopes); the sender's activity.
 - `CHAT_MSG_WHISPER_INFORM`: the receiver's name and GUID, saved for the senders' GUIDs and the Whispers scope (see Scopes), and its activity; then `Protocol.Whispered`, the announcement to that player (see Announcements).
@@ -319,6 +320,7 @@ The relationships behind the first question are stored, since a character only s
 
 - `guild`: the guild in which one of my characters saw this character, written from that character's roster: set for each character in it, cleared for a character with that `guild` no longer in it, also set when an announcement comes from a character found in the roster. It counts only while one of my characters of the same ruleset is in that guild; `Identity` keeps each of my characters' guild. The guild is its club ID (`C_Club.GetGuildClubId()`, a number on Forever although the API documentation says a string; checked in game; that two characters of one guild get the same value is *to verify in game*). Nothing says club IDs are unique across rulesets, so a guild is its club ID and the ruleset of the characters in it.
 - `friendOf`: which of my characters has this character as a WoW friend, each of my characters writing only its own entry from its friend list, also set when an announcement comes from a character found in that list. Battle.net friends are account-wide and checked live.
+- `bnetFriend`: the BattleTag of my Battle.net friend seen playing this character (`gameAccountInfo.playerGuid`), from the whole friend list each time it changes (`People.UpdateBnetFriends`); cleared once that BattleTag is no longer in the list. An empty list (Battle.net disconnected, or not loaded yet) changes nothing. It is not used for sharing, only by the People tab: its Friends filter, and the BattleTag in the detail panel (*to verify in game*: no Battle.net friend seen in Forever yet).
 - `whisperedAt`: when one of my characters last whispered this character (`time()`), set on each whisper I send to a character I hold, and, for a character I did not hold yet, when a stored record brings it (`Scopes.KeepSentWhispers`, from the saved whispers). It counts only within the whisper window, and is cleared once older at logout.
 
 **Clear history**, next to the Whispers scope in the settings, empties the saved whispers and clears every `whisperedAt` (`Scopes.ForgetWhispers`, after a confirmation): the players I whispered are no longer allowed through that scope until I whisper them again.
@@ -335,7 +337,7 @@ Audiences per scope:
 - **Group**: `PARTY` or `RAID` channel, whichever the player is in (checked in game).
 - **Selected** (planned, not a priority): `WHISPER` to players I choose one by one; an alternative to Whispers and Group.
 
-Never transmitted: BattleTags, account IDs, Battle.net presence or game account IDs.
+Never transmitted: BattleTags, account IDs, Battle.net presence or game account IDs. A Battle.net friend's BattleTag is kept locally on the characters they play (`bnetFriend`).
 
 ### Sending a Record
 

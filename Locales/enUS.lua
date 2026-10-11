@@ -161,6 +161,9 @@ L["Unconfirmed / Added by me"] = true
 L["People"] = true
 L["Search names or characters"] = true
 L["Show"] = true
+L["Guild mates"] = true
+L["Everyone else"] = true
+L["No one"] = true
 L["All"] = true
 L["Last seen"] = true
 L["Chars"] = true
@@ -210,6 +213,7 @@ L["Only you see it. It replaces the name this person is shown under."] = true
 L["Remove my nickname"] = true
 L["About %s"] = true
 L["Note: %s"] = true
+L["Battle.net: %s"] = true
 
 -- Guild panel
 L["Enable Who's Who for the guild"] = true
