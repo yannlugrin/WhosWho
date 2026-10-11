@@ -4,7 +4,7 @@ local _, ns = ...
 local L = ns.L
 local issecretvalue = issecretvalue or function() return false end
 
--- The Who's Who section of a player's right-click menu: in the game's menus, and in the People tab's own menu.
+-- The Who's Who section of a player's right-click menu: in the game's menus, and in the People and Guild tabs' own menu.
 
 ---@class WhosWho.UnitMenu
 local UnitMenu = {}
@@ -45,10 +45,12 @@ local function playerGuid(contextData)
     return ns.Scopes.SenderGuid(name)
 end
 
--- What a new person needs to know about the character: from its unit when there is one, from its GUID otherwise.
--- It is on my current character's ruleset, the only one I can meet.
+-- What a new person needs to know about the character: as the menu's opener knows it, from its unit when there is
+-- one, from its GUID otherwise, which the game may not have loaded yet. It is on my current character's ruleset, the
+-- only one I can meet.
 ---@return WhosWho.NewCharacter?
 local function newCharacter(contextData, guid)
+    if contextData.character then return contextData.character end
     local unit = contextData.unit
     if unit then
         local _, _, classID = UnitClass(unit)
@@ -69,7 +71,8 @@ end
 
 ---Adds the Who's Who section, after a divider, when it has an entry for that player.
 ---@param root table the menu's root description
----@param contextData table the game's menu context: unit, guid, name and surname, Battle.net account or chat line
+---@param contextData table the game's menu context: unit, guid, name and surname, Battle.net account or chat line; from
+---our own menu, the character as its caller knows it
 function UnitMenu.AddSection(root, contextData)
     if contextData.unit and not UnitIsFriend("player", contextData.unit) then return end
     local guid = playerGuid(contextData)
@@ -87,8 +90,8 @@ function UnitMenu.AddSection(root, contextData)
     if person then
         local id = person.id
         local entries = {}
-        -- The People panel's own menu is already on the person.
-        if not contextData.fromPeoplePanel then
+        -- The People and Guild tabs' own menu is already on the person.
+        if not contextData.fromPersonList then
             entries[#entries + 1] = { L["Show person"], function() ns.Main.People:ShowPerson(id) end }
         end
         if People.CanSetMain(id, guid) then
@@ -109,6 +112,27 @@ function UnitMenu.AddSection(root, contextData)
     root:CreateDivider()
     root:CreateTitle(L["Who's Who"])
     root:CreateButton(L["Link character"], function() ns.PeopleDialogs.LinkCharacter:Open(guid, character) end)
+end
+
+-- Opens a whisper to that player in the chat box, as the game's player menu does.
+local sendTell = ChatFrameUtil and ChatFrameUtil.SendTell or ChatFrame_SendTell
+
+---Opens the People and Guild tabs' right-click menu on a character: one of our own. The game's player menu, opened
+---from add-on code, would run tainted, and its entries calling protected functions (Copy character name, Target) would
+---be blocked and blamed on Who's Who.
+---@param owner Frame
+---@param name string
+---@param guid string
+---@param character WhosWho.NewCharacter? the character as the caller knows it, for Link character
+function UnitMenu.OpenCharacterMenu(owner, name, guid, character)
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(name)
+        root:CreateButton(WHISPER, function() sendTell(name) end)
+        if not ns.Scopes.InMyGroup(guid) then
+            root:CreateButton(INVITE, function() C_PartyInfo.InviteUnit(name) end)
+        end
+        UnitMenu.AddSection(root, { name = name, guid = guid, character = character, fromPersonList = true })
+    end)
 end
 
 for _, menu in ipairs(MENUS) do

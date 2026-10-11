@@ -159,6 +159,17 @@ Right-click a character in the People tab's detail panel, or a person in the lis
 - The menu shows the character's name as its title, **Whisper**, **Invite**, then the Who's Who section (Make main or Unlink when they apply; no Show person).
 - **Whisper** opens a whisper to that character in the chat box; **Invite** invites it. A character already in my group has no **Invite**. In the list, right-clicking a person whose online character isn't known opens nothing, and the selection doesn't change. No Lua error, and BugSack shows no blocked action.
 
+## Guild Tab
+
+Needs a guild with Who's Who enabled (see Guild Settings): A and B members, both linked with the Guild scope on; C a member without Who's Who; D, B's alt, in the guild while B's main is not.
+
+- A character out of any guild, or in a guild without Who's Who enabled: no Guild tab. Joining the guild shows it, leaving hides it; an officer turning Who's Who off for the guild hides it, on shows it (the first tab is selected if it was open).
+- Header, on one line: the guild's name in angle brackets, my rank in grey, the search box, and at the right the counts of main characters, alts and unknown characters, which add up to the roster's members.
+- Search: typing part of a nickname or of a character's name (an alt's too, or C's name) keeps only the matching rows; the counts don't change.
+- List: a row for A (my own identity, Confirmed glyph, Online), one for B, one for C (its name in grey, Unconfirmed glyph, 1 character, its last online time from the roster); none for D (its main, B's, is not in the guild), counted as an alt. C is counted as unknown, and so is a character of mine in the guild that is not linked, shown like C.
+- Selecting B shows the same detail panel as the People tab; selecting A shows my linked characters, without Forget, nickname edit or note; a left click on C selects nothing.
+- Right-click C: Whisper, Invite, then Who's Who **Link character**. Right-click B while online: its menu, without Show person.
+
 ## Last Seen
 
 In the People tab, a person's last seen moves to now when one of their characters is online in your guild, in your group, online in your friend list, or whispers with you, also for a person you created yourself. A guild member you link while they are offline shows their level from the roster and no last seen time until you see them online.

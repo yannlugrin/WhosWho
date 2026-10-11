@@ -23,7 +23,7 @@ read_globals = {
     "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline", "MenuUtil", "GameTooltip", "GameTooltip_Hide", "HIGHLIGHT_FONT_COLOR", "GRAY_FONT_COLOR", "RED_FONT_COLOR", "GameTooltipTextLeft1", "MinimalSliderWithSteppersMixin", "UnitIsFriend", "GetPlayerInfoByGUID", "C_PlayerInfo", "PlayerLocation", "ChatFrame_SendTell", "CreateSettingsCheckboxWithButtonInitializer", "WHISPER", "INVITE", "C_PartyInfo", "CreateColor", "Mixin", "ScrollBoxConstants",
     "Ambiguate", "BNGetNumFriends", "BNSendGameData", "BNET_CLIENT_WOW",
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
-    "GetGuildRosterInfo", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumGuildMembers", "GetServerTime", "GetTime",
+    "GetGuildRosterInfo", "GetGuildRosterLastOnline", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumClasses", "GetNumGuildMembers", "GetServerTime", "GetTime",
     "GuildControlGetNumRanks", "GuildControlGetRankName", "GuildRoster", "IsInGroup", "IsInGuild", "IsInInstance", "IsInRaid", "IsResting",
     "UnitAffectingCombat", "UnitClass", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsConnected", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
     "WOW_PROJECT_ID", "WOW_PROJECT_CAMELOT", "WOW_PROJECT_MAINLINE",

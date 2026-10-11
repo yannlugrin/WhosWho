@@ -44,8 +44,10 @@ UI\Dialogs\Identity.lua
 UI\Glyphs.lua
 UI\Main\Window.lua
 UI\Main\Lists.lua
+UI\Main\PersonBrowser.lua
 UI\Main\MyIdentity.lua
 UI\Main\People.lua
+UI\Main\Guild.lua
 UI\Dialogs\People.lua
 UI\Launcher.lua
 UI\Decorations\Chat.lua

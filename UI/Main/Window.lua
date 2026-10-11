@@ -7,6 +7,7 @@ local L = ns.L
 ---@field Window Frame the main window
 ---@field MyIdentity Frame the My identity tab
 ---@field People Frame the People tab
+---@field Guild Frame the Guild tab
 local Main = {}
 ns.Main = Main
 
@@ -70,6 +71,18 @@ function Main.AddTab(label, panel)
     PanelTemplates_SetNumTabs(window, #tabs)
     Main.SelectTab(tabs[1].panel)
     ns.Skin.Apply(function(S) S.Tab(tab) end)
+end
+
+---Shows or hides a tab; hiding the selected one selects the first tab.
+---@param panel Frame
+---@param shown boolean
+function Main.SetTabShown(panel, shown)
+    for _, entry in ipairs(tabs) do
+        if entry.panel == panel then
+            entry.tab:SetShown(shown)
+            if not shown and panel:IsShown() then Main.SelectTab(tabs[1].panel) end
+        end
+    end
 end
 
 -- Skin -------------------------------------------------------------------------------------------

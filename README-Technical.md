@@ -53,15 +53,17 @@ WhosWho/
 │   ├── Main/                      The main window
 │   │   ├── Window.lua             Window and tab bar
 │   │   ├── Lists.lua              Shared by the tabs' lists: columns, sortable headers, class names and icons
+│   │   ├── PersonBrowser.lua      Shared by the People and Guild tabs: person list, detail panel, glyph key
 │   │   ├── MyIdentity.lua         My identity tab
-│   │   └── People.lua             People tab
+│   │   ├── People.lua             People tab
+│   │   └── Guild.lua              Guild tab: my guild's status, and its roster's identities and unknown characters
 │   ├── Dialogs/
 │   │   ├── Identity.lua           Dialogs on my identity: first-login prompts, change main, unlink, forget me
 │   │   └── People.lua             Link character: to a person I know, or a new person
 │   └── Decorations/               Additions to the game's own frames
 │       ├── Chat.lua               Sender names in chat lines
 │       ├── Tooltip.lua            Nickname and "Also:" line in player tooltips
-│       ├── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People tab's own menu
+│       ├── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People and Guild tabs' own menu
 │       └── GuildTab.lua           Who's Who tab in the guild panel, for the guild master and officers: the guild's settings
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
