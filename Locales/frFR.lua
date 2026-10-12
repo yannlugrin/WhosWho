@@ -218,6 +218,8 @@ L["Battle.net: %s"] = "Battle.net : %s"
 -- Guild panel
 L["Enable Who's Who for the guild"] = "Activer Who's Who pour la guilde"
 L["Link this character and share with your guild to change the guild's settings."] = "Liez ce personnage et partagez avec votre guilde pour modifier les paramètres de la guilde."
+L["Require members' characters in the guild to be linked"] = "Exiger que les personnages des membres dans la guilde soient liés"
+L["Enable Who's Who for the guild first."] = "Activez d'abord Who's Who pour la guilde."
 
 -- Guild tab
 L["%d |4main character:main characters; · %d |4alt:alts; · %d unknown"] = "%d |4personnage principal:personnages principaux; · %d |4alt:alts; · %d |4inconnu:inconnus;"

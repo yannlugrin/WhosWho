@@ -1608,7 +1608,7 @@ run(60)
 check(state(ivy, halMain.guid) == "confirmed", "Ivy knows Hal")
 
 clearLog()
-hal.ns.Protocol.ChangeGuildSettings({ enable = true })
+hal.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
 run(1)
 check(sent({ from = "Hal Main", type = "GSET" }) == 0, "a change of the guild settings waits for the ones that follow")
 run(5)
@@ -1625,12 +1625,12 @@ check(joe.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Revision(
     "and the settings, verified before his record came, are taken once it confirms him")
 
 clearLog()
-ivy.ns.Protocol.ChangeGuildSettings({ enable = false })
+ivy.ns.Protocol.ChangeGuildSettings({ enable = false, enforceLinking = false })
 run(10)
 check(sent({ from = "Ivy Main", type = "GSET" }) == 0 and ivy.ns.GuildSettings.Get(GUILD2).enable,
     "a member below the officers signs no settings")
 -- A modified client signs them anyway.
-local ivyRecord = ivy.ns.GuildSettings.Change(GUILD2, { enable = false }, ivyMain.guid, os.time())
+local ivyRecord = ivy.ns.GuildSettings.Change(GUILD2, { enable = false, enforceLinking = false }, ivyMain.guid, os.time())
 ivy.ns.Protocol:SendCommMessage("WhosWho", ivy.ns.Codec.GuildSettingsUpdate(ivyRecord), "GUILD")
 run(10)
 check(hal.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Get(GUILD2).enable,
@@ -1684,11 +1684,11 @@ run(5)
 check(state(lea, ivyMain.guid) == "guild", "and taken from an officer")
 
 -- Hal turns Who's Who off for the guild, then on again.
-hal.ns.Protocol.ChangeGuildSettings({ enable = false })
+hal.ns.Protocol.ChangeGuildSettings({ enable = false, enforceLinking = false })
 run(10)
 check(not kim.ns.GuildSettings.Get(GUILD2).enable, "turned off for the guild")
 clearLog()
-hal.ns.Protocol.ChangeGuildSettings({ enable = true })
+hal.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
 run(10)
 check(sent({ from = "Hal Main", type = "GSET", distribution = "GUILD" }) == 1
     and sent({ from = "Hal Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
@@ -1700,6 +1700,108 @@ logout(hal)
 logout(kim)
 logout(lea)
 logout(joe)
+
+-- Enforced linking -------------------------------------------------------------------------------------
+
+-- A guild enforcing linking: Mia an officer; Nia a member, with an alt in the guild she never linked; Oli, Nia's friend,
+-- outside it.
+local GUILD3 = 31000002
+local miaAccount, niaAccount, oliAccount = account("Mia"), account("Nia"), account("Oli")
+local miaMain = character("Mia Main", "Player-1-0000F601", MAGE, GUILD3)
+local niaMain = character("Nia Main", "Player-1-0000F701", PRIEST, GUILD3)
+local niaAlt = character("Nia Alt", "Player-1-0000F702", ROGUE, GUILD3)
+local oliMain = character("Oli Main", "Player-1-0000F801", WARRIOR)
+miaMain.rankIndex = 1
+niaMain.friends, oliMain.friends = { oliMain }, { niaMain }
+-- Nia's account knows its alt and its guild.
+local niaFirstOnAlt = login(niaAccount, niaAlt)
+run(5)
+logout(niaFirstOnAlt)
+local mia = login(miaAccount, miaMain)
+slash(mia, "link")
+local nia = login(niaAccount, niaMain)
+slash(nia, "link")
+local oli = login(oliAccount, oliMain)
+slash(oli, "link")
+run(60)
+local niaId = nia.ns.Identity.Id()
+check(state(mia, niaMain.guid) == "confirmed" and state(oli, niaMain.guid) == "confirmed", "Mia and Oli know Nia")
+check(mia.ns.People.Find(niaAlt.guid) == nil, "not the alt she never linked")
+
+local miaRevision, niaRevision = mia.ns.Identity.Revision(), nia.ns.Identity.Revision()
+clearLog()
+mia.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = true })
+run(60)
+check(nia.ns.Identity.Revision() == niaRevision + 1, "the rule turned on: a new revision for a member it adds a character to")
+check(mia.ns.Identity.Revision() == miaRevision, "none for a member whose record it doesn't change")
+check(sent({ from = "Nia Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and sent({ from = "Nia Main", type = "ANNOUNCE", target = "Oli Main" }) == 0,
+    "announced to the guild alone: what everyone else gets didn't change")
+local niaAltForMia = mia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid]
+check(niaAltForMia and niaAltForMia.guild.forced, "a member of the guild gets the alt the rule adds, marked")
+
+clearLog()
+levelUp(nia)
+run(60)
+check(sent({ from = "Nia Main", type = "REC", target = "Oli Main" }) == 1
+    and oli.ns.People.Get(niaId).signedRecord.rev == nia.ns.Identity.Revision(),
+    "her friend outside the guild asks for the new revision at her next announcement")
+check(oli.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid] == nil and oli.ns.People.Find(niaAlt.guid) == nil,
+    "and gets her record without the alt: it never leaves the guild")
+
+-- In one group with both: a change reaches them together, and each gets the record meant for them.
+world.group = { niaMain, miaMain, oliMain }
+nia.ns.settings.scopes.group = true
+run(40)
+clearLog()
+nia.ns.Identity.SetNickname("Nini")
+run(60)
+check(sent({ from = "Nia Main", type = "ANNOUNCE", distribution = "PARTY" }) == 1
+    and sent({ from = "Mia Main", type = "GET" }) == 1 and sent({ from = "Oli Main", type = "GET" }) == 1,
+    "a change announced to a group holding a guild member and a friend: both ask")
+check(mia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid] and not oli.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid]
+    and oli.ns.People.Get(niaId).signedRecord.rev == nia.ns.Identity.Revision(),
+    "the guild member gets the alt, the friend the same revision without it")
+world.group = {}
+nia.ns.settings.scopes.group = false
+
+-- Oli joins the guild: what he holds of Nia came from outside it, so he fetches it again and gets her alt.
+oliMain.guild, oli.joinedGuild = GUILD3, true
+fire(oli, "PLAYER_GUILD_UPDATE", "player")
+run(120)
+check(oli.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid] and not oli.ns.People.Get(niaId).outdated,
+    "a member joining the guild fetches again the records he held from outside it")
+-- He leaves it: the alt its rule added is forgotten, not Nia.
+oliMain.guild, oli.joinedGuild = nil, nil
+fire(oli, "PLAYER_GUILD_UPDATE", "player")
+run(5)
+check(oli.ns.People.Find(niaAlt.guid) == nil and oli.ns.People.Get(niaId) ~= nil,
+    "leaving the guild forgets the alt its rule added, not the person")
+
+-- Nia plays her alt: the guild's rule makes it announce to the guild, and nowhere else.
+logout(nia)
+clearLog()
+local niaOnAlt = login(niaAccount, niaAlt)
+run(60)
+check(sent({ from = "Nia Alt", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+    and sent({ from = "Nia Alt", type = "ANNOUNCE", distribution = "WHISPER" }) == 0,
+    "a character the rule adds announces to its guild")
+check(state(mia, niaAlt.guid) == "confirmed", "which confirms it")
+
+-- Pia joins the guild while Nia plays her alt: the alt answers her GET with the guild's record.
+local piaAccount = account("Pia")
+local piaMain = character("Pia Main", "Player-1-0000F901", MAGE, GUILD3)
+clearLog()
+local pia = login(piaAccount, piaMain)
+slash(pia, "link")
+run(60)
+check(sent({ from = "Nia Alt", type = "REC" }) >= 1 and sent({ from = "Pia Main", type = "GET", target = "Nia Alt" }) == 1,
+    "a character the rule adds answers its guild's GETs")
+check(pia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid].guild.forced, "with the guild's record")
+logout(niaOnAlt)
+logout(mia)
+logout(oli)
+logout(pia)
 
 -- Announcement format -----------------------------------------------------------------------------------
 

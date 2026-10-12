@@ -202,6 +202,17 @@ Needs a guild with Who's Who enabled (see Guild Settings): A an officer, B and C
 - C logs out. D, a new member, links and logs in with A and B online: D sends one `Sent, WHISPER <A>: 1 GLGET` (the officer), A answers `1 GLIST …` by whisper, then D asks A for C's identity (`1 GET <C's ID>`), A answers with C's `REC`, and `/ww people <C's character>` on D shows it `listed by the guild`. When C logs back in, its announcement confirms it.
 - A turns Who's Who off then on for the guild: `Sent, GUILD: 1 GSET …` then `Sent, GUILD: 1 ANNOUNCE …` ending with A's list revision; members holding the same list send nothing.
 
+## Enforced Linking
+
+Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a member whose main is outside the guild, with two characters in it, B1 linked and B2 never linked (B logged in on B2 once, answering **Not this character**); C, B's friend, outside the guild; D a player not in the guild who knows B. All linked, Guild scope on.
+
+- A's guild panel, Who's Who tab: **Require members' characters in the guild to be linked** under **Enable Who's Who for the guild**, greyed out while Who's Who is off for the guild (its tooltip says to enable it first). A ticks it: `Sent, GUILD: 1 GSET …`.
+- B's side: one new revision, announced on `GUILD` only (no whisper to C). A's People tab: B shown under B1's name (the guild main), B2 among B's characters. C's People tab after B's next level-up: B under B's main, without B2.
+- B plays B2: `Sent, GUILD: 1 ANNOUNCE <B's ID> …`, nothing to C or a group; A's People tab shows B2 confirmed.
+- B turns the Guild scope off: A still gets B's record, with B1 and B2 only; C keeps B's record without them.
+- D joins the guild: within a minute D's People tab shows B2 under B (fetched again through the guild lists or from B). D leaves the guild: B2 disappears from D's People tab, B stays.
+- A unticks the setting: the members whose records change make a new revision; B2 disappears from A's People tab once B's new record arrives.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).

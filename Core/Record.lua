@@ -19,7 +19,7 @@ Record.MAX_REVISION = 2 ^ 31 - 1
 ---@field id string public key, 64 hex characters
 ---@field rev integer
 ---@field nickname string? override of the main character's name
----@field main string? GUID of the main character, one of chars; nil when the player unlinked every character
+---@field main string? GUID of the main character, one of chars; nil without characters, or when a guild main stands in
 ---@field chars table<string, WhosWho.Character> by GUID
 ---@field guild WhosWho.GuildSharing
 
@@ -39,6 +39,12 @@ Record.RULESET = { Normal = 1, PvP = 2, RP = 3, Hardcore = 4 }
 ---@field name string "First Surname"
 ---@field ruleset WhosWho.Ruleset
 ---@field classID integer the game's class ID, as UnitClass returns it
+---@field guild WhosWho.CharacterGuild? only in the record sent to the members of a guild that enforces linking
+
+---What the record of a guild's members says about one of the owner's characters in that guild.
+---@class WhosWho.CharacterGuild
+---@field forced true? in the record only because the guild enforces linking
+---@field main true? the character the guild shows the identity under, the main not being in the guild
 
 -- Names ------------------------------------------------------------------------------------------
 
@@ -123,7 +129,8 @@ end
 
 -- The signature covers these fields only, so a record holding any other key has been changed.
 local RECORD_FIELDS = { v = true, id = true, rev = true, nickname = true, main = true, chars = true, guild = true, sig = true }
-local CHARACTER_FIELDS = { name = true, ruleset = true, classID = true }
+local CHARACTER_FIELDS = { name = true, ruleset = true, classID = true, guild = true }
+local CHARACTER_GUILD_FIELDS = { forced = true, main = true }
 local GUILD_FIELDS = { consent = true }
 
 local function hasOnlyFields(t, fields)
@@ -133,12 +140,20 @@ local function hasOnlyFields(t, fields)
     return true
 end
 
+-- Absent, or at least one marker, each true.
+local function isCharacterGuild(guild)
+    if guild == nil then return true end
+    return type(guild) == "table" and next(guild) ~= nil and hasOnlyFields(guild, CHARACTER_GUILD_FIELDS)
+        and (guild.forced == nil or guild.forced == true) and (guild.main == nil or guild.main == true)
+end
+
 local function isCharacter(character)
     return type(character) == "table"
         and hasOnlyFields(character, CHARACTER_FIELDS)
         and isName(character.name)
         and isRuleset(character.ruleset)
         and isClassID(character.classID)
+        and isCharacterGuild(character.guild)
 end
 
 ---Checks the structure only; the signature is checked by Record.Verify.
@@ -159,16 +174,21 @@ function Record.Validate(record)
         return false, "guild"
     end
 
-    local count = 0
+    local count, guildMains = 0, 0
     for guid, character in pairs(record.chars) do
         if not Record.IsGuid(guid) then return false, "guid" end
         if not isCharacter(character) then return false, "character" end
         count = count + 1
+        if character.guild and character.guild.main then guildMains = guildMains + 1 end
     end
     if count > Record.MAX_CHARACTERS then return false, "chars" end
 
+    if guildMains > 1 then return false, "main" end
     if count == 0 then
         if record.main ~= nil then return false, "main" end
+    elseif record.main == nil then
+        -- The record of a guild's members without my main: its guild main stands for it.
+        if guildMains == 0 then return false, "main" end
     elseif not record.chars[record.main] then
         return false, "main"
     end
@@ -176,15 +196,34 @@ function Record.Validate(record)
     return true
 end
 
+---Whether the record carries guild markers: it was sent to the members of a guild enforcing linking.
+---@param record WhosWho.IdentityRecord
+---@return boolean
+function Record.HasGuildMarkers(record)
+    for _, character in pairs(record.chars) do
+        if character.guild then return true end
+    end
+    return false
+end
+
+---The character the record shows the identity under: its guild main when it has one, otherwise its main.
+---@param record WhosWho.IdentityRecord
+---@return string? guid
+function Record.ShownMain(record)
+    for guid, character in pairs(record.chars) do
+        if character.guild and character.guild.main then return guid end
+    end
+    return record.main
+end
+
 -- Signature --------------------------------------------------------------------------------------
 
 -- Control characters, which Record.FORBIDDEN keeps out of every field.
 local SEP_FIELD, SEP_CHAR, SEP_PART = "\31", "\30", "\29"
 
----The signed bytes: every field but the signature, characters sorted by GUID.
----@param record WhosWho.IdentityRecord
----@return string
-function Record.Canonical(record)
+-- Every field but the signature, the revision as given, characters sorted by GUID; a character's guild markers only when
+-- it has some, so a record without them keeps the bytes it always had.
+local function canonical(record, revision)
     local guids = {}
     for guid in pairs(record.chars) do guids[#guids + 1] = guid end
     table.sort(guids)
@@ -192,13 +231,30 @@ function Record.Canonical(record)
     local chars = {}
     for i, guid in ipairs(guids) do
         local character = record.chars[guid]
-        chars[i] = table.concat({ guid, character.name, character.ruleset, character.classID }, SEP_PART)
+        local parts = { guid, character.name, character.ruleset, character.classID }
+        local guild = character.guild
+        if guild then parts[5] = (guild.forced and "f" or "") .. (guild.main and "m" or "") end
+        chars[i] = table.concat(parts, SEP_PART)
     end
 
     return table.concat({
-        "WW" .. record.v, record.id, tostring(record.rev), record.nickname or "", record.main or "",
+        "WW" .. record.v, record.id, revision, record.nickname or "", record.main or "",
         table.concat(chars, SEP_CHAR), record.guild.consent and "1" or "0",
     }, SEP_FIELD)
+end
+
+---The signed bytes.
+---@param record WhosWho.IdentityRecord
+---@return string
+function Record.Canonical(record)
+    return canonical(record, tostring(record.rev))
+end
+
+---The signed bytes without the revision: equal for two records that say the same at different revisions.
+---@param record WhosWho.IdentityRecord
+---@return string
+function Record.CanonicalWithoutRevision(record)
+    return canonical(record, "")
 end
 
 ---Sets record.sig.

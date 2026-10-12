@@ -14,6 +14,7 @@ GuildSettings.LOWEST_RANK_INDEX = 1
 
 ---@class WhosWho.GuildSettingsValues
 ---@field enable boolean Who's Who enabled for the guild
+---@field enforceLinking boolean members' characters in the guild known under their identity; only with enable
 
 ---A guild's settings as its members share them; data, kept as received.
 ---@class WhosWho.GuildSettingsRecord
@@ -26,7 +27,7 @@ GuildSettings.LOWEST_RANK_INDEX = 1
 ---@field sig string signature over the other fields, 128 hex characters
 
 ---@type WhosWho.GuildSettingsValues
-local DEFAULTS = { enable = false }
+local DEFAULTS = { enable = false, enforceLinking = false }
 
 -- Records ----------------------------------------------------------------------------------------
 
@@ -59,6 +60,14 @@ function GuildSettings.Revision(clubId)
     return record and record.rev or 0
 end
 
+---Whether that guild enforces linking: its members' characters in it known under their identity, linked or not.
+---@param clubId integer?
+---@return boolean
+function GuildSettings.EnforcesLinking(clubId)
+    local settings = GuildSettings.Get(clubId)
+    return settings.enable and settings.enforceLinking == true
+end
+
 ---That guild's settings: its record's, otherwise the defaults. Read only.
 ---@param clubId integer?
 ---@return WhosWho.GuildSettingsValues
@@ -71,7 +80,7 @@ end
 
 -- The signature covers these fields only, so a record holding any other key has been changed.
 local RECORD_FIELDS = { v = true, guild = true, settings = true, signer = true, signerGuid = true, rev = true, sig = true }
-local SETTINGS_FIELDS = { enable = true }
+local SETTINGS_FIELDS = { enable = true, enforceLinking = true }
 
 local function hasOnlyFields(t, fields)
     for key in pairs(t) do
@@ -93,6 +102,7 @@ function GuildSettings.Validate(record)
         and isPositiveInteger(record.guild)
         and type(record.settings) == "table" and hasOnlyFields(record.settings, SETTINGS_FIELDS)
         and type(record.settings.enable) == "boolean"
+        and type(record.settings.enforceLinking) == "boolean"
         and Record.IsId(record.signer)
         and Record.IsGuid(record.signerGuid)
         and isPositiveInteger(record.rev)
@@ -104,8 +114,8 @@ end
 ---@return string
 function GuildSettings.Canonical(record)
     return table.concat({
-        "WWG" .. record.v, tostring(record.guild), record.settings.enable and "1" or "0", record.signer,
-        record.signerGuid, tostring(record.rev),
+        "WWG" .. record.v, tostring(record.guild), record.settings.enable and "1" or "0",
+        record.settings.enforceLinking and "1" or "0", record.signer, record.signerGuid, tostring(record.rev),
     }, "\31")
 end
 
@@ -120,6 +130,26 @@ end
 
 -- Changes ----------------------------------------------------------------------------------------
 
+-- The bytes of the record that guild's members get from me, without its revision.
+local function guildRecordBytes(clubId, ruleset)
+    return Identity.RecordBytesWithoutRevision(GuildSettings.EnforcesLinking(clubId) and clubId or nil, ruleset)
+end
+
+-- Holds a guild's record. When it turns enforced linking on or off and what that guild's members get from me changes,
+-- a new revision.
+local function hold(signedRecord)
+    local clubId, ruleset = signedRecord.guild, Identity.Ruleset(UnitGUID("player"))
+    local bytes, first = guildRecordBytes(clubId, ruleset), records()[clubId] == nil
+    records()[clubId] = signedRecord
+    if guildRecordBytes(clubId, ruleset) ~= bytes then Identity.GuildContentChanged() end
+    -- The first settings I hold of my current guild, enforcing linking (I joined it, or came from 0.1.x): what I hold
+    -- of its members came from outside it.
+    if first and GuildSettings.EnforcesLinking(clubId) and Identity.GuildId(UnitGUID("player")) == clubId then
+        People.MarkOutdated(clubId)
+    end
+    for _, listener in ipairs(changeListeners) do listener(clubId) end
+end
+
 ---Signs a new record of that guild's settings with my identity, from that character, and holds it. Its revision is
 ---the server time, or one more than the record held when that is not later.
 ---@param clubId integer
@@ -129,12 +159,12 @@ end
 ---@return WhosWho.GuildSettingsRecord
 function GuildSettings.Change(clubId, settings, signerGuid, serverTime)
     local record = {
-        v = GuildSettings.VERSION, guild = clubId, settings = { enable = settings.enable }, signer = Identity.Id(),
+        v = GuildSettings.VERSION, guild = clubId,
+        settings = { enable = settings.enable, enforceLinking = settings.enforceLinking }, signer = Identity.Id(),
         signerGuid = signerGuid, rev = math.max(serverTime, GuildSettings.Revision(clubId) + 1),
     }
     record.sig = Identity.Sign(GuildSettings.Canonical(record))
-    records()[clubId] = record
-    for _, listener in ipairs(changeListeners) do listener(clubId) end
+    hold(record)
     return record
 end
 
@@ -174,7 +204,6 @@ function GuildSettings.Accept(signedRecord, signerRankIndex)
     if not GuildSettings.IsNewer(signedRecord) then return "stale" end
     if signerRankIndex and signerRankIndex > GuildSettings.LOWEST_RANK_INDEX then return "refused" end
     if not (signerRankIndex and signerConfirmed(signedRecord)) then return "pending" end
-    records()[signedRecord.guild] = signedRecord
-    for _, listener in ipairs(changeListeners) do listener(signedRecord.guild) end
+    hold(signedRecord)
     return "accepted"
 end

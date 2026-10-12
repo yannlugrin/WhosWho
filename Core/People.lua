@@ -18,9 +18,10 @@ ns.People = People
 ---@field nickname string? the player's own nickname, from the record
 ---@field customNickname string? my nickname for this person
 ---@field note string? my note about this person, never shared; may hold several lines
----@field main string GUID of the main character. Another identity can hold a shared person's main.
+---@field main string GUID of the main, or of the record's guild main; another identity can hold a shared person's main
 ---@field chars table<string, WhosWho.PersonCharacter> by GUID
 ---@field updatedAt number? seconds, from time(): the person's last change, by the player or by me
+---@field outdated true? its record came from outside a guild enforcing linking I joined since: fetched again
 
 ---@alias WhosWho.CharacterState
 ---| "confirmed"  # in the player's record, and a message sent from that character carried the identity
@@ -147,6 +148,34 @@ function People.IsNewer(id, rev)
 
     local forgotten = ns.data.forgotten[id]
     return not (forgotten and forgotten.rev >= rev)
+end
+
+---Whether I want a record of that identity and revision: a newer one, or the revision I hold when it is outdated.
+---@param id string
+---@param rev integer
+---@return boolean
+function People.IsWanted(id, rev)
+    local person = ns.data.people[id]
+    if person and person.outdated and person.signedRecord and person.signedRecord.rev == rev then return true end
+    return People.IsNewer(id, rev)
+end
+
+-- Whether a record of the revision I hold could replace mine: mine is outdated, or it holds another content (another
+-- signature).
+local function replaceable(signedRecord)
+    local person = ns.data.people[signedRecord.id]
+    local held = person and person.signedRecord
+    if not (held and held.rev == signedRecord.rev) then return false end
+    return person.outdated == true or held.sig ~= signedRecord.sig
+end
+
+---Whether a record of the revision I hold replaces mine: only one from my guild (its channel, or a guild member's
+---whisper), whose content was chosen for me as its member, when mine is outdated or holds another content.
+---@param signedRecord WhosWho.SignedIdentityRecord
+---@param fromMyGuild boolean
+---@return boolean
+function People.ReplacesHeld(signedRecord, fromMyGuild)
+    return fromMyGuild and replaceable(signedRecord)
 end
 
 ---The nickname the identity itself gives, whatever overrides it: the player's own (shared person), otherwise the
@@ -422,7 +451,8 @@ local function forgetUnlinked(id, rev)
     ns.data.forgotten[id] = { rev = rev, at = time() }
 end
 
----Stores a newer revision of a player's record. Its characters that declared no identity are left out. A revision
+---Stores a newer revision of a player's record, or the one replacing the revision I hold. Its characters that declared
+---no identity are left out. A revision
 ---without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my nickname
 ---and added alts with it.
 ---@param signedRecord WhosWho.SignedIdentityRecord already validated and verified
@@ -430,7 +460,9 @@ end
 ---@return "updated"|"stale"|"forgotten"
 function People.Accept(signedRecord, fromGuild)
     local people, noIdentity = ns.data.people, ns.data.noIdentity
-    if not People.IsNewer(signedRecord.id, signedRecord.rev) then return "stale" end
+    -- Replacing the revision I hold: the caller checked where it came from (People.ReplacesHeld).
+    local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or replaceable(signedRecord)
+    if not wanted then return "stale" end
     local sharedPerson = people[signedRecord.id]
 
     local recordCharacters = {}
@@ -456,8 +488,8 @@ function People.Accept(signedRecord, fromGuild)
 
     sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
     people[signedRecord.id] = sharedPerson
-    sharedPerson.signedRecord, sharedPerson.nickname, sharedPerson.main = signedRecord, signedRecord.nickname, signedRecord.main
-    sharedPerson.updatedAt = time()
+    sharedPerson.signedRecord, sharedPerson.nickname = signedRecord, signedRecord.nickname
+    sharedPerson.main, sharedPerson.updatedAt, sharedPerson.outdated = ns.Record.ShownMain(signedRecord), time(), nil
 
     -- Confirmations of characters this revision now lists, received before it arrived.
     local pending = pendingConfirmations[signedRecord.id] or {}
@@ -567,16 +599,71 @@ function People.SetGuild(guid, clubId)
     if character then character.guild = clubId end
 end
 
----Applies a whole guild roster: its characters get the guild, the others lose it.
+-- Whether the record holds the character only because its guild enforces linking.
+local function isForced(person, guid)
+    local recordCharacter = person.signedRecord and person.signedRecord.chars[guid]
+    return recordCharacter ~= nil and recordCharacter.guild ~= nil and recordCharacter.guild.forced == true
+end
+
+-- Forgets the characters that guild's rule added to the records I hold, but the ones still in it (members), and those
+-- never seen in my roster; a person left without the player's characters too. Whether any was forgotten.
+local function forgetForced(clubId, memberGuids)
+    local removed = false
+    for id, person in pairs(ns.data.people) do
+        local removedFromPerson = false
+        for guid, character in pairs(person.chars) do
+            local inThatGuild = character.guild == clubId or character.guild == nil
+            if not memberGuids[guid] and inThatGuild and isForced(person, guid) then
+                person.chars[guid] = nil
+                unindexCharacter(guid, id)
+                removedFromPerson = true
+            end
+        end
+        if removedFromPerson then
+            removed = true
+            local hasPlayersCharacter = false
+            for _, character in pairs(person.chars) do
+                if character.state ~= "added" then hasPlayersCharacter = true end
+            end
+            if not hasPlayersCharacter then forget(id) end
+        end
+    end
+    return removed
+end
+
+---Applies a whole guild roster: its characters get the guild, the others lose it. A character the guild's rule added
+---is forgotten once the roster no longer lists it.
 ---@param clubId integer
 ---@param memberGuids table<string, true>
 function People.UpdateGuildMembers(clubId, memberGuids)
+    local removed = forgetForced(clubId, memberGuids)
     for _, person in pairs(ns.data.people) do
         for guid, character in pairs(person.chars) do
             if memberGuids[guid] then
                 character.guild = clubId
             elseif character.guild == clubId then
                 character.guild = nil
+            end
+        end
+    end
+    if removed then changed() end
+end
+
+---The character I play left that guild: the characters its rule added are forgotten.
+---@param clubId integer
+function People.GuildLeft(clubId)
+    if forgetForced(clubId, {}) then changed() end
+end
+
+---I joined a guild enforcing linking: the records I hold of identities with a character in it came from outside it,
+---without the characters its rule adds, and are fetched again.
+---@param clubId integer
+function People.MarkOutdated(clubId)
+    for _, person in pairs(ns.data.people) do
+        for _, character in pairs(person.chars) do
+            if person.signedRecord and character.guild == clubId then
+                person.outdated = true
+                break
             end
         end
     end

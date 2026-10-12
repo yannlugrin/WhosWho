@@ -16,8 +16,7 @@ ns.Identity = Identity
 ---@field nickname string? override; the main character's name is shown otherwise
 ---@field main string? GUID of the main character, always a linked one
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
----@field sig string? signature of the current revision
----@field signedDigest string? SHA-512 (hex) of the bytes sig covers, so a signature from an older record format is never reused
+---@field signatures table<string, string>? the current revision's records' signatures, by SHA-512 (hex) of their bytes
 ---@field lastLogout { guid: string, at: number }? the account's last logout or /reload: the character, and when (time())
 ---@field lastBroadcastRevision integer? the revision my last announcement to every audience that answers a GET carried
 
@@ -44,7 +43,7 @@ local revisionListeners = {}
 local function nextRevision()
     local identity = data()
     identity.rev = identity.rev + 1
-    identity.sig, identity.signedDigest = nil, nil
+    identity.signatures = nil
     for _, listener in ipairs(revisionListeners) do listener() end
 end
 
@@ -183,6 +182,12 @@ function Identity.SetGuild(guid, clubId)
     end
 end
 
+---What the members of a guild enforcing linking get from me changed: a character of mine joined it, or the guild
+---turned the rule on or off.
+function Identity.GuildContentChanged()
+    nextRevision()
+end
+
 ---The club ID of the character's guild, as last seen.
 ---@param guid string
 ---@return integer?
@@ -232,12 +237,17 @@ function Identity.HasCharacterInGuild(clubId, ruleset)
     return false
 end
 
----The revision a character announces: the current one, while it is linked.
+---The revision a character announces: the current one, while it is linked or in a guild enforcing linking, as long as I
+---have an identity.
 ---@param guid string
----@return integer? revision nil for a character that is not linked
+---@return integer? revision nil for a character that is not linked, unless its guild's rule adds it
 function Identity.AnnouncedRevision(guid)
     local character = data().chars[guid]
-    return character and character.linked and data().rev or nil
+    if not character then return nil end
+    if character.linked then return data().rev end
+    local guild = character.guild
+    if guild and ns.GuildSettings.EnforcesLinking(guild.id) and Identity.LinkedCount() > 0 then return data().rev end
+    return nil
 end
 
 ---Whether the character was unlinked after being linked: it declares no identity (NOID).
@@ -397,44 +407,106 @@ function Identity.OnRevisionChanged(listener)
     revisionListeners[#revisionListeners + 1] = listener
 end
 
----The unsigned record of the current revision, with linked characters only. Past Record.MAX_CHARACTERS, the main
----and the lowest GUIDs are kept.
+-- My characters in that guild, the linked ones first, then by name: the first one stands for me there when my main is
+-- not in it.
+local function charactersInGuild(clubId, ruleset)
+    local characters = data().chars
+    local guids = {}
+    for guid, character in pairs(characters) do
+        if character.guild and character.guild.id == clubId and character.ruleset == ruleset then
+            guids[#guids + 1] = guid
+        end
+    end
+    table.sort(guids, function(a, b)
+        local aLinked, bLinked = characters[a].linked == true, characters[b].linked == true
+        if aLinked ~= bLinked then return aLinked end
+        if characters[a].name ~= characters[b].name then return characters[a].name < characters[b].name end
+        return a < b
+    end)
+    return guids
+end
+
+---The unsigned record of the current revision: my linked characters. For the members of a guild that enforces linking,
+---my characters in that guild too, marked forced, and only those with my Guild scope off; the guild shows me under my
+---main when it is in the guild, otherwise under the guild main, the first of them. Past Record.MAX_CHARACTERS, the
+---main, the guild main and the lowest GUIDs are kept.
+---@param clubId integer? the guild enforcing linking whose members get the record; nil for everyone else
+---@param ruleset WhosWho.Ruleset? that guild's ruleset
 ---@return WhosWho.IdentityRecord
-function Identity.UnsignedRecord()
+function Identity.UnsignedRecord(clubId, ruleset)
     local identity = data()
+    ---@type table<string, WhosWho.CharacterGuild|false> by GUID: the characters in the record, with their guild markers
+    local markers = {}
+    if not clubId or ns.Scopes.Get("guild") then
+        for guid, character in pairs(identity.chars) do
+            if character.linked then markers[guid] = false end
+        end
+    end
+    local guildMain
+    if clubId then
+        local inGuild = charactersInGuild(clubId, ruleset)
+        local mainInGuild = false
+        for _, guid in ipairs(inGuild) do
+            if guid == identity.main then mainInGuild = true end
+            if markers[guid] == nil then markers[guid] = { forced = true } end
+        end
+        if not mainInGuild then guildMain = inGuild[1] end
+        if guildMain then
+            markers[guildMain] = markers[guildMain] or {}
+            markers[guildMain].main = true
+        end
+    end
+    local main = markers[identity.main] ~= nil and identity.main or nil
+
     local others = {}
-    for guid, character in pairs(identity.chars) do
-        if character.linked and guid ~= identity.main then others[#others + 1] = guid end
+    for guid in pairs(markers) do
+        if guid ~= main and guid ~= guildMain then others[#others + 1] = guid end
     end
     table.sort(others)
-    local guids = { identity.main }
+    local guids = {}
+    if main then guids[#guids + 1] = main end
+    if guildMain then guids[#guids + 1] = guildMain end
     for i = 1, math.min(#others, ns.Record.MAX_CHARACTERS - #guids) do guids[#guids + 1] = others[i] end
 
     local chars = {}
     for _, guid in ipairs(guids) do
         local character = identity.chars[guid]
-        chars[guid] = { name = character.name, ruleset = character.ruleset, classID = character.classID }
+        chars[guid] = {
+            name = character.name, ruleset = character.ruleset, classID = character.classID, guild = markers[guid] or nil,
+        }
     end
     return {
         v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = identity.nickname,
-        main = identity.main, chars = chars, guild = { consent = ns.Scopes.Get("guild") },
+        main = main, chars = chars, guild = { consent = ns.Scopes.Get("guild") },
     }
 end
 
----Signing takes about 120 ms in game, so the signature is kept while it covers the same bytes.
+---The signed bytes of my record without its revision: equal while it says the same.
+---@param clubId integer? the guild enforcing linking whose members get the record; nil for everyone else
+---@param ruleset WhosWho.Ruleset? that guild's ruleset
+---@return string
+function Identity.RecordBytesWithoutRevision(clubId, ruleset)
+    return ns.Record.CanonicalWithoutRevision(Identity.UnsignedRecord(clubId, ruleset))
+end
+
+---Signing takes about 120 ms in game, so each record's signature is kept while it covers the same bytes.
+---@param clubId integer? the guild enforcing linking whose members get the record; nil for everyone else
+---@param ruleset WhosWho.Ruleset? that guild's ruleset
 ---@return WhosWho.SignedIdentityRecord
-function Identity.SignedRecord()
+function Identity.SignedRecord(clubId, ruleset)
     local identity = data()
-    local record = Identity.UnsignedRecord()
+    local record = Identity.UnsignedRecord(clubId, ruleset)
     ---@cast record WhosWho.SignedIdentityRecord
     local digest = ns.Crypto.ToHex(ns.Crypto.SHA512(ns.Record.Canonical(record)))
-    if identity.sig and identity.signedDigest == digest then
-        record.sig = identity.sig
+    local signatures = identity.signatures or {}
+    identity.signatures = signatures
+    if signatures[digest] then
+        record.sig = signatures[digest]
         return record
     end
 
     ns.Record.Sign(record, identity.seed)
-    identity.sig, identity.signedDigest = record.sig, digest
+    signatures[digest] = record.sig
     return record
 end
 

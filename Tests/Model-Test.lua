@@ -129,7 +129,7 @@ do
     local again = I.SignedRecord()
     check(again.sig == signed.sig, "signature reused while nothing changed")
     check(signed.guild.consent == true, "the record carries the Guild scope as its guild consent")
-    ns.data.identity.signedDigest = "from an older record format"
+    ns.data.identity.signatures = { ["from an older record format"] = again.sig }
     check(ns.Record.Verify(I.SignedRecord()), "a signature over other bytes is made again")
 
     local tampered = I.SignedRecord()
@@ -247,6 +247,72 @@ do
     check(select(2, R.Validate(r)) == "guild", "guild consent not a boolean refused")
     r = base(); r.guild.other = true
     check(select(2, R.Validate(r)) == "guild", "unknown guild field refused")
+
+    r = base(); r.chars[G1].guild = { forced = true }
+    check(R.Validate(r), "a character marked forced, in the record of a guild's members")
+    r = base(); r.chars[G1].guild = {}
+    check(select(2, R.Validate(r)) == "character", "an empty guild marker refused")
+    r = base(); r.chars[G1].guild = { forced = false }
+    check(select(2, R.Validate(r)) == "character", "a marker other than true refused")
+    r = base(); r.chars[G1].guild = { other = true }
+    check(select(2, R.Validate(r)) == "character", "an unknown guild marker refused")
+    r = base(); r.main = nil; r.chars[G1].guild = { main = true }
+    check(R.Validate(r), "a guild main stands for a main the record doesn't hold")
+    r = base(); r.chars[G2] = { name = "C D", ruleset = NORMAL, classID = MAGE, guild = { main = true } }
+    r.chars[G1].guild = { main = true }
+    check(select(2, R.Validate(r)) == "main", "two guild mains refused")
+    r = base()
+    local bytes = R.Canonical(r)
+    r.chars[G1].guild = { forced = true }
+    check(R.Canonical(r) ~= bytes, "the guild markers are signed")
+    r.chars[G1].guild = nil
+    check(R.Canonical(r) == bytes, "a record without markers keeps its bytes")
+end
+
+-- The record of a guild's members ------------------------------------------------------------------
+
+fresh()
+do
+    local I = ns.Identity
+    I.EnsureKeys()
+    -- G1 my main, outside the guild; G2 linked and G3 not linked in guild 7; G4 not linked, outside it.
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, 10)
+    I.Link(G1)
+    I.Refresh(G2, "Ann Zed", NORMAL, MAGE, 10)
+    I.Link(G2)
+    I.Refresh(G3, "Ann Alt", NORMAL, MAGE, 10)
+    I.Refresh(G4, "Ann Other", NORMAL, MAGE, 10)
+    I.SetGuild(G2, 7)
+    I.SetGuild(G3, 7)
+
+    local everyone = I.UnsignedRecord()
+    check(count(everyone.chars) == 2 and not everyone.chars[G3] and not everyone.chars[G1].guild,
+        "everyone else gets my linked characters, without markers")
+    local guild = I.UnsignedRecord(7, NORMAL)
+    check(ns.Record.Validate(guild) and count(guild.chars) == 3 and guild.main == G1,
+        "the guild's members get my linked characters and my characters in the guild, with my main")
+    check(guild.chars[G3].guild.forced and not guild.chars[G4] and not (guild.chars[G2].guild or {}).forced,
+        "the characters only the rule adds are marked forced")
+    check(guild.chars[G2].guild.main and not guild.chars[G3].guild.main,
+        "my main outside the guild: the first linked character in it is the guild main")
+    check(count(I.UnsignedRecord(7, ns.Record.RULESET.PvP).chars) == 2, "a guild is its club ID and its ruleset")
+
+    ns.settings.scopes.guild = false
+    guild = I.UnsignedRecord(7, NORMAL)
+    check(ns.Record.Validate(guild) and count(guild.chars) == 2 and guild.main == nil
+        and guild.chars[G2].guild.forced and guild.chars[G3].guild.forced and guild.chars[G2].guild.main,
+        "Guild scope off: only my characters in the guild, all marked, under the guild main")
+    check(count(I.UnsignedRecord().chars) == 2, "everyone else's record doesn't change")
+
+    I.SetGuild(G1, 7)
+    guild = I.UnsignedRecord(7, NORMAL)
+    check(guild.main == G1 and not guild.chars[G1].guild.main and not guild.chars[G2].guild.main,
+        "my main in the guild: no guild main")
+    ns.settings.scopes.guild = true
+
+    local signed = I.SignedRecord(7, NORMAL)
+    check(ns.Record.Verify(signed) and ns.Record.Verify(I.SignedRecord()), "each record is signed apart")
+    check(I.SignedRecord(7, NORMAL).sig == signed.sig, "and its signature kept while its bytes stay the same")
 end
 
 -- People: shared identities ------------------------------------------------------------------------
@@ -891,6 +957,53 @@ do
     check(ns.data.forgotten[A].rev == 1 and ns.data.forgotten[A].at == 1500, "a forgotten identity keeps when it was forgotten")
 end
 
+-- Records of a guild's members --------------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local A, B = string.rep("a", 64), string.rep("b", 64)
+    local function character(guid) return select(2, P.Find(guid)) end
+    -- G1 the main, outside the guild; G2 the guild main; G3 an alt the guild's rule adds.
+    local function guildRecord(sig)
+        local record = makeRecord(A, 2, { G1, G2, G3 })
+        record.chars[G2].guild = { main = true }
+        record.chars[G3].guild = { forced = true }
+        record.sig = sig
+        return record
+    end
+
+    P.Accept(guildRecord("s1"))
+    check(P.Get(A).main == G2 and P.IdentityNickname(A) == "N2", "a guild's members show the person under its guild main")
+    local other = makeRecord(A, 2, { G1, G2 })
+    other.sig = "s2"
+    check(P.ReplacesHeld(other, true) and not P.ReplacesHeld(guildRecord("s1"), true),
+        "at the revision I hold, another content from my guild replaces mine, the same one doesn't")
+    check(not P.ReplacesHeld(other, false), "from elsewhere (a group), it doesn't")
+    check(not P.ReplacesHeld(makeRecord(A, 3, { G1 }), true), "a newer revision is no replacement, it is newer")
+
+    P.UpdateGuildMembers(7, { [G1] = true, [G2] = true, [G3] = true })
+    check(state(G3) == "listed", "a character the rule adds is kept while my roster lists it")
+    P.UpdateGuildMembers(7, { [G1] = true, [G2] = true })
+    check(not P.Exists(G3) and state(G1) == "listed" and character(G2).guild == 7,
+        "and forgotten once it no longer does; the others stay")
+
+    local onlyForced = makeRecord(B, 1, { G4 })
+    onlyForced.main = nil
+    onlyForced.chars[G4].guild = { forced = true, main = true }
+    P.Accept(onlyForced)
+    P.UpdateGuildMembers(7, { [G4] = true })
+    P.GuildLeft(7)
+    check(P.Get(B) == nil, "leaving the guild forgets what its rule added, and a person left without characters")
+
+    P.UpdateGuildMembers(7, { [G1] = true, [G2] = true })
+    P.MarkOutdated(7)
+    check(P.Get(A).outdated and P.IsWanted(A, 2) and not P.IsNewer(A, 2),
+        "joining a guild enforcing linking: a record held of a member is wanted again at its revision")
+    check(P.Accept(guildRecord("s1")) == "updated" and not P.Get(A).outdated and not P.IsWanted(A, 2),
+        "the same revision fetched again replaces it, and it is no longer wanted")
+end
+
 -- Guild settings record ------------------------------------------------------------------------------
 
 fresh()
@@ -899,16 +1012,24 @@ do
     I.EnsureKeys()
     I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
     I.Link(G1)
-    check(GS.Revision(7) == 0 and GS.Get(7).enable == false, "a guild without a record has the default settings")
-    local record = GS.Change(7, { enable = true }, G1, 1000)
+    check(GS.Revision(7) == 0 and GS.Get(7).enable == false and GS.Get(7).enforceLinking == false,
+        "a guild without a record has the default settings")
+    local record = GS.Change(7, { enable = true, enforceLinking = false }, G1, 1000)
     check(GS.Validate(record) and GS.Verify(record) and GS.Get(7).enable and GS.Revision(7) == 1000,
         "a signed record of the settings verifies and is held")
-    check(GS.Change(7, { enable = false }, G1, 900).rev == 1001, "a later change is always newer, even with an earlier clock")
+    check(GS.Change(7, { enable = false, enforceLinking = false }, G1, 900).rev == 1001,
+        "a later change is always newer, even with an earlier clock")
+    local enforcing = GS.Change(7, { enable = true, enforceLinking = true }, G1, 1100)
+    check(GS.Verify(enforcing) and GS.Get(7).enforceLinking, "the setting enforcing linking is signed with the others")
 
     local changed = {}
     for k, v in pairs(record) do changed[k] = v end
-    changed.settings = { enable = false }
+    changed.settings = { enable = false, enforceLinking = false }
     check(not GS.Verify(changed), "a record changed after signing fails")
+    changed.settings = { enable = true, enforceLinking = true }
+    check(not GS.Verify(changed), "so does enforcing linking added after signing")
+    changed.settings = { enable = true }
+    check(not GS.Validate(changed), "a record without the enforcing setting is refused")
     changed.settings, changed.extra = record.settings, 1
     check(not GS.Validate(changed), "a record with an unknown field is refused")
     local lowSigner, highSigner = { rev = 5, signer = ("a"):rep(64) }, { rev = 5, signer = ("b"):rep(64) }

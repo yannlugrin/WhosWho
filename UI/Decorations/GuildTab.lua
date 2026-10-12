@@ -41,24 +41,53 @@ local function addTab(frame)
     title:SetPoint("TOPLEFT", 18, -16)
     title:SetText(L["Who's Who"])
 
-    local enableCheckbox = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    enableCheckbox:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -4, -20)
-    enableCheckbox.Text:SetFontObject(GameFontHighlight)
-    enableCheckbox.Text:SetText(L["Enable Who's Who for the guild"])
-    enableCheckbox:SetMotionScriptsWhileDisabled(true)
-    enableCheckbox:SetScript("OnClick", function(self) ns.Protocol.ChangeGuildSettings({ enable = self:GetChecked() }) end)
-    enableCheckbox:SetScript("OnEnter", function(self)
-        if self:IsEnabled() then return end
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["Link this character and share with your guild to change the guild's settings."], nil, nil,
-            nil, nil, true)
-        GameTooltip:Show()
+    -- My current guild's settings.
+    local function currentSettings()
+        return ns.GuildSettings.Get(ns.Identity.GuildId(UnitGUID("player")))
+    end
+
+    -- A checkbox of the settings; while disabled, its tooltip says why.
+    local function createCheckbox(label, disabledReason)
+        local checkbox = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+        checkbox.Text:SetFontObject(GameFontHighlight)
+        checkbox.Text:SetText(label)
+        checkbox:SetMotionScriptsWhileDisabled(true)
+        checkbox:SetScript("OnEnter", function(self)
+            if self:IsEnabled() then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(disabledReason(), nil, nil, nil, nil, true)
+            GameTooltip:Show()
+        end)
+        checkbox:SetScript("OnLeave", GameTooltip_Hide)
+        return checkbox
+    end
+
+    local enableCheckbox = createCheckbox(L["Enable Who's Who for the guild"], function()
+        return L["Link this character and share with your guild to change the guild's settings."]
     end)
-    enableCheckbox:SetScript("OnLeave", GameTooltip_Hide)
+    enableCheckbox:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -4, -20)
+    enableCheckbox:SetScript("OnClick", function(self)
+        ns.Protocol.ChangeGuildSettings({ enable = self:GetChecked(), enforceLinking = currentSettings().enforceLinking })
+    end)
+
+    -- Only with Who's Who enabled for the guild.
+    local enforceCheckbox = createCheckbox(L["Require members' characters in the guild to be linked"], function()
+        if not canChangeSettings() then
+            return L["Link this character and share with your guild to change the guild's settings."]
+        end
+        return L["Enable Who's Who for the guild first."]
+    end)
+    enforceCheckbox:SetPoint("TOPLEFT", enableCheckbox, "BOTTOMLEFT", 0, -4)
+    enforceCheckbox:SetScript("OnClick", function(self)
+        ns.Protocol.ChangeGuildSettings({ enable = currentSettings().enable, enforceLinking = self:GetChecked() })
+    end)
 
     local function refresh()
-        enableCheckbox:SetChecked(ns.GuildSettings.Get(ns.Identity.GuildId(UnitGUID("player"))).enable)
+        local settings = currentSettings()
+        enableCheckbox:SetChecked(settings.enable)
         enableCheckbox:SetEnabled(canChangeSettings())
+        enforceCheckbox:SetChecked(settings.enforceLinking == true)
+        enforceCheckbox:SetEnabled(canChangeSettings() and settings.enable)
     end
     ns.GuildSettings.OnChanged(function() if panel:IsShown() then refresh() end end)
 
@@ -126,8 +155,10 @@ local function addTab(frame)
     tab:SetScript("OnEvent", updateTab)
 
     ns.Skin.Apply(function(S)
-        S.Checkbox(enableCheckbox)
-        enableCheckbox.Text:SetPoint("LEFT", enableCheckbox, "RIGHT", SKINNED_CHECKBOX_LABEL_GAP, 0)
+        for _, checkbox in ipairs({ enableCheckbox, enforceCheckbox }) do
+            S.Checkbox(checkbox)
+            checkbox.Text:SetPoint("LEFT", checkbox, "RIGHT", SKINNED_CHECKBOX_LABEL_GAP, 0)
+        end
     end)
 end
 

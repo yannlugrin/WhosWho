@@ -9,6 +9,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Guild settings**: the guild master and officers get a Who's Who tab in the guild panel, to enable Who's Who for the guild. The setting reaches every member who uses Who's Who, signed so that only those ranks can change it; `/ww status` shows it.
 - **Your whole guild, known to everyone**: once Who's Who is enabled for the guild, members pass on to each other the identities guildmates shared with their guild, so you recognise every guildmate who uses Who's Who, even one you've never been online with. An identity only an officer passed on to you shows as listed by the guild until the player confirms it.
 - **Guild tab**: once Who's Who is enabled for your guild, the window gets a Guild tab listing its members by identity, mains and alts together, and the members nobody knows yet, with how many of each.
+- **Linked characters required by the guild**: the guild master or an officer can require the members' characters in the guild to be linked. Every character a member who uses Who's Who has in the guild is then known to its members under that member's identity, linked or not, even with guild sharing off. Those characters are shown to the guild only, and forgotten once they leave it.
 
 ### Changed
 

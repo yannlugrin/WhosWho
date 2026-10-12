@@ -70,7 +70,7 @@ end
 -- character.
 local function guildListsActive()
     local guid = UnitGUID("player")
-    return IsInGuild() and Scopes.Get("guild") and Identity.IsLinked(guid)
+    return IsInGuild() and Scopes.SharesWithGuild() and Identity.IsLinked(guid)
         and GuildSettings.Get(Identity.GuildId(guid)).enable
 end
 
@@ -131,10 +131,13 @@ end
 ---A REC sent: the revision it carried, and when its last part left (nil while queued).
 ---@class WhosWho.Delivery
 ---@field revision integer
+---@field clubId integer? the guild enforcing linking whose members' record it was; nil for everyone's
 ---@field leftAt number?
 
 -- Last revision published to every audience this session, and whether the Guild scope was on then.
 local publishedRevision, publishedWithGuildScope
+-- The bytes of everyone's record as last published, without its revision.
+local publishedBytes
 ---@type table<string, true> names of the players who sent a GET for my identity
 local requesters = {}
 ---@type table<string, WhosWho.Delivery> by channel (GUILD, PARTY, RAID) or by name (WHISPER)
@@ -146,12 +149,13 @@ local sendAt
 ---@type number? when the pending wait started (GetTime)
 local waitStartedAt
 
--- Whether a REC of my current revision that reaches that player is still queued, or was sent less than
--- REACHED_DELAY_SECONDS ago: a GET from that player is then answered by that REC.
+-- Whether a REC of my current revision that reaches that player, with the record it gets, is still queued, or was sent
+-- less than REACHED_DELAY_SECONDS ago: a GET from that player is then answered by that REC.
 local function reachedRecently(name)
+    local clubId = Scopes.RecordGuildOf(name)
     local function deliveredRecently(key)
         local delivery = key and deliveries[key]
-        return delivery and delivery.revision == Identity.Revision()
+        return delivery and delivery.revision == Identity.Revision() and delivery.clubId == clubId
             and (not delivery.leftAt or GetTime() - delivery.leftAt < REACHED_DELAY_SECONDS)
     end
     return deliveredRecently(name)
@@ -159,9 +163,9 @@ local function reachedRecently(name)
         or (Scopes.GroupReaches(name) and deliveredRecently(Scopes.GroupChannel()))
 end
 
-local function sendRecord(message, channel, name)
+local function sendRecord(message, channel, name, clubId)
     if loggingOut then return end
-    local delivery = { revision = Identity.Revision() }
+    local delivery = { revision = Identity.Revision(), clubId = clubId }
     deliveries[name or channel] = delivery
     traceSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name, "NORMAL", function(_, sent, total)
@@ -204,32 +208,40 @@ local function fewestMessages(names)
     return bestChoice, bestWhispered
 end
 
--- Every requester my scopes still allow, in the fewest messages. An anonymous character answers nobody: the
--- requesters ask again at my next announcement.
+-- Every requester my record still reaches, in the fewest messages for each record they get: my guild's members' one,
+-- everyone's. The others ask again at my next announcement.
 local function answerRequesters(recordUpdate)
-    if not Identity.IsLinked(UnitGUID("player")) then
-        requesters = {}
-        return
-    end
-    local names = {}
+    local guildClubId, guildRuleset = Scopes.EnforcedGuild()
+    local guildNames, names = {}, {}
     for name in pairs(requesters) do
-        if Scopes.Allows(name) then names[#names + 1] = name end
+        if Scopes.RecordReaches(name) then
+            if Scopes.RecordGuildOf(name) then
+                guildNames[#guildNames + 1] = name
+            else
+                names[#names + 1] = name
+            end
+        end
     end
     requesters = {}
 
-    local bestChoice, bestWhispered = fewestMessages(names)
-    if bestChoice.guild then sendRecord(recordUpdate(), "GUILD") end
-    if bestChoice.group then sendRecord(recordUpdate(), Scopes.GroupChannel()) end
-    for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(), "WHISPER", name) end
+    local function answer(list, clubId, ruleset)
+        local bestChoice, bestWhispered = fewestMessages(list)
+        if bestChoice.guild then sendRecord(recordUpdate(clubId, ruleset), "GUILD", nil, clubId) end
+        if bestChoice.group then sendRecord(recordUpdate(clubId, ruleset), Scopes.GroupChannel(), nil, clubId) end
+        for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(clubId, ruleset), "WHISPER", name, clubId) end
+    end
+    answer(guildNames, guildClubId, guildRuleset)
+    answer(names)
 end
 
 -- Whether the character I play was anonymous at login, until its first announcement.
 local anonymousAtLogin = false
 
--- A change of revision, to every audience: the players holding an older one ask for it. When the Guild scope was
--- turned on since the last one, the guild members send theirs back: until then they ignored mine, and I theirs. When
--- the character I play was anonymous at login, everyone sends theirs back: it asked nobody.
-local function announceRevision()
+-- A change of revision, to every audience, or to my guild alone when only its members' record changed: the players
+-- holding an older one ask for it. When the Guild scope was turned on since the last one, the guild members send theirs
+-- back: until then they ignored mine, and I theirs. When the character I play was anonymous at login, everyone sends
+-- theirs back: it asked nobody.
+local function announceRevision(guildOnly)
     local guid = UnitGUID("player")
     local level = UnitLevel("player")
     local wantsAnnouncements = anonymousAtLogin
@@ -243,10 +255,12 @@ local function announceRevision()
     local guildMessage = guildScopeTurnedOn and not wantsAnnouncements and announcementText(level, true, true) or message
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do
-        sendQueued(channel == "GUILD" and guildMessage or message, channel)
+        if channel == "GUILD" or not guildOnly then sendQueued(channel == "GUILD" and guildMessage or message, channel) end
     end
     for _, name in ipairs(audience.guildMembers) do sendQueued(guildMessage, "WHISPER", name) end
-    for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
+    if not guildOnly then
+        for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
+    end
     Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(guid))
 end
 
@@ -263,14 +277,20 @@ local function sendRecords()
     end
     sendAt, waitStartedAt = nil, nil
 
-    if Identity.Revision() ~= publishedRevision then announceRevision() end
+    if Identity.Revision() ~= publishedRevision then
+        -- Everyone's record unchanged: the change is only in what my guild's members get.
+        local bytes = Identity.RecordBytesWithoutRevision()
+        announceRevision(bytes == publishedBytes)
+        publishedBytes = bytes
+    end
     publishedRevision = Identity.Revision()
 
-    -- The REC text, built once for every REC this wait sends, and only when one goes out.
-    local message
-    answerRequesters(function()
-        message = message or Codec.RecordUpdate(Identity.SignedRecord())
-        return message
+    -- Each REC text, built once for every REC this wait sends, and only when one goes out.
+    local messages = {}
+    answerRequesters(function(clubId, ruleset)
+        local key = clubId or 0
+        messages[key] = messages[key] or Codec.RecordUpdate(Identity.SignedRecord(clubId, ruleset))
+        return messages[key]
     end)
 end
 
@@ -308,7 +328,7 @@ local function sendAnnouncements()
     announcementWaiting = false
     local names = {}
     for name in pairs(announcementRecipients) do
-        if Scopes.Allows(name) then names[#names + 1] = name end
+        if Scopes.AnnouncementReaches(name) then names[#names + 1] = name end
     end
     announcementRecipients = {}
 
@@ -349,7 +369,8 @@ local function announceToFriends(friends)
 
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
     for _, friend in ipairs(friends) do
-        if friend.connected and not Scopes.GuildReaches(friend.name) and not Scopes.GroupReaches(friend.name) then
+        if friend.connected and Scopes.AnnouncementReaches(friend.name) and not Scopes.GuildReaches(friend.name)
+            and not Scopes.GroupReaches(friend.name) then
             sendQueued(message, "WHISPER", friend.name)
             rememberAnnouncement(friend.name, revision)
         end
@@ -677,7 +698,7 @@ local function receiveAnnouncement(announcement, sender)
         -- The owner left: a GET would get no answer, and my announcement would not reach them.
         requests[id] = nil
         announcementRecipients[sender] = nil
-    elseif linked and People.IsNewer(id, announcement.rev) and Scopes.Allows(sender) then
+    elseif linked and People.IsWanted(id, announcement.rev) and Scopes.Allows(sender) then
         requestRecord(id, sender)
     end
 end
@@ -687,7 +708,7 @@ end
 local function receiveRecordRequest(request, sender)
     for _, id in ipairs(request.ids) do
         if id == Identity.Id() then
-            if Identity.IsLinked(UnitGUID("player")) and not reachedRecently(sender) then
+            if Scopes.RecordReaches(sender) and not reachedRecently(sender) then
                 requesters[sender] = true
                 scheduleRecordSending(REQUEST_WAIT_SECONDS)
             end
@@ -704,7 +725,7 @@ end
 
 -- A REC is used only from a channel I share on, so strangers cannot fill my saved data.
 local function sharedChannel(distribution, sender)
-    if distribution == "GUILD" then return Scopes.Get("guild") end
+    if distribution == "GUILD" then return Scopes.SharesWithGuild() end
     if distribution == "PARTY" or distribution == "RAID" then return Scopes.Get("group") end
     if distribution == "WHISPER" then return Scopes.Allows(sender) end
     return false
@@ -722,12 +743,15 @@ end
 local function receiveRecordUpdate(recordUpdate, distribution, sender)
     local signedRecord = recordUpdate.signedRecord
     if signedRecord.id == Identity.Id() or not sharedChannel(distribution, sender) then return end
-    if not People.IsNewer(signedRecord.id, signedRecord.rev) then return end
+    local fromMyGuild = distribution == "GUILD" or (distribution == "WHISPER" and Scopes.GuildReaches(sender))
+    local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or People.ReplacesHeld(signedRecord, fromMyGuild)
+    if not wanted then return end
     -- Relayed by a member of my guild: only with the player's consent; an identity I don't hold yet, only from a trusted
     -- member, and its characters are then listed by the guild.
     local fromGuild = false
     if not sentByOwner(signedRecord, sender) then
-        if not (guildListsActive() and signedRecord.guild.consent and Scopes.GuildReaches(sender)) then return end
+        local relayable = signedRecord.guild.consent or Record.HasGuildMarkers(signedRecord)
+        if not (guildListsActive() and relayable and Scopes.GuildReaches(sender)) then return end
         if not People.Get(signedRecord.id) then
             if not trustedMember(sender) then return end
             fromGuild = true
@@ -830,7 +854,7 @@ end
 -- Turning the Whispers scope on sends nothing: it applies to the players I whisper from then on.
 ---@param key "guild"|"friends"|"whispers"|"group"
 local function announceScope(key)
-    if key == "group" and IsInGroup() then
+    if key == "group" and Scopes.AnnouncesToGroup() and IsInGroup() then
         announceToChannel(Scopes.GroupChannel())
     elseif key == "friends" then
         announceToFriends(Scopes.Friends())
@@ -885,6 +909,7 @@ function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
     publishedRevision, publishedWithGuildScope = Identity.Revision(), Scopes.Get("guild")
+    publishedBytes = Identity.RecordBytesWithoutRevision()
     Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
     People.OnChanged(retryPendingGuildSettings)
@@ -978,7 +1003,7 @@ function Protocol.GroupRosterChanged()
     local inGroup = IsInGroup()
     local joined = inGroup and not wasInGroup
     wasInGroup = inGroup
-    if not (joined and Scopes.Get("group")) then return end
+    if not (joined and Scopes.AnnouncesToGroup()) then return end
 
     announceToChannel(Scopes.GroupChannel())
 end
@@ -1000,7 +1025,7 @@ end
 ---@param name any
 function Protocol.Whispered(name)
     if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
-    if not (Scopes.Get("whispers") and Scopes.Allows(name)) then return end
+    if not (Scopes.Get("whispers") and Scopes.AnnouncementReaches(name)) then return end
     if Scopes.GuildReaches(name) or Scopes.GroupReaches(name) or Scopes.FriendReaches(name) then return end
     local message = announcementText(UnitLevel("player"), true, true)
     if not message then return end

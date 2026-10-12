@@ -1,6 +1,6 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Identity, People = ns.Identity, ns.People
+local GuildSettings, Identity, People = ns.GuildSettings, ns.Identity, ns.People
 
 -- Who my record goes to and through which channel, the GUIDs the game gives for the players I share with, and the
 -- relationships kept on confirmed characters (guild, friendOf, whisperedAt).
@@ -45,6 +45,36 @@ local function guildMember(name)
         end
     end
     return false
+end
+
+---My current guild, when it enforces linking and I have an identity: I share with it whatever my Guild scope.
+---@return integer? clubId
+---@return WhosWho.Ruleset? ruleset
+function Scopes.EnforcedGuild()
+    local guid = UnitGUID("player")
+    local clubId = IsInGuild() and Identity.GuildId(guid)
+    if not (clubId and Identity.LinkedCount() > 0 and GuildSettings.EnforcesLinking(clubId)) then return nil, nil end
+    return clubId, Identity.Ruleset(guid)
+end
+
+-- Whether the character I play shares with my guild only: one I didn't link, which my guild's rule adds.
+local function guildOnly()
+    return not Identity.IsLinked(UnitGUID("player")) and Scopes.EnforcedGuild() ~= nil
+end
+
+---Whether I share with my current guild: with the Guild scope, or by its rule.
+---@return boolean
+function Scopes.SharesWithGuild()
+    return Scopes.Get("guild") or Scopes.EnforcedGuild() ~= nil
+end
+
+-- Sets my current character's guild (apply). When the guild enforces linking and what its members get from me changes,
+-- a new revision; a guild left needs none, its members forget the characters it added once their roster drops them.
+local function setOwnGuild(clubId, apply)
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    local bytes = GuildSettings.EnforcesLinking(clubId) and Identity.RecordBytesWithoutRevision(clubId, ruleset)
+    apply()
+    if bytes and Identity.RecordBytesWithoutRevision(clubId, ruleset) ~= bytes then Identity.GuildContentChanged() end
 end
 
 -- A member of my current guild, from the roster; stops at the name.
@@ -286,8 +316,10 @@ function Scopes.GuildRosterChanged()
     for name in pairs(unlistedGuildSenders) do
         if C_GuildInfo.MemberExistsByName(name) then unlistedGuildSenders[name] = nil end
     end
-    Identity.SetGuild(UnitGUID("player"), clubId)
+    local joined = Identity.GuildId(UnitGUID("player")) ~= clubId
+    setOwnGuild(clubId, function() Identity.SetGuild(UnitGUID("player"), clubId) end)
     People.UpdateGuildMembers(clubId, memberGuids)
+    if joined and GuildSettings.EnforcesLinking(clubId) then People.MarkOutdated(clubId) end
     People.Activity(activities)
 end
 
@@ -298,7 +330,9 @@ function Scopes.GuildChanged()
         C_GuildInfo.GuildRoster()
         return
     end
+    local clubId = Identity.GuildId(UnitGUID("player"))
     Identity.SetGuild(UnitGUID("player"), nil)
+    if clubId then People.GuildLeft(clubId) end
 end
 
 ---After a record is stored: the guild and the level of its characters my roster lists, as an announcement from them
@@ -419,7 +453,7 @@ end
 function Scopes.Allows(name)
     local guild, friends = Scopes.Get("guild"), Scopes.Get("friends")
     local whispersOn = Scopes.Get("whispers")
-    if guild and guildMember(name) then return true end
+    if Scopes.SharesWithGuild() and guildMember(name) then return true end
     if friends and C_FriendList.GetFriendInfo(name) then return true end
     if Scopes.Get("group") and groupMemberGuid(name) then return true end
     if whispersOn then
@@ -447,11 +481,46 @@ function Scopes.Allows(name)
     return false
 end
 
----Whether that player is in my guild and the Guild scope is on: the GUILD channel reaches it.
+---Whether my announcement, from the character I play, goes to that player: one my scopes allow; only my guild's members
+---from a character my guild's rule adds.
+---@param name string
+---@return boolean
+function Scopes.AnnouncementReaches(name)
+    return Scopes.Allows(name) and (not guildOnly() or Scopes.GuildReaches(name))
+end
+
+---Whether my announcements, from the character I play, go to my group: with the Group scope, from a character that
+---shares beyond my guild.
+---@return boolean
+function Scopes.AnnouncesToGroup()
+    return Scopes.Get("group") and not guildOnly()
+end
+
+---Whether my record, from the character I play, goes to that player: one my scopes allow, from a linked character; only
+---my guild's members from a character my guild's rule adds.
+---@param name string
+---@return boolean
+function Scopes.RecordReaches(name)
+    if not Scopes.Allows(name) then return false end
+    return Identity.IsLinked(UnitGUID("player")) or (guildOnly() and Scopes.GuildReaches(name))
+end
+
+---The guild whose members' record that player gets: my current guild, when it enforces linking and the player is in it;
+---nil for everyone's record.
+---@param name string
+---@return integer? clubId
+---@return WhosWho.Ruleset? ruleset
+function Scopes.RecordGuildOf(name)
+    local clubId, ruleset = Scopes.EnforcedGuild()
+    if clubId and Scopes.GuildReaches(name) then return clubId, ruleset end
+    return nil, nil
+end
+
+---Whether that player is in my guild and I share with it: the GUILD channel reaches it.
 ---@param name string
 ---@return boolean
 function Scopes.GuildReaches(name)
-    return Scopes.Get("guild") and guildMember(name)
+    return Scopes.SharesWithGuild() and guildMember(name)
 end
 
 ---Whether one of my linked characters is in my current character's guild, in its ruleset: an anonymous character may
@@ -470,7 +539,8 @@ end
 -- callers, once a character can send on GUILD right after joining.
 ---PLAYER_GUILD_UPDATE: the character I play joined a guild.
 function Scopes.GuildJoined()
-    Identity.GuildJoined(UnitGUID("player"), C_Club.GetGuildClubId())
+    local clubId = C_Club.GetGuildClubId()
+    setOwnGuild(clubId, function() Identity.GuildJoined(UnitGUID("player"), clubId) end)
 end
 
 ---Whether my add-on messages on GUILD reach the guild: not from a character that joined its guild since its last login.
@@ -515,7 +585,7 @@ end
 ---@return string[] names
 local function whisperedPeople(since)
     local ruleset = Identity.Ruleset(UnitGUID("player"))
-    if not (Scopes.Get("whispers") and since) then return {} end
+    if not (Scopes.Get("whispers") and since) or guildOnly() then return {} end
 
     local whispered, lastCharacter = {}, {}
     for otherGuid, whisper in pairs(ns.data.whispers) do
@@ -545,17 +615,16 @@ end
 ---@return WhosWho.Audience
 local function membersAndFriends()
     local memberChannels, guildMembers, names = {}, {}, {}
-
-    local guild = Scopes.Get("guild") and IsInGuild()
+    local guild = Scopes.SharesWithGuild() and IsInGuild()
     if guild and Scopes.CanSendOnGuild() then memberChannels[#memberChannels + 1] = "GUILD" end
-    if Scopes.Get("group") and IsInGroup() then memberChannels[#memberChannels + 1] = Scopes.GroupChannel() end
+    if Scopes.AnnouncesToGroup() and IsInGroup() then memberChannels[#memberChannels + 1] = Scopes.GroupChannel() end
     if guild and not Scopes.CanSendOnGuild() then
         for _, name in ipairs(Scopes.OnlineGuildMembers()) do
             if not Scopes.GroupReaches(name) then guildMembers[#guildMembers + 1] = name end
         end
     end
 
-    if Scopes.Get("friends") then
+    if Scopes.Get("friends") and not guildOnly() then
         for _, friend in ipairs(Scopes.Friends()) do
             if friend.connected and not Scopes.GuildReaches(friend.name) and not Scopes.GroupReaches(friend.name) then
                 names[#names + 1] = friend.name

@@ -218,6 +218,8 @@ L["Battle.net: %s"] = true
 -- Guild panel
 L["Enable Who's Who for the guild"] = true
 L["Link this character and share with your guild to change the guild's settings."] = true
+L["Require members' characters in the guild to be linked"] = true
+L["Enable Who's Who for the guild first."] = true
 
 -- Guild tab
 L["%d |4main character:main characters; · %d |4alt:alts; · %d unknown"] = true

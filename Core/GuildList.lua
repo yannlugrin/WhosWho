@@ -34,7 +34,7 @@ function GuildList.Entries(clubId, ruleset)
     local entries = {}
     for id, person in pairs(ns.data.people) do
         local record = person.signedRecord
-        if record and record.guild.consent then
+        if record and not person.outdated and (record.guild.consent or ns.Record.HasGuildMarkers(record)) then
             for _, character in pairs(person.chars) do
                 if IN_LIST_STATES[character.state] and character.guild == clubId and character.ruleset == ruleset then
                     entries[id] = record.rev
@@ -45,7 +45,7 @@ function GuildList.Entries(clubId, ruleset)
     end
     local ownCharacterGuid = UnitGUID("player")
     if Identity.IsLinked(ownCharacterGuid) and Identity.GuildId(ownCharacterGuid) == clubId
-        and Identity.UnsignedRecord().guild.consent then
+        and (Identity.UnsignedRecord().guild.consent or ns.GuildSettings.EnforcesLinking(clubId)) then
         entries[Identity.Id()] = Identity.Revision()
     end
     return entries
@@ -115,7 +115,7 @@ end
 function GuildList.Missing(entries)
     local held, unknown = {}, {}
     for id, rev in pairs(entries) do
-        if id ~= Identity.Id() and People.IsNewer(id, rev) then
+        if id ~= Identity.Id() and People.IsWanted(id, rev) then
             if People.Get(id) then held[#held + 1] = id else unknown[#unknown + 1] = id end
         end
     end
