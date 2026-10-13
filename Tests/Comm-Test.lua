@@ -256,6 +256,7 @@ local function newEnvironment(session)
     end
 
     env.IsInGuild = function() return c.guild ~= nil end
+    env.C_EventUtils = { IsEventValid = function() return true end }
     -- Right after joining, the game may give the roster before the guild's club ID (session.clubIdHidden).
     env.C_Club = { GetGuildClubId = function() return not session.clubIdHidden and c.guild or nil end }
     env.GetNumGuildMembers = function() return #roster() end
@@ -1895,6 +1896,7 @@ check(state(sam, miaMain.guid) == "confirmed", "Sam knows Mia")
 world.group = {}
 sam.ns.settings.scopes.group, mia.ns.settings.scopes.group = false, false
 clearLog()
+fire(sam, "GUILD_INVITE_REQUEST", "Pia Main")
 samMain.guild, sam.joinedGuild, sam.clubIdHidden = GUILD3, true, true
 fire(sam, "PLAYER_GUILD_UPDATE", "player")
 run(5)
@@ -1905,6 +1907,14 @@ check(sent({ from = "Sam Main", type = "ANNOUNCE" }) >= 1
     and sent({ from = "Sam Main", type = "ANNOUNCE" }) == sent({ from = "Sam Main", text = EMPTY_ANNOUNCEMENT })
     and sent({ from = "Sam Main", type = "REC" }) == 0,
     "then, the rule not accepted, only empty announcements: the guild never learns the identity")
+local samTargets = {}
+for _, entry in ipairs(world.log) do
+    if entry.from == "Sam Main" and entry.distribution == "WHISPER" and entry.type == "ANNOUNCE" then
+        samTargets[#samTargets + 1] = entry.target
+    end
+end
+check(samTargets[1] == "Pia Main" and samTargets[2] == "Mia Main",
+    "the members are whispered the inviter first, then by rank: the officer before the others")
 check(sam.ns.Identity.EnforcedLinkingOptIn(GUILD3) == nil and sam.ns.Scopes.EnforcedLinkingChoiceNeeded() == GUILD3,
     "joining with another character, the refusal goes back to unanswered: he is asked again")
 check(sent({ from = "Sam Main", type = "GET" }) == 0 and not sam.ns.Scopes.Allows("Mia Main"),

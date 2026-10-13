@@ -168,14 +168,22 @@ function Scopes.TrustedForGuildSettings(name)
     return rankIndex ~= nil and rankIndex <= GuildSettings.LOWEST_RANK_INDEX
 end
 
----The online members of my guild but me, from the roster.
+---The online members of my guild but me, from the roster: the member who invited me first, then by rank (the guild
+---master first), then by name. The members trusted for the guild's first settings get my messages first.
 ---@return string[] names
 function Scopes.OnlineGuildMembers()
-    local names, ownName = {}, ns.UnitWholeName("player")
+    local names, rankIndexByName, ownName = {}, {}, ns.UnitWholeName("player")
     for i = 1, GetNumGuildMembers() do
-        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
-        if name and notSecret(name, online) and online and name ~= ownName then names[#names + 1] = name end
+        local name, _, rankIndex, _, _, _, _, _, online = GetGuildRosterInfo(i)
+        if name and notSecret(name, rankIndex, online) and online and name ~= ownName then
+            names[#names + 1], rankIndexByName[name] = name, rankIndex
+        end
     end
+    table.sort(names, function(a, b)
+        if (a == guildInviter) ~= (b == guildInviter) then return a == guildInviter end
+        if rankIndexByName[a] ~= rankIndexByName[b] then return rankIndexByName[a] < rankIndexByName[b] end
+        return a < b
+    end)
     return names
 end
 
