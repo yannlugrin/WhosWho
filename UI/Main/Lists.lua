@@ -56,15 +56,18 @@ end
 
 -- People ---------------------------------------------------------------------------------------
 
----Where the name a person is shown under comes from.
+---Where the name a person is shown under comes from: until a character is confirmed, a record my guild passed on
+---shows as the guild's.
 ---@param person WhosWho.Person
----@return "confirmed"|"renamed"|"unconfirmed"
+---@return "confirmed"|"renamed"|"guild"|"unconfirmed"
 function Lists.NicknameSource(person)
     if not person.signedRecord then return "unconfirmed" end
+    local listedByGuild = false
     for _, character in pairs(person.chars) do
         if character.state == "confirmed" then return person.customNickname and "renamed" or "confirmed" end
+        listedByGuild = listedByGuild or character.state == "guild"
     end
-    return "unconfirmed"
+    return listedByGuild and "guild" or "unconfirmed"
 end
 
 ---Whether the search text, lowercased, is in the person's nickname, their own nickname or a character's name.

@@ -7,7 +7,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Added
 
 - **Guild settings**: the guild master and officers get a Who's Who tab in the guild panel, to enable Who's Who for the guild. The setting reaches every member who uses Who's Who, signed so that only those ranks can change it; `/ww status` shows it.
-- **Your whole guild, known to everyone**: once Who's Who is enabled for the guild, members pass on to each other the identities guildmates shared with their guild, so you recognise every guildmate who uses Who's Who, even one you've never been online with. An identity only an officer passed on to you shows as listed by the guild until the player confirms it.
+- **Your whole guild, known to everyone**: once Who's Who is enabled for the guild, members pass on to each other the identities guildmates shared with their guild, so you recognise every guildmate who uses Who's Who, even one you've never been online with. An identity only an officer passed on to you shows as listed by the guild until the player confirms it. One known only through the guild is forgotten once they leave it, or you do.
 - **Guild tab**: once Who's Who is enabled for your guild, the window gets a Guild tab listing its members by identity, mains and alts together, and the members nobody knows yet, with how many of each.
 - **Linked characters required by the guild**: the guild master or an officer can require the members' characters in the guild to be linked. Each member who uses Who's Who is asked first: link those characters, share them with the guild only without linking them, or refuse, and Who's Who then shares nothing with that guild, which may go against its rules. Shared characters are known to the guild's members under that member's identity, even with guild sharing off, shown to the guild only, and forgotten once they leave it.
 
@@ -15,6 +15,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 - **People tab filter**: show your friends, your guild mates, everyone else, or any mix of them, instead of filtering by how an identity was confirmed. A Battle.net friend's BattleTag shows in their detail panel.
 - **Last seen**: a guild member you haven't seen online no longer gets a last seen time from the guild roster, only their level.
+
+### Fixed
+
+- **Guild left while offline**: a character removed from its guild while offline, or whose guild disbanded, no longer counts as in it at its next login.
 
 ## [0.1.1] - 2026-10-10
 

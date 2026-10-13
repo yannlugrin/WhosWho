@@ -71,27 +71,19 @@ end
 ---@field classID integer?
 ---@field level integer
 ---@field online boolean
----@field lastSeen number? seconds, from time(): when an offline member was last online, to the hour
 
 ---The members of my guild, from the roster.
 ---@return WhosWho.GuildMember[]
 local function guildMembers()
-    local members, now = {}, time()
+    local members = {}
     for i = 1, GetNumGuildMembers() do
         local name, _, _, level, _, _, _, _, online, _, classFile = GetGuildRosterInfo(i)
         local guid = select(17, GetGuildRosterInfo(i))
         local secret = issecretvalue(name) or issecretvalue(guid) or issecretvalue(level) or issecretvalue(online)
             or issecretvalue(classFile)
         if name and guid and not secret then
-            local lastSeen
-            if not online then
-                local years, months, days, hours = GetGuildRosterLastOnline(i)
-                local hoursOffline = (((years or 0) * 12 + (months or 0)) * 30.5 + (days or 0)) * 24 + (hours or 0)
-                lastSeen = now - hoursOffline * 3600
-            end
             members[#members + 1] = {
                 guid = guid, name = name, classID = classIdOf(classFile), level = level, online = online == true,
-                lastSeen = lastSeen,
             }
         end
     end
@@ -102,51 +94,65 @@ end
 -- people, then the most recently seen; equal ones by name.
 local sortKey, sortAscending = "LastSeen", false
 
--- My own identity's row: my linked characters, the one I play online.
+-- My record as my guild's members get it: the guild's content when it enforces linking and my identity is complete
+-- there, my linked characters otherwise.
+---@return WhosWho.IdentityRecord
+local function ownGuildRecord()
+    return Identity.UnsignedRecord(ns.Scopes.EnforcedGuild())
+end
+
+-- The name my guild's members show me under: my nickname, otherwise the name of the main they see.
+local function ownNickname(record)
+    return record.nickname or record.chars[ns.Record.ShownMain(record)].name
+end
+
+-- My own identity's row: the characters my guild gets, the one I play online.
+---@param record WhosWho.IdentityRecord
 ---@return WhosWho.PersonListEntry
-local function ownListEntry()
-    local ownCharacterGuid = UnitGUID("player")
+local function ownListEntry(record)
+    local ownCharacterGuid, ownCharacters = UnitGUID("player"), Identity.Characters()
     local characterCount, lastSeen, onlineCharacter = 0, nil, nil
-    for guid, character in pairs(Identity.Characters()) do
-        if character.linked then
-            characterCount = characterCount + 1
-            if not lastSeen or character.lastSeen > lastSeen then lastSeen = character.lastSeen end
-            if guid == ownCharacterGuid then
-                onlineCharacter = { guid = guid, name = character.name, classID = character.classID }
-            end
+    for guid, character in pairs(record.chars) do
+        characterCount = characterCount + 1
+        local seen = ownCharacters[guid].lastSeen
+        if not lastSeen or seen > lastSeen then lastSeen = seen end
+        if guid == ownCharacterGuid then
+            onlineCharacter = { guid = guid, name = character.name, classID = character.classID }
         end
     end
     return {
-        id = Identity.Id(), nickname = Identity.Nickname(), source = "confirmed", characterCount = characterCount,
+        id = Identity.Id(), nickname = ownNickname(record), source = "confirmed", characterCount = characterCount,
         lastSeen = lastSeen, online = onlineCharacter ~= nil, onlineCharacter = onlineCharacter,
     }
 end
 
+---@param record WhosWho.IdentityRecord
 ---@return WhosWho.PersonDetail
-local function ownDetail()
-    local ownCharacterGuid, mainGuid = UnitGUID("player"), Identity.Main()
+local function ownDetail(record)
+    local ownCharacterGuid, ownCharacters = UnitGUID("player"), Identity.Characters()
+    local mainGuid = ns.Record.ShownMain(record)
     local characters = {}
-    for guid, character in pairs(Identity.Characters()) do
-        if character.linked then
-            characters[#characters + 1] = {
-                guid = guid,
-                name = character.name, classID = character.classID, state = "confirmed", main = guid == mainGuid,
-                online = guid == ownCharacterGuid, lastSeen = character.lastSeen, level = character.level,
-                ruleset = character.ruleset,
-            }
-        end
+    for guid, character in pairs(record.chars) do
+        local ownCharacter = ownCharacters[guid]
+        characters[#characters + 1] = {
+            guid = guid,
+            name = character.name, classID = character.classID, state = "confirmed", main = guid == mainGuid,
+            online = guid == ownCharacterGuid, lastSeen = ownCharacter.lastSeen, level = ownCharacter.level,
+            ruleset = character.ruleset,
+        }
     end
     PersonBrowser.SortCharacters(characters)
     return {
-        nickname = Identity.Nickname(), source = "confirmed", characters = characters, id = Identity.Id(), own = true,
+        nickname = ownNickname(record), source = "confirmed", characters = characters, id = Identity.Id(), own = true,
     }
 end
 
--- Whether the search text, lowercased, is in my nickname or a linked character's name.
-local function ownMatchesSearch(text)
-    if text == "" or Identity.Nickname():lower():find(text, 1, true) then return true end
-    for _, character in pairs(Identity.Characters()) do
-        if character.linked and character.name:lower():find(text, 1, true) then return true end
+-- Whether the search text, lowercased, is in my nickname or the name of a character my guild gets.
+---@param record WhosWho.IdentityRecord
+local function ownMatchesSearch(record, text)
+    if text == "" or ownNickname(record):lower():find(text, 1, true) then return true end
+    for _, character in pairs(record.chars) do
+        if character.name:lower():find(text, 1, true) then return true end
     end
     return false
 end
@@ -157,7 +163,7 @@ end
 function panel:Select(id)
     if id and id == Identity.Id() then
         browser:SetSelected(id)
-        browser:SetPerson(ownDetail())
+        browser:SetPerson(ownDetail(ownGuildRecord()))
         return
     end
     local person = id and People.Get(id)
@@ -166,8 +172,8 @@ function panel:Select(id)
 end
 
 ---Fills the header from my guild, and the list from its roster: a row for each identity whose main is in it,
----mine included, and one for each character no identity holds, my unlinked ones included, with the search applied;
----the selected row again while the list still shows it.
+---mine included, and one for each character no identity holds, mine my guild doesn't get included, with the search
+---applied; the selected row again while the list still shows it.
 function panel:Refresh()
     local guildName, rankName = GetGuildInfo("player")
     self.GuildName:SetText(guildName and ("<%s>"):format(guildName) or "")
@@ -175,19 +181,20 @@ function panel:Refresh()
 
     local text = self.SearchBox:GetText():lower()
     local onlineGuids = ns.Scopes.OnlineGuids()
-    local ownMainGuid = Identity.Main()
+    local ownRecord = ownGuildRecord()
+    local ownMainGuid = ns.Record.ShownMain(ownRecord)
     local entries, selectedShown = {}, false
     local mainCount, altCount, unknownCount = 0, 0, 0
     for _, member in ipairs(guildMembers()) do
         local guid = member.guid
         local person = People.Find(guid)
         local entry
-        if Identity.IsLinked(guid) then
+        if ownRecord.chars[guid] then
             if guid ~= ownMainGuid then
                 altCount = altCount + 1
             else
                 mainCount = mainCount + 1
-                if ownMatchesSearch(text) then entry = ownListEntry() end
+                if ownMatchesSearch(ownRecord, text) then entry = ownListEntry(ownRecord) end
             end
         elseif person then
             if guid ~= person.main then
@@ -205,8 +212,7 @@ function panel:Refresh()
             unknownCount = unknownCount + 1
             if text == "" or member.name:lower():find(text, 1, true) then
                 entry = {
-                    nickname = member.name, source = "unconfirmed", characterCount = 1, lastSeen = member.lastSeen,
-                    online = member.online,
+                    nickname = member.name, source = "unconfirmed", characterCount = 1, online = member.online,
                     unknownCharacter = {
                         guid = guid, name = member.name,
                         newCharacter = member.classID and {

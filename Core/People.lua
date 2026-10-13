@@ -605,43 +605,54 @@ local function isForced(person, guid)
     return recordCharacter ~= nil and recordCharacter.guild ~= nil and recordCharacter.guild.forced == true
 end
 
--- Forgets the characters that guild's rule added to the records I hold, but the ones still in it (members), and those
--- never seen in my roster; a person left without the player's characters too. Whether any was forgotten.
-local function forgetForced(clubId, memberGuids)
+-- Whether the person holds a character the player told me of: one I didn't add, and, for one only that guild passed
+-- on, still in it (members).
+local function holdsPlayersCharacter(person, memberGuids)
+    for guid, character in pairs(person.chars) do
+        if character.state ~= "added" and (character.state ~= "guild" or memberGuids[guid]) then return true end
+    end
+    return false
+end
+
+-- Forgets what I hold of a shared person through that guild, for the characters its roster no longer lists (members):
+-- the characters its rule added, but those never seen in my roster; the person too, when it had a character in that
+-- guild and is left without a character the player told me of. Whether anything was forgotten.
+local function forgetFormerMember(person, clubId, memberGuids)
+    local inThatGuild, removedFromPerson = false, {}
+    for guid, character in pairs(person.chars) do
+        inThatGuild = inThatGuild or character.guild == clubId
+        local forcedThere = character.guild == clubId or character.guild == nil
+        if not memberGuids[guid] and forcedThere and isForced(person, guid) then
+            person.chars[guid] = nil
+            unindexCharacter(guid, person.id)
+            removedFromPerson[guid] = true
+        end
+    end
+    if (inThatGuild or next(removedFromPerson)) and not holdsPlayersCharacter(person, memberGuids) then
+        forget(person.id)
+        return true
+    end
+    if not next(removedFromPerson) then return false end
+    -- Its guild main forgotten, the person is shown under the record's main again.
+    if removedFromPerson[person.main] then person.main = person.signedRecord.main end
+    return true
+end
+
+-- forgetFormerMember for every shared person. Whether anything was forgotten.
+local function forgetFormerMembers(clubId, memberGuids)
     local removed = false
-    for id, person in pairs(ns.data.people) do
-        local removedFromPerson = {}
-        for guid, character in pairs(person.chars) do
-            local inThatGuild = character.guild == clubId or character.guild == nil
-            if not memberGuids[guid] and inThatGuild and isForced(person, guid) then
-                person.chars[guid] = nil
-                unindexCharacter(guid, id)
-                removedFromPerson[guid] = true
-            end
-        end
-        if next(removedFromPerson) then
-            removed = true
-            local hasPlayersCharacter = false
-            for _, character in pairs(person.chars) do
-                if character.state ~= "added" then hasPlayersCharacter = true end
-            end
-            if not hasPlayersCharacter then
-                forget(id)
-            elseif removedFromPerson[person.main] then
-                -- Its guild main forgotten, the person is shown under the record's main again.
-                person.main = person.signedRecord.main
-            end
-        end
+    for _, person in pairs(ns.data.people) do
+        if person.signedRecord and forgetFormerMember(person, clubId, memberGuids) then removed = true end
     end
     return removed
 end
 
----Applies a whole guild roster: its characters get the guild, the others lose it. A character the guild's rule added
----is forgotten once the roster no longer lists it.
+---Applies a whole guild roster: its characters get the guild, the others lose it. What I hold of a player only through
+---that guild is forgotten once the roster no longer lists them.
 ---@param clubId integer
 ---@param memberGuids table<string, true>
 function People.UpdateGuildMembers(clubId, memberGuids)
-    local removed = forgetForced(clubId, memberGuids)
+    local removed = forgetFormerMembers(clubId, memberGuids)
     for _, person in pairs(ns.data.people) do
         for guid, character in pairs(person.chars) do
             if memberGuids[guid] then
@@ -654,10 +665,10 @@ function People.UpdateGuildMembers(clubId, memberGuids)
     if removed then changed() end
 end
 
----The character I play left that guild: the characters its rule added are forgotten.
+---None of my characters is in that guild any more: what I hold of its members only through it is forgotten.
 ---@param clubId integer
 function People.GuildLeft(clubId)
-    if forgetForced(clubId, {}) then changed() end
+    if forgetFormerMembers(clubId, {}) then changed() end
 end
 
 ---I joined a guild enforcing linking: the records I hold of identities with a character in it came from outside it,

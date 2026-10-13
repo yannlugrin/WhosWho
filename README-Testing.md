@@ -176,7 +176,7 @@ Needs a guild with Who's Who enabled (see Guild Settings): A and B members, both
 - A character out of any guild, or in a guild without Who's Who enabled: no Guild tab. Joining the guild shows it, leaving hides it; an officer turning Who's Who off for the guild hides it, on shows it (the first tab is selected if it was open).
 - Header, on one line: the guild's name in angle brackets, my rank in grey, the search box, and at the right the counts of main characters, alts and unknown characters, which add up to the roster's members.
 - Search: typing part of a nickname or of a character's name (an alt's too, or C's name) keeps only the matching rows; the counts don't change.
-- List: a row for A (my own identity, Confirmed glyph, Online), one for B, one for C (its name in grey, Unconfirmed glyph, 1 character, its last online time from the roster); none for D (its main, B's, is not in the guild), counted as an alt. C is counted as unknown, and so is a character of mine in the guild that is not linked, shown like C.
+- List: a row for A (my own identity, Confirmed glyph, Online), one for B, one for C (its name in grey, Unconfirmed glyph, 1 character, no last seen while offline: the roster's last online isn't used); none for D (its main, B's, is not in the guild), counted as an alt. C is counted as unknown, and so is a character of mine in the guild that is not linked, shown like C.
 - Selecting B shows the same detail panel as the People tab; selecting A shows my linked characters, without Forget, nickname edit or note; a left click on C selects nothing.
 - Right-click C: Whisper, Invite, then Who's Who **Link character**. Right-click B while online: its menu, without Show person.
 
@@ -218,9 +218,18 @@ Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a mem
 Needs the guild of Enforced Linking with the rule on: B a member with an unlinked character in it, E a player who never linked any character, in the guild.
 
 - B logs in: one dialog, "<guild> requires its members to link their characters in it.", listing B's characters in the guild (the unlinked ones marked), with **Link**, **Share without linking**, **Refuse**; the guild-main dropdown when B's main isn't in the guild and B has several characters there. In combat at login: the dialog waits until combat ends. Before answering, nothing from B on `GUILD` but `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`.
-- **Refuse**: nothing to the guild; no dialog until B's next login in another state. **Share without linking**: A's People tab shows B's characters in the guild, under the guild main chosen. **Link**: they are linked in **My identity**, and the Guild scope is on.
+- **Refuse**: nothing to the guild; no dialog until B's next login in another state. **Share without linking**: A's People tab shows B's characters in the guild, under the guild main chosen. B's Guild tab shows B's own identity, with those characters, under that guild main. **Link**: they are linked in **My identity**, and the Guild scope is on.
 - E logs in: `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`, the members answer, and the same dialog shows once the guild's settings arrive, in place of the first-login prompt. **Share without linking**: A's People tab shows E's character under an identity of its own.
 - A turns the rule off and on again while B plays: no dialog until B's next login.
+
+## Leaving a Guild
+
+Needs the guild of Guild Lists: A in it, and a guildmate C whom A only knows through the guild list (Guild glyph in A's People tab).
+
+- A's People tab: C shows the green banner (Guild), with "Shared by your guild, not by the player." in its tooltip, until one of C's characters is confirmed to A.
+- C leaves the guild: once A's roster updates, C is gone from A's People tab. A guildmate with a character confirmed to A stays when they leave.
+- A leaves the guild while none of A's other characters is in it: C is gone; a guildmate confirmed to A stays. With another of A's characters still in the guild, nothing goes.
+- A's character is removed from the guild while offline (an officer kicks it): at its next login, `/ww status` shows no guild line, and the guild's rule no longer adds that character to A's record.
 
 ## Still to Test
 

@@ -384,7 +384,8 @@ function Scopes.GuildRosterChanged()
     People.Activity(activities)
 end
 
----PLAYER_GUILD_UPDATE for my character: a guild left, or joined (its roster follows).
+---PLAYER_GUILD_UPDATE for my character: a guild left, or joined (its roster follows). Also at login, for a guild left
+---while offline. What I hold of a guild I left goes once none of my characters is in it.
 function Scopes.GuildChanged()
     unlistedGuildSenders = {}
     if IsInGuild() then
@@ -394,10 +395,10 @@ function Scopes.GuildChanged()
     local guid = UnitGUID("player")
     local clubId = Identity.GuildId(guid)
     Identity.SetGuild(guid, nil)
-    if clubId then
+    if clubId and not Identity.HasCharacterInGuild(clubId, Identity.Ruleset(guid)) then
         People.GuildLeft(clubId)
         Identity.SetEnforcedLinkingOptIn(clubId, nil)
-        if not Identity.HasCharacterInGuild(clubId, Identity.Ruleset(guid)) then GuildList.ForgetGuild(clubId) end
+        GuildList.ForgetGuild(clubId)
     end
 end
 

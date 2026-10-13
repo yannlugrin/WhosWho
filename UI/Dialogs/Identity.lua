@@ -338,8 +338,9 @@ function IdentityDialogs.HideLinkPrompts()
     IdentityDialogs.LinkCharacter:Hide()
 end
 
--- The guild rule is asked once a session, out of combat: at login, or once the guild's settings arrive. A rule turned on
--- during the session, in a guild whose settings I held at login, waits for the next login.
+-- The guild rule is asked once a session, out of combat: at login, or once the guild's settings arrive; leaving the
+-- guild makes it asked again. A rule turned on during the session, in a guild whose settings I held at login, waits for
+-- the next login.
 local guildRuleAsked, waitingForCombatEnd = false, false
 ---@type table<integer, boolean>? by club ID, whether each guild I held settings of enforced linking at login
 local enforcedAtLogin
@@ -372,8 +373,14 @@ guildRuleEvents:RegisterEvent("PLAYER_LOGIN")
 -- My guild known, once the roster arrives.
 guildRuleEvents:RegisterEvent("GUILD_ROSTER_UPDATE")
 guildRuleEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+guildRuleEvents:RegisterUnitEvent("PLAYER_GUILD_UPDATE", "player")
 guildRuleEvents:SetScript("OnEvent", function(_, event)
-    if event ~= "PLAYER_REGEN_ENABLED" or waitingForCombatEnd then askGuildRule() end
+    if event == "PLAYER_GUILD_UPDATE" then
+        -- A guild left; a guild joined is asked once its roster arrives.
+        if not IsInGuild() then guildRuleAsked = false end
+    elseif event ~= "PLAYER_REGEN_ENABLED" or waitingForCombatEnd then
+        askGuildRule()
+    end
 end)
 ns.GuildSettings.OnChanged(function() askGuildRule() end)
 

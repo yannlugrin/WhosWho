@@ -127,7 +127,11 @@ frame:SetScript("OnEvent", function(_, event, ...)
         -- isInitialLogin: a login, not a /reload or a loading screen. The login announcement waits for it, which tells
         -- whether a guild joined before ends with this login.
         local isInitialLogin, isReloadingUi = ...
-        if isInitialLogin then ns.Identity.LoggedIn(UnitGUID("player")) end
+        if isInitialLogin then
+            ns.Identity.LoggedIn(UnitGUID("player"))
+            -- Removed from its guild, or the guild disbanded, while offline.
+            if not IsInGuild() and ns.Identity.GuildId(UnitGUID("player")) then ns.Scopes.GuildChanged() end
+        end
         if isInitialLogin or isReloadingUi then ns.Protocol.AnnounceLogin() end
     elseif event == "PLAYER_LOGOUT" then
         -- Also fires on /reload; saved variables are written right after it.

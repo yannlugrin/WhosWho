@@ -1029,6 +1029,32 @@ do
         "the same revision fetched again replaces it, and it is no longer wanted")
 end
 
+-- Players known only through a guild ---------------------------------------------------------------------
+
+fresh()
+do
+    local P = ns.People
+    local D, E, F = string.rep("d", 64), string.rep("e", 64), string.rep("f", 64)
+    -- D: passed on by the guild, G1 in it, G2 an alt outside it. E: G3 confirmed, G4 passed on. F: passed on, G5.
+    P.Accept(makeRecord(D, 1, { G1, G2 }), true)
+    P.Accept(makeRecord(E, 1, { G3 }))
+    P.Confirm(E, G3, 10)
+    P.Accept(makeRecord(E, 2, { G3, G4 }), true)
+    P.Accept(makeRecord(F, 1, { G5 }), true)
+    local manual = P.Create("Player-70-0000000F", { name = "Tank", ruleset = NORMAL, classID = MAGE })
+    P.UpdateGuildMembers(9, { [G1] = true, [G3] = true, [G4] = true, [G5] = true, ["Player-70-0000000F"] = true })
+    check(state(G1) == "guild" and state(G4) == "guild", "characters a guild passed on stay while its roster lists them")
+
+    P.UpdateGuildMembers(9, { [G1] = true, [G3] = true, [G4] = true, ["Player-70-0000000F"] = true })
+    check(P.Get(F) == nil, "a person known only through the guild goes once the roster no longer lists it")
+    check(P.Get(D) and P.Get(E) and P.Get(manual), "the others stay")
+
+    P.GuildLeft(9)
+    check(P.Get(D) == nil and not P.Exists(G2), "leaving the guild forgets a person known only through it, alts too")
+    check(state(G3) == "confirmed" and state(G4) == "guild", "a person with a confirmed character stays whole")
+    check(P.Get(manual) ~= nil, "a person I created stays")
+end
+
 -- Guild settings record ------------------------------------------------------------------------------
 
 fresh()

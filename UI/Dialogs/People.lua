@@ -90,7 +90,7 @@ listBar:SetPoint("BOTTOMLEFT", listBox, "BOTTOMRIGHT", 6, 0)
 ---@class WhosWho.LinkCharacterEntry
 ---@field id string
 ---@field nickname string
----@field source "confirmed"|"renamed"|"unconfirmed"
+---@field source "confirmed"|"renamed"|"guild"|"unconfirmed"
 ---@field main { name: string, classID: integer }?
 ---@field characterCount integer
 
