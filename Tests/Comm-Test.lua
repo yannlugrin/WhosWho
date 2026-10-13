@@ -256,7 +256,8 @@ local function newEnvironment(session)
     end
 
     env.IsInGuild = function() return c.guild ~= nil end
-    env.C_Club = { GetGuildClubId = function() return c.guild end }
+    -- Right after joining, the game may give the roster before the guild's club ID (session.clubIdHidden).
+    env.C_Club = { GetGuildClubId = function() return not session.clubIdHidden and c.guild or nil end }
     env.GetNumGuildMembers = function() return #roster() end
     env.GetGuildRosterInfo = function(i)
         local member = roster()[i]
@@ -1872,6 +1873,43 @@ run(60)
 check(sent({ from = "Rob Alt", type = "ANNOUNCE", distribution = "GUILD" }) >= 1 and sent({ from = "Rob Alt", type = "NOID" }) == 0,
     "a character I unlinked, which the guild's rule adds once I opted in, announces my identity to the guild, not NOID")
 logout(rob)
+-- Sam refused the guild's rule on his alt in it; his main, linked, with the Guild scope on, joins it. The game gives the
+-- roster before the club ID: until it does, the guild can't be told apart from one without the rule, so nothing goes.
+local samAccount = account("Sam")
+local samMain = character("Sam Main", "Player-1-0000FC01", WARRIOR)
+local samAlt = character("Sam Alt", "Player-1-0000FC02", MAGE, GUILD3)
+local sam = login(samAccount, samAlt)
+run(60)
+sam.ns.Identity.SetEnforcedLinkingOptIn(GUILD3, false)
+logout(sam)
+sam = login(samAccount, samMain)
+slash(sam, "link")
+run(30)
+-- He knows Mia, a member of that guild, from a group.
+world.group = { samMain, miaMain }
+sam.ns.settings.scopes.group, mia.ns.settings.scopes.group = true, true
+mia.ns.Protocol:SendCommMessage("WhosWho",
+    mia.ns.Codec.Announcement(mia.ns.Identity.Id(), mia.ns.Identity.Revision(), 10, true, true, nil, nil, 0), "PARTY")
+run(60)
+check(state(sam, miaMain.guid) == "confirmed", "Sam knows Mia")
+world.group = {}
+sam.ns.settings.scopes.group, mia.ns.settings.scopes.group = false, false
+clearLog()
+samMain.guild, sam.joinedGuild, sam.clubIdHidden = GUILD3, true, true
+fire(sam, "PLAYER_GUILD_UPDATE", "player")
+run(5)
+check(sent({ from = "Sam Main", type = "ANNOUNCE" }) == 0, "joining, nothing goes to the guild before its club ID")
+sam.clubIdHidden = nil
+run(60)
+check(sent({ from = "Sam Main", type = "ANNOUNCE" }) >= 1
+    and sent({ from = "Sam Main", type = "ANNOUNCE" }) == sent({ from = "Sam Main", text = EMPTY_ANNOUNCEMENT })
+    and sent({ from = "Sam Main", type = "REC" }) == 0,
+    "then, the rule not accepted, only empty announcements: the guild never learns the identity")
+check(sam.ns.Identity.EnforcedLinkingOptIn(GUILD3) == nil and sam.ns.Scopes.EnforcedLinkingChoiceNeeded() == GUILD3,
+    "joining with another character, the refusal goes back to unanswered: he is asked again")
+check(sent({ from = "Sam Main", type = "GET" }) == 0 and not sam.ns.Scopes.Allows("Mia Main"),
+    "and nothing is asked of its members, even one known from elsewhere: the guild's rule decides for that guild")
+logout(sam)
 
 logout(niaOnAlt)
 logout(mia)

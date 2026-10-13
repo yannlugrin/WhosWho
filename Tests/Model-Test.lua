@@ -932,11 +932,17 @@ do
     check(P.Exists(G3), "a character I added stays")
     P.Accept(makeRecord(A, 2, { G1, G2 }, "Ann"))
     check(not P.Exists(G2), "a record listing it again leaves it out")
+    P.Accept(makeRecord(A, 3, { G1, G2 }, "Ann"), false, { [G1] = true })
+    check(not P.Exists(G2), "even from my guild, when its roster doesn't list it")
+    P.Accept(makeRecord(A, 4, { G1, G2 }, "Ann"), false, { [G1] = true, [G2] = true })
+    check(state(G2) == "listed" and ns.data.noIdentity[G2] == 600,
+        "from my guild, a character its roster lists is listed again; its declaration stays until it confirms one")
+    P.Accept(makeRecord(A, 5, { G1 }, "Ann"))
     P.DeclaredNoIdentity(G1)
     check(P.Get(A) == nil and not P.Exists(G3) and #AC.List() == before,
         "an identity left without the player's characters is forgotten, my added alt with it, silently")
-    check(not P.IsNewer(A, 2) and P.IsNewer(A, 3), "older copies of it are stale")
-    check(P.Accept(makeRecord(A, 3, { G1, G2 }, "Ann")) == "forgotten" and P.Get(A) == nil,
+    check(not P.IsNewer(A, 5) and P.IsNewer(A, 6), "older copies of it are stale")
+    check(P.Accept(makeRecord(A, 6, { G1, G2 }, "Ann")) == "forgotten" and P.Get(A) == nil,
         "a revision whose characters all declared no identity stores nothing")
 
     P.Accept(makeRecord(B, 1, { G4 }, "Bob"))

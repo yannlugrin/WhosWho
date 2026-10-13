@@ -198,6 +198,14 @@ function Identity.GuildId(guid)
     return character and character.guild and character.guild.id
 end
 
+---Whether the character joined a guild whose club ID the game hasn't given yet.
+---@param guid string
+---@return boolean
+function Identity.GuildIdPending(guid)
+    local character = data().chars[guid]
+    return character ~= nil and character.guild ~= nil and character.guild.id == nil
+end
+
 ---PLAYER_GUILD_UPDATE: the character joined a guild.
 ---@param guid string
 ---@param clubId integer? nil when the game does not give it yet

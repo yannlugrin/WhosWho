@@ -218,9 +218,10 @@ Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a mem
 Needs the guild of Enforced Linking with the rule on: B a member with an unlinked character in it, E a player who never linked any character, in the guild.
 
 - B logs in: one dialog, "<guild> requires its members to link their characters in it.", listing B's characters in the guild (the unlinked ones marked), with **Link**, **Share without linking**, **Refuse**; the guild-main dropdown when B's main isn't in the guild and B has several characters there. In combat at login: the dialog waits until combat ends. Before answering, nothing from B on `GUILD` but `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`.
-- **Refuse**: nothing to the guild; no dialog until B's next login in another state. **Share without linking**: A's People tab shows B's characters in the guild, under the guild main chosen. B's Guild tab shows B's own identity, with those characters, under that guild main. **Link**: they are linked in **My identity**, and the Guild scope is on.
+- **Refuse**: nothing to the guild; no dialog until B's next login in another state, nor when another of B's characters logs in in the guild. When another of B's characters joins the guild, the dialog shows again. **Share without linking**: A's People tab shows B's characters in the guild, under the guild main chosen. B's Guild tab shows B's own identity, with those characters, under that guild main. **Link**: they are linked in **My identity**, and the Guild scope is on.
 - E logs in: `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`, the members answer, and the same dialog shows once the guild's settings arrive, in place of the first-login prompt. **Share without linking**: A's People tab shows E's character under an identity of its own.
 - A turns the rule off and on again while B plays: no dialog until B's next login.
+- B's character in the guild unlinked, the rule refused or not answered; B's other character, linked, with the Guild scope on, joins the guild (`/ww debug on`): only `Sent, WHISPER <member>: 1 ANNOUNCE 0 0 0 0 1 0 0`, never B's identity ID, even while the game hasn't given the guild's club ID yet.
 
 ## Leaving a Guild
 

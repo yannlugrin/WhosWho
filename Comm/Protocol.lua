@@ -783,7 +783,9 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     end
 
     RecordVerification.Queue(signedRecord, Record, function(verified)
-        if People.Accept(verified, fromGuild) ~= "stale" then
+        -- My guild vouches for its members' characters, even after their NOID.
+        local guildMembers = fromMyGuild and Scopes.GuildMembersIn(verified) or nil
+        if People.Accept(verified, fromGuild, guildMembers) ~= "stale" then
             requests[verified.id] = nil
             Scopes.KeepSentWhispers()
             Scopes.KeepGuildMembers(verified)
@@ -1014,10 +1016,11 @@ function Protocol.GuildChanged()
 end
 
 ---GUILD_ROSTER_UPDATE, after Scopes.GuildRosterChanged: guild settings held back until their signer is in my roster,
----and the announcement to the guild I joined, to each online member.
+---and the announcement to the guild I joined, to each online member, once the roster gives the guild's club ID.
 function Protocol.GuildRosterChanged()
     retryPendingGuildSettings()
     if not guildJoinAnnouncementPending or GetNumGuildMembers() == 0 then return end
+    if Identity.GuildIdPending(UnitGUID("player")) then return end
     guildJoinAnnouncementPending = false
     -- My announcement when I share with the guild (NOID from a character I unlinked).
     local announcement = Scopes.SharesWithGuild() and announcementText(UnitLevel("player"), true, true)

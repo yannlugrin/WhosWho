@@ -47,6 +47,20 @@ local function guildMember(name)
     return false
 end
 
+-- Whether my identity is complete in a guild enforcing linking: I opted in, or all my characters in it are linked with
+-- my Guild scope on.
+local function completeIn(clubId, ruleset)
+    return Identity.EnforcedLinkingOptIn(clubId) == true
+        or (Scopes.Get("guild") and Identity.AllLinkedInGuild(clubId, ruleset))
+end
+
+-- Whether I share with a guild one of my characters is in: with the Guild scope; one enforcing linking, only once my
+-- identity is complete there, whatever my Guild scope.
+local function sharesWith(clubId, ruleset)
+    if GuildSettings.EnforcesLinking(clubId) then return completeIn(clubId, ruleset) end
+    return Scopes.Get("guild")
+end
+
 ---My current guild, when it enforces linking and my identity is complete there: I opted in, or all my characters in it
 ---are linked with my Guild scope on. I share with it whatever my Guild scope.
 ---@return integer? clubId
@@ -54,10 +68,7 @@ end
 function Scopes.EnforcedGuild()
     local guid = UnitGUID("player")
     local clubId, ruleset = IsInGuild() and Identity.GuildId(guid), Identity.Ruleset(guid)
-    if not (clubId and GuildSettings.EnforcesLinking(clubId)) then return nil, nil end
-    local complete = Identity.EnforcedLinkingOptIn(clubId) == true
-        or (Scopes.Get("guild") and Identity.AllLinkedInGuild(clubId, ruleset))
-    if not complete then return nil, nil end
+    if not (clubId and GuildSettings.EnforcesLinking(clubId) and completeIn(clubId, ruleset)) then return nil, nil end
     return clubId, ruleset
 end
 
@@ -77,12 +88,15 @@ local function guildOnly()
 end
 
 ---Whether I share with my current guild: with the Guild scope; a guild enforcing linking, only once my identity is
----complete there, whatever my Guild scope.
+---complete there, whatever my Guild scope. Right after joining, nothing until the game gives the guild's club ID, which
+---tells whether its rule applies.
 ---@return boolean
 function Scopes.SharesWithGuild()
-    local clubId = IsInGuild() and Identity.GuildId(UnitGUID("player"))
-    if GuildSettings.EnforcesLinking(clubId) then return Scopes.EnforcedGuild() ~= nil end
-    return Scopes.Get("guild")
+    local guid = UnitGUID("player")
+    if IsInGuild() and Identity.GuildIdPending(guid) then return false end
+    local clubId = IsInGuild() and Identity.GuildId(guid)
+    if not clubId then return Scopes.Get("guild") end
+    return sharesWith(clubId, Identity.Ruleset(guid))
 end
 
 -- Sets my current character's guild (apply). When the guild enforces linking and what its members get from me changes,
@@ -380,6 +394,11 @@ function Scopes.GuildRosterChanged()
         GuildSettings.Joined(clubId)
         GuildList.ForgetGuild(clubId)
     end
+    -- A character joining a guild whose rule I refused: the rule is asked again.
+    if joined and Identity.JoinedGuildSinceLogin(UnitGUID("player"))
+        and Identity.EnforcedLinkingOptIn(clubId) == false then
+        Identity.SetEnforcedLinkingOptIn(clubId, nil)
+    end
     if joined and GuildSettings.EnforcesLinking(clubId) then People.MarkOutdated(clubId) end
     People.Activity(activities)
 end
@@ -418,6 +437,18 @@ function Scopes.KeepGuildMembers(signedRecord)
         end
     end
     People.Activity(activities)
+end
+
+---The characters of a record that my current guild's roster lists.
+---@param signedRecord WhosWho.SignedIdentityRecord
+---@return table<string, true> by GUID
+function Scopes.GuildMembersIn(signedRecord)
+    local guids = {}
+    for i = 1, GetNumGuildMembers() do
+        local guid = select(17, GetGuildRosterInfo(i))
+        if guid and notSecret(guid) and signedRecord.chars[guid] then guids[guid] = true end
+    end
+    return guids
 end
 
 ---GROUP_ROSTER_UPDATE: the activity of the members connected.
@@ -518,7 +549,7 @@ end
 ---@param name string "First Surname"
 ---@return boolean
 function Scopes.Allows(name)
-    local guild, friends = Scopes.Get("guild"), Scopes.Get("friends")
+    local friends = Scopes.Get("friends")
     local whispersOn = Scopes.Get("whispers")
     if Scopes.SharesWithGuild() and guildMember(name) then return true end
     if friends and C_FriendList.GetFriendInfo(name) then return true end
@@ -529,7 +560,7 @@ function Scopes.Allows(name)
     end
 
     -- An alt of a player my scopes allow: one of the person's confirmed characters has a guild one of my characters is
-    -- in (Guild scope), is the WoW friend of one of my characters (Friends scope), or was whispered by one of my
+    -- in, which I share with (Guild scope, its rule), is the WoW friend of one of my characters (Friends scope), or was whispered by one of my
     -- characters within the whisper window (Whispers scope).
     local ruleset = Identity.Ruleset(UnitGUID("player"))
     local person = ruleset and People.FindConfirmedByName(name, ruleset)
@@ -537,7 +568,8 @@ function Scopes.Allows(name)
 
     for _, character in pairs(person.chars) do
         if character.state == "confirmed" then
-            if guild and character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset) then
+            if character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset)
+                and sharesWith(character.guild, character.ruleset) then
                 return true
             end
             if friends and character.friendOf then return true end

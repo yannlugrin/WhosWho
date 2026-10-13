@@ -452,13 +452,14 @@ local function forgetUnlinked(id, rev)
 end
 
 ---Stores a newer revision of a player's record, or the one replacing the revision I hold. Its characters that declared
----no identity are left out. A revision
----without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my nickname
----and added alts with it.
+---no identity are left out, but those my guild vouches for: a record my guild sent, and its roster lists them. A
+---revision without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my
+---nickname and added alts with it.
 ---@param signedRecord WhosWho.SignedIdentityRecord already validated and verified
 ---@param fromGuild boolean? relayed by a member of my guild, not sent by the player: the new characters are "guild"
+---@param guildMembers table<string, true>? by GUID, the record's characters my guild's roster lists, when my guild sent it
 ---@return "updated"|"stale"|"forgotten"
-function People.Accept(signedRecord, fromGuild)
+function People.Accept(signedRecord, fromGuild, guildMembers)
     local people, noIdentity = ns.data.people, ns.data.noIdentity
     -- Replacing the revision I hold: the caller checked where it came from (People.ReplacesHeld).
     local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or replaceable(signedRecord)
@@ -467,7 +468,9 @@ function People.Accept(signedRecord, fromGuild)
 
     local recordCharacters = {}
     for guid, recordCharacter in pairs(signedRecord.chars) do
-        if not noIdentity[guid] then recordCharacters[guid] = recordCharacter end
+        if not noIdentity[guid] or (guildMembers and guildMembers[guid]) then
+            recordCharacters[guid] = recordCharacter
+        end
     end
     if not next(recordCharacters) then
         forgetUnlinked(signedRecord.id, signedRecord.rev)
