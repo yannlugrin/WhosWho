@@ -10,7 +10,7 @@ local FILES = {
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua",
     "Core/Core.lua", "Core/Store.lua", "Core/Record.lua", "Core/Identity.lua", "Core/AutomaticChanges.lua",
     "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua", "Core/GuildList.lua",
-    "Comm/Codec.lua", "Comm/Scopes.lua", "Comm/Protocol.lua",
+    "Comm/Diagnostic.lua", "Comm/Codec.lua", "Comm/Scopes.lua", "Comm/Protocol.lua",
 }
 local chunks = {}
 for i, file in ipairs(FILES) do chunks[i] = assert(loadfile(root .. "/" .. file)) end
@@ -852,6 +852,7 @@ cat.env.print = function(...) printed[#printed + 1] = table.concat({ ... }, " ")
 levelUp(bob)
 run(1)
 check(not printed[1], "nothing printed while debug messages are off")
+check(not cat.ns.Diagnostic.Messages()[1], "nothing logged while the diagnostic mode is off")
 slash(cat, "debug on")
 printed = {}
 levelUp(bob)
@@ -861,7 +862,14 @@ for _, line in ipairs(printed) do
     if line:find("Received, GUILD Bob Main: 1 ANNOUNCE " .. bob.ns.Identity.Id(), 1, true) then traced = true end
 end
 check(traced, "with debug messages on, a received announcement is printed")
+local logged = cat.ns.Diagnostic.Messages()[1]
+check(logged and not logged.sent and logged.distribution == "GUILD" and logged.name == "Bob Main"
+    and logged.text:find("^1 ANNOUNCE " .. bob.ns.Identity.Id()), "and logged, most recent first")
+cat = reload(cat)
+check(cat.ns.Diagnostic.Messages()[1] ~= nil, "the log is kept across a /reload while the diagnostic mode is on")
 slash(cat, "debug off")
+cat = reload(cat)
+check(not cat.ns.Diagnostic.Messages()[1], "and emptied at the logout after it is turned off")
 
 clearLog()
 slash(dan, "nick Danny")

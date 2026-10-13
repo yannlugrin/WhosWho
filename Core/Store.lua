@@ -21,6 +21,7 @@ ns.Store = Store
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
 ---@field guildSettings table<integer, WhosWho.HeldGuildSettings> by club ID: each guild's settings as I hold them
 ---@field guildLists table<integer, WhosWho.GuildListRevision> by club ID: my list's revision for each guild
+---@field messageLog WhosWho.LoggedMessage[] while the diagnostic mode is on, most recent first, at most Diagnostic.KEPT_MESSAGES; emptied at logout while it is off
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
 ---@class WhosWho.Settings
@@ -29,7 +30,7 @@ ns.Store = Store
 ---@field advanced WhosWho.AdvancedSettings delays of the protocol a player may change (no screen yet)
 ---@field chat { nickname: { enable: boolean } } the nickname after the sender's name
 ---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer }, note: { enable: boolean } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted; the start of my note about the person
----@field debugMessages boolean every Who's Who message sent or received, printed in chat
+---@field diagnostic { enable: boolean, chat: boolean } the diagnostic mode: every Who's Who message sent or received kept in the message log, and printed in chat
 ---@field launcher { hide: boolean, showInCompartment: boolean, minimapPos: number? } LibDBIcon's own format: the minimap button and the add-on compartment entry
 
 Store.DEFAULTS = {
@@ -41,6 +42,7 @@ Store.DEFAULTS = {
         automaticChanges = {},
         guildSettings = {},
         guildLists = {},
+        messageLog = {},
     },
     profile = {
         scopes = { guild = true, friends = true, whispers = false, group = false },
@@ -55,7 +57,7 @@ Store.DEFAULTS = {
             otherCharacters = { enable = true, classColor = true, limit = 4 },
             note = { enable = true },
         },
-        debugMessages = false,
+        diagnostic = { enable = false, chat = true },
         launcher = { hide = false, showInCompartment = true },
     },
 }
@@ -110,6 +112,11 @@ function Store.MigrateSettings(settings)
         settings.tooltip.otherCharacters.enable = otherCharacters
     end
     settings.tooltipOtherCharacters = nil
+    -- 0.1.1: debugMessages, the diagnostic mode, which printed every message in chat.
+    if settings.debugMessages ~= nil then
+        settings.diagnostic.enable = settings.debugMessages
+        settings.debugMessages = nil
+    end
 end
 
 ---Moves data saved in older formats to the current one.

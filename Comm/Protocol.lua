@@ -1,8 +1,8 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Codec, GuildList, GuildSettings, Identity, People, Record, RecordVerification, Scopes, Store =
-    ns.Codec, ns.GuildList, ns.GuildSettings, ns.Identity, ns.People, ns.Record, ns.RecordVerification, ns.Scopes,
-    ns.Store
+local Codec, Diagnostic, GuildList, GuildSettings, Identity, People, Record, RecordVerification, Scopes, Store =
+    ns.Codec, ns.Diagnostic, ns.GuildList, ns.GuildSettings, ns.Identity, ns.People, ns.Record, ns.RecordVerification,
+    ns.Scopes, ns.Store
 
 -- Announcements, record requests (GET) and records (REC) between clients, the guild settings (GSGET, GSET) and the
 -- guild lists (GLGET, GLIST).
@@ -31,26 +31,9 @@ local issecretvalue = issecretvalue or function() return false end
 
 local L = ns.L
 
--- The payload of a REC, a GSET or a GLIST is binary: only its size is shown.
-local function describe(text)
-    local recordUpdate = text:match("^%d+ REC ") or text:match("^%d+ GSET ") or text:match("^%d+ GLIST ")
-    return recordUpdate and L["%s(%d bytes)"]:format(recordUpdate, #text) or text
-end
-
-local function traceSent(text, distribution, name)
-    if not ns.settings.debugMessages then return end
-    ns.Print(L["Sent, %s: %s"]:format(name and (distribution .. " " .. name) or distribution, describe(text)))
-end
-
-local function traceReceived(text, distribution, sender)
-    if not ns.settings.debugMessages then return end
-    ns.Print(L["Received, %s: %s"]:format(distribution .. " " .. sender, describe(text)))
-end
-
 -- What became of a guild settings record received: dropped, checked, then accepted, held back, refused or stale.
 local function traceGuildSettings(signedRecord, outcome)
-    if not ns.settings.debugMessages then return end
-    ns.Print(L["Guild settings %d: %s"]:format(signedRecord.rev, outcome))
+    Diagnostic.Print(L["Guild settings %d: %s"]:format(signedRecord.rev, outcome))
 end
 
 -- Sending ----------------------------------------------------------------------------------------
@@ -61,12 +44,12 @@ local loggingOut = false
 
 local function sendQueued(message, channel, name)
     if loggingOut then return end
-    traceSent(message, channel, name)
+    Diagnostic.MessageSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name)
 end
 
 local function sendNow(message, channel, name)
-    traceSent(message, channel, name)
+    Diagnostic.MessageSent(message, channel, name)
     C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
 end
 
@@ -172,7 +155,7 @@ local function sendRecord(message, channel, name, clubId)
     if loggingOut then return end
     local delivery = { revision = Identity.Revision(), clubId = clubId }
     deliveries[name or channel] = delivery
-    traceSent(message, channel, name)
+    Diagnostic.MessageSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name, "NORMAL", function(_, sent, total)
         if sent >= total then delivery.leftAt = GetTime() end
     end)
@@ -395,7 +378,7 @@ local requests = {}
 local function sendRequest(ids, name)
     if loggingOut then return end
     local message = Codec.RecordRequest(ids)
-    traceSent(message, "WHISPER", name)
+    Diagnostic.MessageSent(message, "WHISPER", name)
     Protocol:SendCommMessage(PREFIX, message, "WHISPER", name)
 end
 
@@ -845,7 +828,7 @@ end
 
 local function receive(_, text, distribution, sender)
     if issecretvalue(text) or issecretvalue(sender) then return end
-    traceReceived(text, distribution, sender)
+    Diagnostic.MessageReceived(text, distribution, sender)
     local message = Codec.Decode(text)
     if not message then return end
     -- A member who joined the guild since my roster was read.

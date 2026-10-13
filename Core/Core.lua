@@ -23,6 +23,7 @@ local addonName, ns = ...
 ---@field GuildSettings WhosWho.GuildSettings
 ---@field GuildList WhosWho.GuildList
 ---@field Codec WhosWho.Codec
+---@field Diagnostic WhosWho.Diagnostic
 ---@field Scopes WhosWho.Scopes
 ---@field Protocol WhosWho.Protocol
 ---@field Skin WhosWho.Skin
@@ -139,6 +140,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Identity.LoggedOut(UnitGUID("player"))
         ns.Protocol.SessionEnding()
         ns.Scopes.ForgetOldWhispers()
+        ns.Diagnostic.SessionEnding()
     elseif event == "PLAYER_CAMPING" or event == "PLAYER_QUITING" then
         -- The 20-second logout or quit countdown starts.
         ns.Protocol.AnnounceLogout()
@@ -272,12 +274,12 @@ end
 ns.Commands.debug = function(rest)
     local state = rest:lower()
     if state == "on" or state == "off" then
-        ns.settings.debugMessages = state == "on"
+        ns.settings.diagnostic.enable = state == "on"
     elseif rest ~= "" then
         ns.Print(L["Usage: /ww debug <on|off>"])
         return
     end
-    ns.Print(L["Debug messages: %s"]:format(ns.settings.debugMessages and L["on"] or L["off"]))
+    ns.Print(L["Diagnostic mode: %s"]:format(ns.settings.diagnostic.enable and L["on"] or L["off"]))
 end
 
 ns.Commands.nick = function(rest)

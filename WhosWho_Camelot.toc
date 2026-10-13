@@ -33,6 +33,7 @@ Core\RecordVerification.lua
 Core\GuildSettings.lua
 Core\GuildList.lua
 
+Comm\Diagnostic.lua
 Comm\Codec.lua
 Comm\Scopes.lua
 Comm\Protocol.lua

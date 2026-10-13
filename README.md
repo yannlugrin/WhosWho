@@ -45,7 +45,7 @@ Open the window with the minimap button, the add-on compartment next to the mini
 | `/ww people` | The 10 people you saw most recently, with their characters |
 | `/ww people <character name>` | The people with a character of that name |
 | `/ww settings` | Open the Who's Who settings |
-| `/ww debug <on\|off>` | Print every Who's Who message sent or received in chat, to report a problem |
+| `/ww debug <on\|off>` | Turn the diagnostic mode on or off, to report a problem: Who's Who keeps the messages it sends and receives (Settings → Who's Who → Diagnostic) and prints them in chat |
 
 ## Looks
 

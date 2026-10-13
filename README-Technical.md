@@ -41,13 +41,14 @@ WhosWho/
 │   ├── GuildSettings.lua          A guild's settings: the record its guild master or an officer signs, held per guild
 │   └── GuildList.lua              My list of a guild's identities, its revision, and what another member's list has newer
 ├── Comm/
+│   ├── Diagnostic.lua             Diagnostic mode: the message log, and the messages printed in chat
 │   ├── Codec.lua                  Message text: version, type, fields; REC serialized, compressed, encoded
 │   ├── Scopes.lua                 Who may receive what, channels, audiences, senders' GUIDs, guild and friendOf
 │   └── Protocol.lua               Announcements, GET, REC: waits, lock, requesters, own messages
 ├── UI/
 │   ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
-│   ├── Settings.xml               Settings list row template: a section's information text
-│   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Data
+│   ├── Settings.xml               Settings list row templates: a section's information text, the Diagnostic page's stats and message log
+│   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Display, Minimap, Data; Diagnostic subcategory
 │   ├── Launcher.lua               Minimap button and add-on compartment entry (LibDBIcon)
 │   ├── Glyphs.lua                 Glyph images, colours, labels and tooltips
 │   ├── Main/                      The main window
@@ -486,6 +487,10 @@ automaticChanges  { { time, kind = "merged" | "moved" | "taken",
                     from = { id, nickname, customNickname, main }, to = same or nil,
                     chars = { [guid] = { name, ruleset, classID, state, stateAfter } },
                     toChars = { [guid] = { name, ruleset, classID, state } } or nil, read }, ... }   most recent first, at most 100
+messageLog  { { time, sent, distribution, name (the receiver of a whisper, or the sender), text, size }, ... }
+            messages sent and received while the diagnostic mode is on, most recent first, at most 1000; a REC, GSET or
+            GLIST keeps only its version and type in text, size being the whole message's; emptied on PLAYER_LOGOUT
+            (logout or /reload) while the mode is off
 ```
 
 Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared by every character), so they can be reset without touching the data:
@@ -495,11 +500,11 @@ scopes = { guild, friends, whispers, group }, whisperHours (the whisper window, 
 advanced = { revisionWaitSeconds (15), quickRelogSeconds (300), whisperAnnouncementSeconds (1800), loginWhispersSeconds (1800) }
            (delays of the protocol a player may change, no screen yet; read through Store.Advanced, which falls back on the default)
 tooltip = { nickname = { enable, position ("afterName" | "ownLine") }, otherCharacters = { enable, classColor, limit } (the "Also:" line), note = { enable } },
-debugMessages (every Who's Who message sent or received, printed in chat),
+diagnostic = { enable, chat } (the diagnostic mode: every Who's Who message sent or received kept in messageLog, and printed in chat),
 launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the minimap button and the add-on compartment entry)
 ```
 
-`Store.MigrateData`, at load, turns the removal revision 0.1.0-beta.1 saved on an unlinked character (`removedInRevision`) into `removedAt`, and each `forgotten` revision into `{ rev, at }`, both set to the migration's time (the real one is unknown), and the club ID 0.1.0 saved as my character's `guild` into `{ id }`, without a join time. `Store.MigrateSettings`, at load, moves settings saved by 0.1.0-beta.1 (`chatNicknames`, `tooltipNickname`, `tooltipOtherCharacters`, a boolean then, a table in development builds) to these keys and removes the old ones. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
+`Store.MigrateData`, at load, turns the removal revision 0.1.0-beta.1 saved on an unlinked character (`removedInRevision`) into `removedAt`, and each `forgotten` revision into `{ rev, at }`, both set to the migration's time (the real one is unknown), and the club ID 0.1.0 saved as my character's `guild` into `{ id }`, without a join time. `Store.MigrateSettings`, at load, moves settings saved by 0.1.0-beta.1 (`chatNicknames`, `tooltipNickname`, `tooltipOtherCharacters`, a boolean then, a table in development builds) to these keys and removes the old ones, and `debugMessages`, saved up to 0.1.1, to `diagnostic.enable`. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
 
 Planned: `scopes.selected` and the list of selected players.
 

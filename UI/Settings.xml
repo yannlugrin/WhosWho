@@ -12,4 +12,6 @@
             </Layer>
         </Layers>
     </Frame>
+    <!-- The Diagnostic page's stats and message log, built by Settings.lua. -->
+    <Frame name="WhosWhoSettingsDiagnosticTemplate" virtual="true"/>
 </Ui>

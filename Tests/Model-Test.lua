@@ -171,6 +171,7 @@ do
                 nickname = { enable = true, position = "afterName" },
                 otherCharacters = { enable = true, classColor = true, limit = 4 },
             },
+            diagnostic = { enable = false, chat = true },
         }
         for key, value in pairs(old) do settings[key] = value end
         ns.Store.MigrateSettings(settings)
@@ -186,6 +187,9 @@ do
     s = profile({ tooltipOtherCharacters = { enable = true, classColor = false, limit = 7 } })
     check(s.tooltip.otherCharacters.classColor == false and s.tooltip.otherCharacters.limit == 7
         and s.tooltipOtherCharacters == nil, "the table form of the other characters setting moves too")
+    s = profile({ debugMessages = true })
+    check(s.diagnostic.enable and s.diagnostic.chat and s.debugMessages == nil,
+        "0.1.1 debug messages turn the diagnostic mode on, printed in chat")
     s = profile({})
     check(s.chat.nickname.enable and s.tooltip.nickname.position == "afterName", "nothing saved: the defaults stay")
 
