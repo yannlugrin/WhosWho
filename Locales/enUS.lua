@@ -25,6 +25,7 @@ L["No one known yet."] = true
 L["off"] = true
 L["on"] = true
 L["Received, %s: %s"] = true
+L["Guild settings %d: %s"] = true
 L["Sent, %s: %s"] = true
 L["shared, revision %d"] = true
 L["This character is now your main."] = true
@@ -220,6 +221,17 @@ L["Enable Who's Who for the guild"] = true
 L["Link this character and share with your guild to change the guild's settings."] = true
 L["Require members' characters in the guild to be linked"] = true
 L["Enable Who's Who for the guild first."] = true
+
+-- Guild rule dialog
+L["%s requires its members to link their characters in it."] = true
+L["Your characters in this guild: %s."] = true
+L["%s (not linked)"] = true
+L["Link them to your identity, or share them with this guild only, without linking them. If you refuse, Who's Who shares nothing with this guild, which may go against its rules."] = true
+L["Shown to the guild as"] = true
+L["Linking also turns sharing with your guild on: it then sees all your linked characters, not only the ones in it."] = true
+L["Share without linking"] = true
+L["Refuse"] = true
+L["Only this guild's members see the characters you share without linking."] = true
 
 -- Guild tab
 L["%d |4main character:main characters; · %d |4alt:alts; · %d unknown"] = true

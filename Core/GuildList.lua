@@ -96,6 +96,12 @@ function GuildList.Forget()
     ns.data.guildLists = {}
 end
 
+---Forgets my list's revision for that guild: my next list of it is a first one, older than everyone's.
+---@param clubId integer
+function GuildList.ForgetGuild(clubId)
+    revisions()[clubId] = nil
+end
+
 ---Whether a list revision is later than another: a later time, or the same time with a greater hash.
 ---@param at integer
 ---@param hash string

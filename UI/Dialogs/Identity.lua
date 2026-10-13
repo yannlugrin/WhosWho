@@ -6,10 +6,14 @@ local L = ns.L
 ---@class WhosWho.IdentityDialogs
 ---@field NewIdentity WhosWho.NewIdentityDialog the first-login dialog while no character is linked
 ---@field LinkCharacter WhosWho.LinkCharacterDialog the first-login dialog once an identity exists
+---@field GuildRule WhosWho.GuildRuleDialog my answer to a guild enforcing linking
 local IdentityDialogs = {}
 ns.IdentityDialogs = IdentityDialogs
 
 local WIDTH = 360
+-- Three buttons side by side.
+local GUILD_RULE_WIDTH = 440
+local GUILD_MAIN_DROPDOWN_WIDTH = 180
 local SIDE_PADDING = 16
 -- From the top of the dialog, below its title bar.
 local TOP_PADDING = 34
@@ -49,12 +53,12 @@ end
 ---@field CloseButton Button
 ---@field rows { region: Region, x: number? }[] stacked from the top by layOut
 ---@field LinkButton Button
----@field NotThisCharacterButton Button
 
+---@param width number
 ---@return WhosWho.PromptDialog
-local function createDialog()
+local function createDialog(width)
     local dialog = CreateFrame("Frame", nil, UIParent, "DefaultPanelFlatTemplate")
-    dialog:SetWidth(WIDTH)
+    dialog:SetWidth(width)
     dialog:SetPoint("CENTER")
     dialog:SetFrameStrata("DIALOG")
     dialog:SetTitle(L["Who's Who"])
@@ -72,7 +76,7 @@ end
 
 local function addText(dialog, fontObject)
     local text = dialog:CreateFontString(nil, "OVERLAY", fontObject)
-    text:SetWidth(WIDTH - 2 * SIDE_PADDING)
+    text:SetWidth(dialog:GetWidth() - 2 * SIDE_PADDING)
     text:SetJustifyH("CENTER")
     dialog.rows[#dialog.rows + 1] = { region = text }
     return text
@@ -85,24 +89,36 @@ local function createButton(parent, text)
     return button
 end
 
--- Link and Not this character, centred side by side.
+-- Buttons centred side by side, each set on the dialog under its key.
 ---@param dialog WhosWho.PromptDialog
-local function addButtons(dialog)
+---@param buttons { [1]: string, [2]: string }[] key and label, in order
+local function addButtons(dialog, buttons)
     local row = CreateFrame("Frame", nil, dialog)
-    row:SetSize(WIDTH - 2 * SIDE_PADDING, BUTTON_HEIGHT)
-    dialog.LinkButton = createButton(row, L["Link"])
-    dialog.NotThisCharacterButton = createButton(row, L["Not this character"])
-    local width = dialog.LinkButton:GetWidth() + SPACING + dialog.NotThisCharacterButton:GetWidth()
-    dialog.LinkButton:SetPoint("LEFT", row, "LEFT", (row:GetWidth() - width) / 2, 0)
-    dialog.NotThisCharacterButton:SetPoint("LEFT", dialog.LinkButton, "RIGHT", SPACING, 0)
+    row:SetSize(dialog:GetWidth() - 2 * SIDE_PADDING, BUTTON_HEIGHT)
+    local width = -SPACING
+    for _, button in ipairs(buttons) do
+        dialog[button[1]] = createButton(row, button[2])
+        width = width + SPACING + dialog[button[1]]:GetWidth()
+    end
+    for i, button in ipairs(buttons) do
+        if i == 1 then
+            dialog[button[1]]:SetPoint("LEFT", row, "LEFT", (row:GetWidth() - width) / 2, 0)
+        else
+            dialog[button[1]]:SetPoint("LEFT", dialog[buttons[i - 1][1]], "RIGHT", SPACING, 0)
+        end
+    end
     dialog.rows[#dialog.rows + 1] = { region = row }
 end
+
+-- Link and Not this character.
+local LINK_BUTTONS = { { "LinkButton", L["Link"] }, { "NotThisCharacterButton", L["Not this character"] } }
 
 -- No identity yet --------------------------------------------------------------------------------
 
 local function createNewIdentityDialog()
     ---@class WhosWho.NewIdentityDialog: WhosWho.PromptDialog
-    local dialog = createDialog()
+    ---@field NotThisCharacterButton Button
+    local dialog = createDialog(WIDTH)
     dialog.Question = addText(dialog, "GameFontNormalLarge")
     dialog.Explanation = addText(dialog, "GameFontHighlight")
     dialog.Explanation:SetText(L["An identity groups the characters you link to it, so people recognise you on each of them. It is shown under your main character's name."])
@@ -129,7 +145,7 @@ local function createNewIdentityDialog()
         layOut(dialog)
     end)
 
-    addButtons(dialog)
+    addButtons(dialog, LINK_BUTTONS)
     addText(dialog, "GameFontDisableSmall"):SetText(L["Nothing is shared until a character is linked."])
 
     dialog.LinkButton:SetScript("OnClick", function()
@@ -172,10 +188,11 @@ end
 
 local function createLinkCharacterDialog()
     ---@class WhosWho.LinkCharacterDialog: WhosWho.PromptDialog
-    local dialog = createDialog()
+    ---@field NotThisCharacterButton Button
+    local dialog = createDialog(WIDTH)
     dialog.Question = addText(dialog, "GameFontNormalLarge")
     dialog.Explanation = addText(dialog, "GameFontHighlight")
-    addButtons(dialog)
+    addButtons(dialog, LINK_BUTTONS)
     addText(dialog, "GameFontDisableSmall"):SetText(L["Nothing is shared until a character is linked."])
 
     dialog.LinkButton:SetScript("OnClick", function()
@@ -213,11 +230,157 @@ local function createLinkCharacterDialog()
     return dialog
 end
 
+-- Guild rule -------------------------------------------------------------------------------------
+
+local function createGuildRuleDialog()
+    ---@class WhosWho.GuildRuleDialog: WhosWho.PromptDialog
+    ---@field ShareButton Button
+    ---@field RefuseButton Button
+    local dialog = createDialog(GUILD_RULE_WIDTH)
+    dialog.Question = addText(dialog, "GameFontNormalLarge")
+    dialog.Characters = addText(dialog, "GameFontHighlight")
+    dialog.Explanation = addText(dialog, "GameFontHighlight")
+    dialog.Explanation:SetText(L["Link them to your identity, or share them with this guild only, without linking them. If you refuse, Who's Who shares nothing with this guild, which may go against its rules."])
+    -- Only while the Guild scope is off, which Link turns on.
+    dialog.LinkSharesAll = addText(dialog, "GameFontHighlight")
+    dialog.LinkSharesAll:SetText(L["Linking also turns sharing with your guild on: it then sees all your linked characters, not only the ones in it."])
+
+    -- The character the guild shows me under, my main not being in it.
+    local guildMain = CreateFrame("Frame", nil, dialog)
+    guildMain:SetSize(GUILD_RULE_WIDTH - 2 * SIDE_PADDING, BUTTON_HEIGHT)
+    guildMain.Label = guildMain:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    guildMain.Label:SetPoint("LEFT")
+    guildMain.Label:SetText(L["Shown to the guild as"])
+    guildMain.Dropdown = CreateFrame("DropdownButton", nil, guildMain, "WowStyle1DropdownTemplate")
+    guildMain.Dropdown:SetWidth(GUILD_MAIN_DROPDOWN_WIDTH)
+    guildMain.Dropdown:SetPoint("LEFT", guildMain.Label, "RIGHT", SPACING, 0)
+    dialog.GuildMain = guildMain
+    dialog.rows[#dialog.rows + 1] = { region = guildMain }
+
+    addButtons(dialog, {
+        { "LinkButton", L["Link"] }, { "ShareButton", L["Share without linking"] }, { "RefuseButton", L["Refuse"] },
+    })
+    addText(dialog, "GameFontDisableSmall"):SetText(L["Only this guild's members see the characters you share without linking."])
+
+    -- Whatever the answer, the character I play is answered too: this dialog takes its first-login prompt's place.
+    local function answered()
+        local guid = UnitGUID("player")
+        if not ns.Identity.IsRegistered(guid) then ns.Identity.Unlink(guid) end
+        dialog:Hide()
+    end
+    dialog.LinkButton:SetScript("OnClick", function()
+        for _, guid in ipairs(dialog.characterGuids) do
+            if not ns.Identity.IsLinked(guid) then ns.Identity.Link(guid) end
+        end
+        ns.Scopes.Set("guild", true)
+        if dialog.guildMainGuid then ns.Identity.SetGuildMain(dialog.guildMainGuid) end
+        answered()
+    end)
+    dialog.ShareButton:SetScript("OnClick", function()
+        if dialog.guildMainGuid then ns.Identity.SetGuildMain(dialog.guildMainGuid) end
+        ns.Identity.SetEnforcedLinkingOptIn(dialog.clubId, true)
+        answered()
+    end)
+    dialog.RefuseButton:SetScript("OnClick", function()
+        ns.Identity.SetEnforcedLinkingOptIn(dialog.clubId, false)
+        answered()
+    end)
+
+    ---@param clubId integer my current guild
+    ---@param ruleset WhosWho.Ruleset the ruleset of the character I play
+    function dialog:SetGuild(clubId, ruleset)
+        self.clubId = clubId
+        self.characterGuids = ns.Identity.CharactersInGuild(clubId, ruleset)
+        local characters, mainGuid = ns.Identity.Characters(), ns.Identity.Main()
+        local names, mainInGuild = {}, false
+        for i, guid in ipairs(self.characterGuids) do
+            local character = characters[guid]
+            local name = classColoredName(character.name, character.classID)
+            names[i] = character.linked and name or L["%s (not linked)"]:format(name)
+            if guid == mainGuid then mainInGuild = true end
+        end
+        self.Question:SetText(L["%s requires its members to link their characters in it."]
+            :format(NORMAL_FONT_COLOR:WrapTextInColorCode(GetGuildInfo("player") or "")))
+        self.Characters:SetText(L["Your characters in this guild: %s."]:format(table.concat(names, ", ")))
+        self.LinkSharesAll:SetShown(not ns.Scopes.Get("guild"))
+
+        -- Several characters, none of them my main: the one the guild shows me under, the first by default.
+        self.guildMainGuid = not mainInGuild and #self.characterGuids > 1 and self.characterGuids[1] or nil
+        self.GuildMain:SetShown(self.guildMainGuid ~= nil)
+        self.GuildMain.Dropdown:SetupMenu(function(_, root)
+            for _, guid in ipairs(self.characterGuids) do
+                local character = characters[guid]
+                root:CreateRadio(classColoredName(character.name, character.classID),
+                    function() return self.guildMainGuid == guid end, function() self.guildMainGuid = guid end)
+            end
+        end)
+        layOut(self)
+    end
+
+    ns.Skin.Apply(function(S)
+        S.Shell(dialog)
+        S.CloseButton(dialog.CloseButton)
+        S.Dropdown(dialog.GuildMain.Dropdown)
+        S.Button(dialog.LinkButton)
+        S.Button(dialog.ShareButton)
+        S.Button(dialog.RefuseButton)
+    end)
+    return dialog
+end
+
 IdentityDialogs.NewIdentity = createNewIdentityDialog()
 IdentityDialogs.LinkCharacter = createLinkCharacterDialog()
+IdentityDialogs.GuildRule = createGuildRuleDialog()
 
----Asks whether to link the character logged in. Without a main character, the identity starts with it.
+---Closes both first-login dialogs, leaving the character unanswered.
+function IdentityDialogs.HideLinkPrompts()
+    IdentityDialogs.NewIdentity:Hide()
+    IdentityDialogs.LinkCharacter:Hide()
+end
+
+-- The guild rule is asked once a session, out of combat: at login, or once the guild's settings arrive. A rule turned on
+-- during the session, in a guild whose settings I held at login, waits for the next login.
+local guildRuleAsked, waitingForCombatEnd = false, false
+---@type table<integer, boolean>? by club ID, whether each guild I held settings of enforced linking at login
+local enforcedAtLogin
+
+-- Shows the guild rule dialog when the character I play must answer it; whether it is asked, now or once out of combat.
+local function askGuildRule()
+    if not enforcedAtLogin then
+        enforcedAtLogin = {}
+        for _, clubId in ipairs(ns.GuildSettings.HeldGuilds()) do
+            enforcedAtLogin[clubId] = ns.GuildSettings.EnforcesLinking(clubId)
+        end
+    end
+    local clubId = ns.Scopes.EnforcedLinkingChoiceNeeded()
+    if guildRuleAsked or not clubId then return false end
+    local guid = UnitGUID("player")
+    if enforcedAtLogin[clubId] == false and not ns.Identity.JoinedGuildSinceLogin(guid) then return false end
+    if UnitAffectingCombat("player") then
+        waitingForCombatEnd = true
+        return true
+    end
+    guildRuleAsked, waitingForCombatEnd = true, false
+    IdentityDialogs.HideLinkPrompts()
+    IdentityDialogs.GuildRule:SetGuild(clubId, ns.Identity.Ruleset(guid))
+    IdentityDialogs.GuildRule:Show()
+    return true
+end
+
+local guildRuleEvents = CreateFrame("Frame")
+guildRuleEvents:RegisterEvent("PLAYER_LOGIN")
+-- My guild known, once the roster arrives.
+guildRuleEvents:RegisterEvent("GUILD_ROSTER_UPDATE")
+guildRuleEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+guildRuleEvents:SetScript("OnEvent", function(_, event)
+    if event ~= "PLAYER_REGEN_ENABLED" or waitingForCombatEnd then askGuildRule() end
+end)
+ns.GuildSettings.OnChanged(function() askGuildRule() end)
+
+---Asks whether to link the character logged in. Without a main character, the identity starts with it. In a guild
+---enforcing linking that I must answer, its dialog takes the place of this one.
 function IdentityDialogs.AskToLink()
+    if askGuildRule() then return end
     local name = ns.UnitWholeName("player")
     local _, _, classID = UnitClass("player")
     local _, main = ns.Identity.Main()
@@ -229,12 +392,6 @@ function IdentityDialogs.AskToLink()
     IdentityDialogs.LinkCharacter:SetCharacter(UnitGUID("player"), name, classID, ns.Identity.Nickname(),
         ns.Identity.LinkedCharacters())
     IdentityDialogs.LinkCharacter:Show()
-end
-
----Closes both first-login dialogs, leaving the character unanswered.
-function IdentityDialogs.HideLinkPrompts()
-    IdentityDialogs.NewIdentity:Hide()
-    IdentityDialogs.LinkCharacter:Hide()
 end
 
 -- Nickname ---------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local GuildSettings, Identity, People = ns.GuildSettings, ns.Identity, ns.People
+local GuildList, GuildSettings, Identity, People = ns.GuildList, ns.GuildSettings, ns.Identity, ns.People
 
 -- Who my record goes to and through which channel, the GUIDs the game gives for the players I share with, and the
 -- relationships kept on confirmed characters (guild, friendOf, whisperedAt).
@@ -47,14 +47,28 @@ local function guildMember(name)
     return false
 end
 
----My current guild, when it enforces linking and I have an identity: I share with it whatever my Guild scope.
+---My current guild, when it enforces linking and my identity is complete there: I opted in, or all my characters in it
+---are linked with my Guild scope on. I share with it whatever my Guild scope.
 ---@return integer? clubId
 ---@return WhosWho.Ruleset? ruleset
 function Scopes.EnforcedGuild()
     local guid = UnitGUID("player")
-    local clubId = IsInGuild() and Identity.GuildId(guid)
-    if not (clubId and Identity.LinkedCount() > 0 and GuildSettings.EnforcesLinking(clubId)) then return nil, nil end
-    return clubId, Identity.Ruleset(guid)
+    local clubId, ruleset = IsInGuild() and Identity.GuildId(guid), Identity.Ruleset(guid)
+    if not (clubId and GuildSettings.EnforcesLinking(clubId)) then return nil, nil end
+    local complete = Identity.EnforcedLinkingOptIn(clubId) == true
+        or (Scopes.Get("guild") and Identity.AllLinkedInGuild(clubId, ruleset))
+    if not complete then return nil, nil end
+    return clubId, ruleset
+end
+
+---My current guild, when it enforces linking, my identity isn't complete there and I haven't answered it yet: the
+---character I play must be asked.
+---@return integer? clubId
+function Scopes.EnforcedLinkingChoiceNeeded()
+    local clubId = IsInGuild() and Identity.GuildId(UnitGUID("player"))
+    if not (clubId and GuildSettings.EnforcesLinking(clubId)) then return nil end
+    if Scopes.EnforcedGuild() or Identity.EnforcedLinkingOptIn(clubId) ~= nil then return nil end
+    return clubId
 end
 
 -- Whether the character I play shares with my guild only: one I didn't link, which my guild's rule adds.
@@ -62,10 +76,13 @@ local function guildOnly()
     return not Identity.IsLinked(UnitGUID("player")) and Scopes.EnforcedGuild() ~= nil
 end
 
----Whether I share with my current guild: with the Guild scope, or by its rule.
+---Whether I share with my current guild: with the Guild scope; a guild enforcing linking, only once my identity is
+---complete there, whatever my Guild scope.
 ---@return boolean
 function Scopes.SharesWithGuild()
-    return Scopes.Get("guild") or Scopes.EnforcedGuild() ~= nil
+    local clubId = IsInGuild() and Identity.GuildId(UnitGUID("player"))
+    if GuildSettings.EnforcesLinking(clubId) then return Scopes.EnforcedGuild() ~= nil end
+    return Scopes.Get("guild")
 end
 
 -- Sets my current character's guild (apply). When the guild enforces linking and what its members get from me changes,
@@ -75,6 +92,13 @@ local function setOwnGuild(clubId, apply)
     local bytes = GuildSettings.EnforcesLinking(clubId) and Identity.RecordBytesWithoutRevision(clubId, ruleset)
     apply()
     if bytes and Identity.RecordBytesWithoutRevision(clubId, ruleset) ~= bytes then Identity.GuildContentChanged() end
+end
+
+---Whether that player is a member of my current guild, whatever I share with it: for the guild's settings.
+---@param name string
+---@return boolean
+function Scopes.GuildMember(name)
+    return guildMember(name)
 end
 
 -- A member of my current guild, from the roster; stops at the name.
@@ -108,6 +132,26 @@ function Scopes.GuildRankIndex(guid)
         if memberGuid and notSecret(memberGuid, rankIndex) and memberGuid == guid then return rankIndex end
     end
     return nil
+end
+
+-- The member who invited the character I play into a guild, this session.
+local guildInviter
+
+---GUILD_INVITE_REQUEST: who invites the character I play into a guild.
+---@param inviter any
+function Scopes.GuildInviteReceived(inviter)
+    if inviter and notSecret(inviter) then guildInviter = inviter end
+end
+
+---Whether that member of my guild is trusted for its first settings: an officer (or the guild master) in my roster, or
+---the member who invited me.
+---@param name string
+---@return boolean
+function Scopes.TrustedForGuildSettings(name)
+    if name == guildInviter then return true end
+    local guid = guildMemberGuid(name)
+    local rankIndex = guid and Scopes.GuildRankIndex(guid)
+    return rankIndex ~= nil and rankIndex <= GuildSettings.LOWEST_RANK_INDEX
 end
 
 ---The online members of my guild but me, from the roster.
@@ -295,11 +339,23 @@ end
 
 -- Relationships ----------------------------------------------------------------------------------
 
+-- Right after joining, the game may send the roster before my guild's club ID: the roster is asked for again, that long
+-- after, until it comes with it.
+local CLUB_ID_RETRY_SECONDS = 10
+local clubIdRetryPending = false
+
 ---GUILD_ROSTER_UPDATE: my current character's guild, the guild of the characters I hold, and their activity: seen now
 ---while online; offline, its level only.
 function Scopes.GuildRosterChanged()
     local count = GetNumGuildMembers()
     local clubId = C_Club.GetGuildClubId()
+    if count > 0 and not clubId and not clubIdRetryPending then
+        clubIdRetryPending = true
+        C_Timer.After(CLUB_ID_RETRY_SECONDS, function()
+            clubIdRetryPending = false
+            if IsInGuild() then C_GuildInfo.GuildRoster() end
+        end)
+    end
     -- The roster is empty until the game has loaded it.
     if count == 0 or not clubId then return end
 
@@ -319,6 +375,11 @@ function Scopes.GuildRosterChanged()
     local joined = Identity.GuildId(UnitGUID("player")) ~= clubId
     setOwnGuild(clubId, function() Identity.SetGuild(UnitGUID("player"), clubId) end)
     People.UpdateGuildMembers(clubId, memberGuids)
+    -- What I held of a guild I joined again dates from before: its settings count as first ones, my list as a first one.
+    if joined then
+        GuildSettings.Joined(clubId)
+        GuildList.ForgetGuild(clubId)
+    end
     if joined and GuildSettings.EnforcesLinking(clubId) then People.MarkOutdated(clubId) end
     People.Activity(activities)
 end
@@ -330,9 +391,14 @@ function Scopes.GuildChanged()
         C_GuildInfo.GuildRoster()
         return
     end
-    local clubId = Identity.GuildId(UnitGUID("player"))
-    Identity.SetGuild(UnitGUID("player"), nil)
-    if clubId then People.GuildLeft(clubId) end
+    local guid = UnitGUID("player")
+    local clubId = Identity.GuildId(guid)
+    Identity.SetGuild(guid, nil)
+    if clubId then
+        People.GuildLeft(clubId)
+        Identity.SetEnforcedLinkingOptIn(clubId, nil)
+        if not Identity.HasCharacterInGuild(clubId, Identity.Ruleset(guid)) then GuildList.ForgetGuild(clubId) end
+    end
 end
 
 ---After a record is stored: the guild and the level of its characters my roster lists, as an announcement from them
@@ -487,6 +553,12 @@ end
 ---@return boolean
 function Scopes.AnnouncementReaches(name)
     return Scopes.Allows(name) and (not guildOnly() or Scopes.GuildReaches(name))
+end
+
+---Whether my announcements, from the character I play, go to my guild: I share with it, and the character announces.
+---@return boolean
+function Scopes.AnnouncesToGuild()
+    return IsInGuild() and Scopes.SharesWithGuild() and Identity.AnnouncedRevision(UnitGUID("player")) ~= nil
 end
 
 ---Whether my announcements, from the character I play, go to my group: with the Group scope, from a character that

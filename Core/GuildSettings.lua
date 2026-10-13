@@ -31,8 +31,13 @@ local DEFAULTS = { enable = false, enforceLinking = false }
 
 -- Records ----------------------------------------------------------------------------------------
 
----@return table<integer, WhosWho.GuildSettingsRecord> by club ID
-local function records()
+---A guild's settings as I hold them.
+---@class WhosWho.HeldGuildSettings
+---@field record WhosWho.GuildSettingsRecord the latest record accepted, as signed
+---@field signerUnconfirmed true? the guild's first settings, taken before I could confirm their signer
+
+---@return table<integer, WhosWho.HeldGuildSettings> by club ID
+local function heldByGuild()
     return ns.data.guildSettings
 end
 
@@ -49,7 +54,35 @@ end
 ---@param clubId integer?
 ---@return WhosWho.GuildSettingsRecord?
 function GuildSettings.Record(clubId)
-    return clubId and records()[clubId] or nil
+    local held = clubId and heldByGuild()[clubId]
+    return held and held.record or nil
+end
+
+---The guilds I hold settings of.
+---@return integer[] clubIds
+function GuildSettings.HeldGuilds()
+    local clubIds = {}
+    for clubId in pairs(heldByGuild()) do clubIds[#clubIds + 1] = clubId end
+    return clubIds
+end
+
+---The character I play joined that guild: the settings I held of it from before count as its first settings again.
+---@param clubId integer
+function GuildSettings.Joined(clubId)
+    local held = heldByGuild()[clubId]
+    if held then held.signerUnconfirmed = true end
+end
+
+---Whether I want that revision of a guild's settings a member announced: a later one than mine, or any other while mine
+---is unconfirmed.
+---@param clubId integer?
+---@param rev integer 0 for none
+---@return boolean
+function GuildSettings.IsWanted(clubId, rev)
+    local held = clubId and heldByGuild()[clubId]
+    if not held then return rev > 0 end
+    if held.signerUnconfirmed then return rev > 0 and rev ~= held.record.rev end
+    return rev > held.record.rev
 end
 
 ---The revision of the record I hold for that guild, 0 without one.
@@ -137,11 +170,13 @@ end
 
 -- Holds a guild's record. When it turns enforced linking on or off and what that guild's members get from me changes,
 -- a new revision.
-local function hold(signedRecord)
+local function hold(signedRecord, signerUnconfirmed)
     local clubId, ruleset = signedRecord.guild, Identity.Ruleset(UnitGUID("player"))
-    local bytes, first = guildRecordBytes(clubId, ruleset), records()[clubId] == nil
-    records()[clubId] = signedRecord
+    local bytes, first = guildRecordBytes(clubId, ruleset), heldByGuild()[clubId] == nil
+    heldByGuild()[clubId] = { record = signedRecord, signerUnconfirmed = signerUnconfirmed or nil }
     if guildRecordBytes(clubId, ruleset) ~= bytes then Identity.GuildContentChanged() end
+    -- Nothing to answer once the guild no longer enforces linking.
+    if not GuildSettings.EnforcesLinking(clubId) then Identity.SetEnforcedLinkingOptIn(clubId, nil) end
     -- The first settings I hold of my current guild, enforcing linking (I joined it, or came from 0.1.x): what I hold
     -- of its members came from outside it.
     if first and GuildSettings.EnforcesLinking(clubId) and Identity.GuildId(UnitGUID("player")) == clubId then
@@ -182,8 +217,9 @@ end
 ---@param signedRecord WhosWho.GuildSettingsRecord
 ---@return boolean
 function GuildSettings.IsNewer(signedRecord)
-    local held = records()[signedRecord.guild]
-    return not held or GuildSettings.IsNewerThan(signedRecord, held)
+    local held = heldByGuild()[signedRecord.guild]
+    -- One held without its signer confirmed may give way to any confirmed one (GuildSettings.Accept).
+    return not held or held.signerUnconfirmed == true or GuildSettings.IsNewerThan(signedRecord, held.record)
 end
 
 -- Whether the record's signing character is a confirmed character of its signing identity; for my own identity, one of
@@ -195,15 +231,28 @@ local function signerConfirmed(signedRecord)
 end
 
 ---Holds a verified record that is newer, when its signer may change the settings: its signing character confirmed,
----and at a rank index up to GuildSettings.LOWEST_RANK_INDEX in my roster. "pending": the signing character is not
----confirmed yet, or not in my roster yet; the record may be accepted later.
+---and at a rank index up to GuildSettings.LOWEST_RANK_INDEX in my roster. A guild's first settings (none held, or held
+---unconfirmed), whose signer I can't confirm yet, are taken unconfirmed when their signer is at such a rank, or when a
+---trusted member sent them (an officer, or who invited me), until a confirmed record replaces them whatever its revision.
+---"pending": the signing character is not confirmed yet, or not in my roster yet; the record may be accepted later.
 ---@param signedRecord WhosWho.GuildSettingsRecord signature verified
 ---@param signerRankIndex integer? the signing character's rank index in my roster, nil when it does not list it
+---@param sentByTrusted boolean sent by a member trusted for a guild's first settings
 ---@return "accepted"|"stale"|"pending"|"refused"
-function GuildSettings.Accept(signedRecord, signerRankIndex)
+function GuildSettings.Accept(signedRecord, signerRankIndex, sentByTrusted)
     if not GuildSettings.IsNewer(signedRecord) then return "stale" end
-    if signerRankIndex and signerRankIndex > GuildSettings.LOWEST_RANK_INDEX then return "refused" end
-    if not (signerRankIndex and signerConfirmed(signedRecord)) then return "pending" end
-    hold(signedRecord)
-    return "accepted"
+    local signerOfficer = signerRankIndex ~= nil and signerRankIndex <= GuildSettings.LOWEST_RANK_INDEX
+    if signerOfficer and signerConfirmed(signedRecord) then
+        hold(signedRecord, false)
+        return "accepted"
+    end
+    local held = heldByGuild()[signedRecord.guild]
+    local first = not held or held.signerUnconfirmed == true
+    if first and (signerOfficer or sentByTrusted) then
+        if held and not GuildSettings.IsNewerThan(signedRecord, held.record) then return "stale" end
+        hold(signedRecord, true)
+        return "accepted"
+    end
+    if signerRankIndex and not signerOfficer then return "refused" end
+    return "pending"
 end

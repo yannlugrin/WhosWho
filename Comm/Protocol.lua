@@ -47,6 +47,12 @@ local function traceReceived(text, distribution, sender)
     ns.Print(L["Received, %s: %s"]:format(distribution .. " " .. sender, describe(text)))
 end
 
+-- What became of a guild settings record received: dropped, checked, then accepted, held back, refused or stale.
+local function traceGuildSettings(signedRecord, outcome)
+    if not ns.settings.debugMessages then return end
+    ns.Print(L["Guild settings %d: %s"]:format(signedRecord.rev, outcome))
+end
+
 -- Sending ----------------------------------------------------------------------------------------
 
 -- Whether my logout announcement went out, until the logout is canceled: nothing else goes out meanwhile, so it is the
@@ -97,13 +103,12 @@ end
 
 -- Announcements ----------------------------------------------------------------------------------
 
--- My announcement from the character I play; from a character I unlinked, NOID in its place; nil while it never was
--- linked.
+-- My announcement from the character I play, when it announces; otherwise NOID from a character I unlinked, nil from one
+-- never linked.
 local function announcementText(level, acceptsGet, wantsAnnouncement)
     local guid = UnitGUID("player")
-    if Identity.IsRemoved(guid) then return Codec.NoIdentity() end
     local revision = Identity.AnnouncedRevision(guid)
-    if not revision then return nil end
+    if not revision then return Identity.IsRemoved(guid) and Codec.NoIdentity() or nil end
     local listAt, listHash
     if guildListsActive() then
         local _
@@ -134,8 +139,8 @@ end
 ---@field clubId integer? the guild enforcing linking whose members' record it was; nil for everyone's
 ---@field leftAt number?
 
--- Last revision published to every audience this session, and whether the Guild scope was on then.
-local publishedRevision, publishedWithGuildScope
+-- Last revision published to every audience this session, and whether I shared with my guild then.
+local publishedRevision, publishedSharingWithGuild
 -- The bytes of everyone's record as last published, without its revision.
 local publishedBytes
 ---@type table<string, true> names of the players who sent a GET for my identity
@@ -238,8 +243,8 @@ end
 local anonymousAtLogin = false
 
 -- A change of revision, to every audience, or to my guild alone when only its members' record changed: the players
--- holding an older one ask for it. When the Guild scope was turned on since the last one, the guild members send theirs
--- back: until then they ignored mine, and I theirs. When the character I play was anonymous at login, everyone sends
+-- holding an older one ask for it. When I started sharing with my guild since the last one (the Guild scope turned on, or
+-- its rule answered), the guild members send theirs back: until then they ignored mine, and I theirs. When the character I play was anonymous at login, everyone sends
 -- theirs back: it asked nobody.
 local function announceRevision(guildOnly)
     local guid = UnitGUID("player")
@@ -250,9 +255,9 @@ local function announceRevision(guildOnly)
 
     -- Only an announcement asks: NOID, from a character I unlinked, leaves the flag for when it is linked again.
     if Identity.IsLinked(guid) then anonymousAtLogin = false end
-    local guildScopeTurnedOn = Scopes.Get("guild") and not publishedWithGuildScope
-    publishedWithGuildScope = Scopes.Get("guild")
-    local guildMessage = guildScopeTurnedOn and not wantsAnnouncements and announcementText(level, true, true) or message
+    local guildSharingStarted = Scopes.SharesWithGuild() and not publishedSharingWithGuild
+    publishedSharingWithGuild = Scopes.SharesWithGuild()
+    local guildMessage = guildSharingStarted and not wantsAnnouncements and announcementText(level, true, true) or message
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do
         if channel == "GUILD" or not guildOnly then sendQueued(channel == "GUILD" and guildMessage or message, channel) end
@@ -460,24 +465,32 @@ local refusedGuildSettings = {}
 local function requestGuildSettings(name, rev)
     local request = guildSettingsRequest
     if refusedGuildSettings[rev] then return end
-    if request and request.rev >= rev and GetTime() - request.sentAt < REQUEST_DELAY_SECONDS then return end
-    guildSettingsRequest = { rev = rev, sentAt = GetTime() }
+    -- One request at a time, but a member trusted for a guild's first settings is asked over one who isn't.
+    local trusted = Scopes.TrustedForGuildSettings(name)
+    if request and request.rev >= rev and GetTime() - request.sentAt < REQUEST_DELAY_SECONDS
+        and (request.trusted or not trusted) then
+        return
+    end
+    guildSettingsRequest = { rev = rev, sentAt = GetTime(), trusted = trusted }
     sendQueued(Codec.GuildSettingsRequest(), "WHISPER", name)
 end
 
 ---@type WhosWho.GuildSettingsRecord? the newest verified record held back until its signing character is confirmed and
 ---in my roster, tried again as they change
 local pendingGuildSettings
+-- Whether a member trusted for a guild's first settings sent the record held back.
+local pendingSentByTrusted = false
 
-local function acceptGuildSettings(signedRecord)
-    local result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid))
+local function acceptGuildSettings(signedRecord, sentByTrusted)
+    local result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid), sentByTrusted)
+    traceGuildSettings(signedRecord, result)
     if result == "accepted" then
         guildSettingsRequest = nil
     elseif result == "refused" then
         refusedGuildSettings[signedRecord.rev] = true
     elseif result == "pending"
         and not (pendingGuildSettings and GuildSettings.IsNewerThan(pendingGuildSettings, signedRecord)) then
-        pendingGuildSettings = signedRecord
+        pendingGuildSettings, pendingSentByTrusted = signedRecord, sentByTrusted
     end
 end
 
@@ -485,7 +498,7 @@ local function retryPendingGuildSettings()
     local signedRecord = pendingGuildSettings
     if not signedRecord then return end
     pendingGuildSettings = nil
-    acceptGuildSettings(signedRecord)
+    acceptGuildSettings(signedRecord, pendingSentByTrusted)
 end
 
 local guildSettingsWaiting = false
@@ -669,12 +682,19 @@ end
 ---@param announcement WhosWho.Announcement
 local function receiveAnnouncement(announcement, sender)
     local id = announcement.id
+    -- Empty: a member with nothing to share wants mine, nothing more. My own comes back on GUILD.
+    if not id then
+        if announcement.wantsAnnouncement and sender ~= ns.UnitWholeName("player") and Scopes.Allows(sender) then
+            queueAnnouncement(sender)
+        end
+        return
+    end
     if id == Identity.Id() then return end
 
     -- My answer, whatever the character I play: what it sends, if anything, is decided when the answers go out.
     if announcement.wantsAnnouncement and Scopes.Allows(sender) then queueAnnouncement(sender) end
-    if announcement.acceptsGet and Scopes.GuildReaches(sender)
-        and announcement.guildSettingsRev > GuildSettings.Revision(Identity.GuildId(UnitGUID("player"))) then
+    if announcement.acceptsGet and Scopes.GuildMember(sender)
+        and GuildSettings.IsWanted(Identity.GuildId(UnitGUID("player")), announcement.guildSettingsRev) then
         requestGuildSettings(sender, announcement.guildSettingsRev)
     end
     -- Kept even while my lists are off: the settings enabling them may arrive right after.
@@ -682,11 +702,10 @@ local function receiveAnnouncement(announcement, sender)
         listOffers[sender] = { at = announcement.guildListAt, hash = announcement.guildListHash }
         scheduleGuildListEvaluation()
     end
-    local linked = Identity.IsLinked(UnitGUID("player"))
-
     -- An anonymous character only updates the identities I hold, and asks nothing; without any linked character, it
     -- takes nothing.
-    if not (linked or (People.Get(id) and Identity.LinkedCount() > 0)) then return end
+    local sharing = Scopes.RecordReaches(sender)
+    if not (sharing or (People.Get(id) and Identity.LinkedCount() > 0)) then return end
 
     local senderGuid = Scopes.SenderGuid(sender)
     if senderGuid then
@@ -698,7 +717,7 @@ local function receiveAnnouncement(announcement, sender)
         -- The owner left: a GET would get no answer, and my announcement would not reach them.
         requests[id] = nil
         announcementRecipients[sender] = nil
-    elseif linked and People.IsWanted(id, announcement.rev) and Scopes.Allows(sender) then
+    elseif sharing and People.IsWanted(id, announcement.rev) then
         requestRecord(id, sender)
     end
 end
@@ -758,7 +777,7 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
         end
     end
     -- An anonymous character stores a new identity only from the guild of one of my linked characters.
-    if not (Identity.IsLinked(UnitGUID("player")) or People.Get(signedRecord.id)
+    if not (Scopes.RecordReaches(sender) or People.Get(signedRecord.id)
         or (distribution == "GUILD" and Scopes.LinkedCharacterInGuild())) then
         return
     end
@@ -781,7 +800,7 @@ end
 -- A member of my current guild asking for its settings.
 local function receiveGuildSettingsRequest(sender)
     local signedRecord = GuildSettings.Record(Identity.GuildId(UnitGUID("player")))
-    if signedRecord and Scopes.GuildReaches(sender) then
+    if signedRecord and Scopes.GuildMember(sender) then
         sendQueued(Codec.GuildSettingsUpdate(signedRecord), "WHISPER", sender)
     end
 end
@@ -790,9 +809,14 @@ end
 ---@param update WhosWho.GuildSettingsUpdate
 local function receiveGuildSettingsUpdate(update, sender)
     local signedRecord = update.signedRecord
-    if not (Scopes.GuildReaches(sender) and signedRecord.guild == Identity.GuildId(UnitGUID("player"))) then return end
-    if not GuildSettings.IsNewer(signedRecord) then return end
-    RecordVerification.Queue(signedRecord, GuildSettings, acceptGuildSettings)
+    if not Scopes.GuildMember(sender) then return traceGuildSettings(signedRecord, "sender not in my guild") end
+    -- Right after joining, the game may not give my guild's club ID yet: the record is then kept under its own.
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    if clubId and signedRecord.guild ~= clubId then return traceGuildSettings(signedRecord, "another guild") end
+    if not GuildSettings.IsNewer(signedRecord) then return traceGuildSettings(signedRecord, "not newer") end
+    traceGuildSettings(signedRecord, "checking its signature")
+    local sentByTrusted = Scopes.TrustedForGuildSettings(sender)
+    RecordVerification.Queue(signedRecord, GuildSettings, function(verified) acceptGuildSettings(verified, sentByTrusted) end)
 end
 
 -- A member of my current guild asking for my list of it.
@@ -826,8 +850,10 @@ local function receive(_, text, distribution, sender)
     if distribution == "GUILD" and not Scopes.ReceivedOnGuild(sender) and message.type == "ANNOUNCE" then
         C_GuildInfo.GuildRoster()
     end
-    -- Without a linked character, I take nothing; a character I unlinked still answers an announcement with NOID.
-    if Identity.LinkedCount() == 0 and message.type ~= "ANNOUNCE" then return end
+    -- Without a linked character, I take nothing but announcements and my guild's settings, which hold no identity, and
+    -- what a guild I opted in to sends; a character I unlinked still answers an announcement with NOID.
+    local takenAnyway = message.type == "ANNOUNCE" or message.type == "GSGET" or message.type == "GSET"
+    if Identity.LinkedCount() == 0 and not Scopes.EnforcedGuild() and not takenAnyway then return end
 
     if message.type == "ANNOUNCE" then
         receiveAnnouncement(message, sender)
@@ -908,7 +934,7 @@ end
 function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
-    publishedRevision, publishedWithGuildScope = Identity.Revision(), Scopes.Get("guild")
+    publishedRevision, publishedSharingWithGuild = Identity.Revision(), Scopes.SharesWithGuild()
     publishedBytes = Identity.RecordBytesWithoutRevision()
     Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
@@ -930,6 +956,8 @@ function Protocol.AnnounceLogin()
         and time() - lastLogout.at < Store.Advanced("quickRelogSeconds")
     if quickRelog and Identity.AnnouncedRevision(guid) == Identity.LastBroadcastRevision() then return end
     announce(Scopes.LoginAudience(), UnitLevel("player"), true, true, sendQueued)
+    -- Sharing nothing with my guild, I still want its members' announcements: they carry its settings.
+    if IsInGuild() and not Scopes.AnnouncesToGuild() then sendToGuild(Codec.EmptyAnnouncement()) end
 end
 
 ---PLAYER_LEVEL_UP.
@@ -979,7 +1007,7 @@ function Protocol.GuildChanged()
     -- A guild update while already in the guild keeps the announcement waiting.
     if joined then
         Scopes.GuildJoined()
-        guildJoinAnnouncementPending = Scopes.Get("guild")
+        guildJoinAnnouncementPending = true
     elseif not inGuild then
         guildJoinAnnouncementPending = false
     end
@@ -991,9 +1019,14 @@ function Protocol.GuildRosterChanged()
     retryPendingGuildSettings()
     if not guildJoinAnnouncementPending or GetNumGuildMembers() == 0 then return end
     guildJoinAnnouncementPending = false
-    local message = announcementText(UnitLevel("player"), true, true)
-    if not message then return end
-    for _, name in ipairs(Scopes.OnlineGuildMembers()) do sendQueued(message, "WHISPER", name) end
+    -- My announcement when I share with the guild (NOID from a character I unlinked).
+    local announcement = Scopes.SharesWithGuild() and announcementText(UnitLevel("player"), true, true)
+    -- When my identity doesn't reach the guild that way, an empty announcement: its members still send theirs back.
+    local emptyAnnouncement = not Scopes.AnnouncesToGuild() and Codec.EmptyAnnouncement()
+    for _, name in ipairs(Scopes.OnlineGuildMembers()) do
+        if announcement then sendQueued(announcement, "WHISPER", name) end
+        if emptyAnnouncement then sendQueued(emptyAnnouncement, "WHISPER", name) end
+    end
 end
 
 ---GROUP_ROSTER_UPDATE: on joining a group, my announcement to the group, which every member answers with theirs.

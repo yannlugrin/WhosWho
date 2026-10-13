@@ -213,6 +213,15 @@ Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a mem
 - D joins the guild: within a minute D's People tab shows B2 under B (fetched again through the guild lists or from B). D leaves the guild: B2 disappears from D's People tab, B stays.
 - A unticks the setting: the members whose records change make a new revision; B2 disappears from A's People tab once B's new record arrives.
 
+## Enforced Linking Opt-In
+
+Needs the guild of Enforced Linking with the rule on: B a member with an unlinked character in it, E a player who never linked any character, in the guild.
+
+- B logs in: one dialog, "<guild> requires its members to link their characters in it.", listing B's characters in the guild (the unlinked ones marked), with **Link**, **Share without linking**, **Refuse**; the guild-main dropdown when B's main isn't in the guild and B has several characters there. In combat at login: the dialog waits until combat ends. Before answering, nothing from B on `GUILD` but `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`.
+- **Refuse**: nothing to the guild; no dialog until B's next login in another state. **Share without linking**: A's People tab shows B's characters in the guild, under the guild main chosen. **Link**: they are linked in **My identity**, and the Guild scope is on.
+- E logs in: `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`, the members answer, and the same dialog shows once the guild's settings arrive, in place of the first-login prompt. **Share without linking**: A's People tab shows E's character under an identity of its own.
+- A turns the rule off and on again while B plays: no dialog until B's next login.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).

@@ -15,7 +15,7 @@ local VERSION = "1"
 
 ---@class WhosWho.Announcement
 ---@field type "ANNOUNCE"
----@field id string identity ID
+---@field id string? identity ID; nil for an empty announcement, from a character with nothing to share
 ---@field rev integer
 ---@field level integer the sending character's level
 ---@field acceptsGet boolean whether the sender answers a GET now
@@ -78,6 +78,13 @@ function Codec.Announcement(id, rev, level, acceptsGet, wantsAnnouncement, guild
     local guildListRev = guildListAt and (guildListAt .. "." .. guildListHash) or "0"
     return ("%s ANNOUNCE %s %d %d %d %d %s %d"):format(VERSION, id, rev, level, acceptsGet and 1 or 0,
         wantsAnnouncement and 1 or 0, guildListRev, guildSettingsRev)
+end
+
+---An announcement from a character with no identity to share: it carries nothing, and only asks for the receivers'
+---announcements. 0.1.x refuses it (no identity ID).
+---@return string
+function Codec.EmptyAnnouncement()
+    return ("%s ANNOUNCE 0 0 0 0 1 0 0"):format(VERSION)
 end
 
 ---@param ids string[] 1 to Codec.MAX_REQUESTED_IDS identity IDs
@@ -148,6 +155,7 @@ end
 local function decodeAnnouncement(fields)
     local id, rev, level, acceptsGet, wantsAnnouncement, guildListRev, guildSettingsRev =
         fields:match("^(%x+) (%d+) (%d%d?%d?) ([01]) ([01]) (%S+) ?(%d*)")
+    if id == "0" then return { type = "ANNOUNCE", wantsAnnouncement = wantsAnnouncement == "1" } end
     if not (Record.IsId(id) and revision(rev) and tonumber(level) >= 1) then return nil end
     local validListRev, guildListAt, guildListHash = parseGuildListRev(guildListRev)
     if not validListRev then return nil end

@@ -17,6 +17,7 @@ ns.Identity = Identity
 ---@field main string? GUID of the main character, always a linked one
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
 ---@field signatures table<string, string>? the current revision's records' signatures, by SHA-512 (hex) of their bytes
+---@field enforcedLinkingOptIns table<integer, boolean>? by club ID, my answer to a guild enforcing linking: true opts in
 ---@field lastLogout { guid: string, at: number }? the account's last logout or /reload: the character, and when (time())
 ---@field lastBroadcastRevision integer? the revision my last announcement to every audience that answers a GET carried
 
@@ -31,6 +32,7 @@ ns.Identity = Identity
 ---@class WhosWho.OwnCharacterGuild
 ---@field id integer? club ID (C_Club.GetGuildClubId), nil until the game gives it after joining
 ---@field joinedAt number? seconds, from time(): when the character joined it, unknown for a guild it was in before
+---@field main true? the character this guild shows me under, my main not being in it, as I chose
 
 ---@return WhosWho.IdentityData
 local function data()
@@ -237,17 +239,64 @@ function Identity.HasCharacterInGuild(clubId, ruleset)
     return false
 end
 
----The revision a character announces: the current one, while it is linked or in a guild enforcing linking, as long as I
----have an identity.
+---The revision a character announces: the current one, while it is linked, or in a guild enforcing linking whose rule
+---I opted in to.
 ---@param guid string
 ---@return integer? revision nil for a character that is not linked, unless its guild's rule adds it
 function Identity.AnnouncedRevision(guid)
     local character = data().chars[guid]
     if not character then return nil end
     if character.linked then return data().rev end
-    local guild = character.guild
-    if guild and ns.GuildSettings.EnforcesLinking(guild.id) and Identity.LinkedCount() > 0 then return data().rev end
+    local clubId = character.guild and character.guild.id
+    if clubId and ns.GuildSettings.EnforcesLinking(clubId) and Identity.EnforcedLinkingOptIn(clubId) == true then
+        return data().rev
+    end
     return nil
+end
+
+---Whether every character of mine in that guild is linked.
+---@param clubId integer
+---@param ruleset WhosWho.Ruleset
+---@return boolean
+function Identity.AllLinkedInGuild(clubId, ruleset)
+    for _, character in pairs(data().chars) do
+        if character.guild and character.guild.id == clubId and character.ruleset == ruleset and not character.linked then
+            return false
+        end
+    end
+    return true
+end
+
+---My answer to a guild enforcing linking: true opts in (my characters in it shared without linking), false refuses.
+---@param clubId integer
+---@return boolean? optIn nil while not answered
+function Identity.EnforcedLinkingOptIn(clubId)
+    local optIns = data().enforcedLinkingOptIns
+    return optIns and optIns[clubId]
+end
+
+---Saves my answer to a guild enforcing linking, or drops it (nil). Opting in or out changes what its members get.
+---@param clubId integer
+---@param optIn boolean?
+function Identity.SetEnforcedLinkingOptIn(clubId, optIn)
+    local identity = data()
+    local wasOptedIn = Identity.EnforcedLinkingOptIn(clubId) == true
+    identity.enforcedLinkingOptIns = identity.enforcedLinkingOptIns or {}
+    identity.enforcedLinkingOptIns[clubId] = optIn
+    if (optIn == true) ~= wasOptedIn then nextRevision() end
+end
+
+---Makes that character the one its guild shows me under, my main not being in it.
+---@param guid string
+function Identity.SetGuildMain(guid)
+    local character = data().chars[guid]
+    local clubId = character and character.guild and character.guild.id
+    if not clubId or character.guild.main then return end
+    for _, other in pairs(data().chars) do
+        if other.guild and other.guild.id == clubId then other.guild.main = nil end
+    end
+    character.guild.main = true
+    nextRevision()
 end
 
 ---Whether the character was unlinked after being linked: it declares no identity (NOID).
@@ -407,9 +456,12 @@ function Identity.OnRevisionChanged(listener)
     revisionListeners[#revisionListeners + 1] = listener
 end
 
--- My characters in that guild, the linked ones first, then by name: the first one stands for me there when my main is
--- not in it.
-local function charactersInGuild(clubId, ruleset)
+---My characters in that guild, the one I chose as its guild main first, then the linked ones, then by name: the first one
+---stands for me there when my main is not in it.
+---@param clubId integer
+---@param ruleset WhosWho.Ruleset?
+---@return string[] guids
+function Identity.CharactersInGuild(clubId, ruleset)
     local characters = data().chars
     local guids = {}
     for guid, character in pairs(characters) do
@@ -418,6 +470,8 @@ local function charactersInGuild(clubId, ruleset)
         end
     end
     table.sort(guids, function(a, b)
+        local aChosen, bChosen = characters[a].guild.main == true, characters[b].guild.main == true
+        if aChosen ~= bChosen then return aChosen end
         local aLinked, bLinked = characters[a].linked == true, characters[b].linked == true
         if aLinked ~= bLinked then return aLinked end
         if characters[a].name ~= characters[b].name then return characters[a].name < characters[b].name end
@@ -444,7 +498,7 @@ function Identity.UnsignedRecord(clubId, ruleset)
     end
     local guildMain
     if clubId then
-        local inGuild = charactersInGuild(clubId, ruleset)
+        local inGuild = Identity.CharactersInGuild(clubId, ruleset)
         local mainInGuild = false
         for _, guid in ipairs(inGuild) do
             if guid == identity.main then mainInGuild = true end

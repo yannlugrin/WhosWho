@@ -9,24 +9,24 @@ For **World of Warcraft: Forever**. Source code, issues and releases: [github.co
 ## Features
 
 - **One identity for all your characters.** Link the characters you play and pick your main: you're shown under its name, or under a nickname if you set one. The first time you log in on a character, Who's Who asks whether to link it. Manage it all in the **My identity** tab, or with `/ww link`, `/ww main` and `/ww nick`.
-- **You decide who sees it.** Share with your guild, your friends, your party or raid, or the people you whisper. Guild and friends are on by default, and nothing is shared until you link a character.
+- **You decide who sees it.** Share with your guild, your friends, your party or raid, or the people you whisper. Guild and friends are on by default, and nothing is shared until you link a character or accept a guild's rule.
 - **Recognise people across their alts.** When someone shares their identity with you, the **People** tab lists them with their characters, who is online and when you last saw them. Their nickname shows next to their name in chat and in their tooltip, on every character they linked, and the tooltip lists their other characters.
 - **Your own nickname and notes.** In the People tab, give anyone your own nickname for them and write notes about them, seen only by you, or forget them. The start of the note shows in their tooltip.
 - **Always up to date.** Your identity reaches the people you share with when you log in, level up, log out, join a group or a guild, add a friend, turn a sharing option on or whisper someone, and people who come online or join your group later get it too. The people you whisper keep getting it for a time you choose in the settings (3 hours by default).
 - **Link players who don't use the add-on.** Start a person from one of their characters and link their other characters to them, or add an alt you know to someone's shared identity. A small mark shows what the player didn't share themselves.
 - **Right-click any player**, from their unit frame, the guild roster, your friends, recent contacts or their name in chat, to link their character to a person, show that person, make it their main or unlink it.
 - **Your whole guild, known to everyone.** Once the guild master or an officer enables Who's Who for the guild, in a new tab of the guild panel, guild members pass on to each other the identities guildmates shared, so you recognise every guildmate who uses Who's Who, even one you've never been online with. The window's **Guild** tab then lists your guildmates by identity, and the members not known yet.
-- **Guilds that link alts to mains.** The guild master or an officer can require it: the guild then knows every character its members have in it under their identity, linked or not, and only the guild sees the ones they didn't link.
+- **Guilds that link alts to mains.** The guild master or an officer can require it. Each member is asked first: link their characters in the guild, share them with the guild only without linking them, or refuse, and Who's Who then shares nothing with that guild. Only the guild sees the characters they didn't link.
 - *Coming:* **Review** what Who's Who changed on its own, for example when a player you linked yourself starts sharing their own identity.
 
 Open the window with the minimap button, the add-on compartment next to the minimap, or `/ww open`. Right-click the button for a menu.
 
 ## Privacy
 
-- Nothing leaves your client as long as you haven't linked a character to your identity.
+- Nothing about you leaves your client until you link a character to your identity or accept a guild's rule. A character that shares nothing still lets its guild know it uses Who's Who, without any identity, to learn the guild's rules.
 - A character you unlink tells the players who knew it, each time you log in on it, that it belongs to no identity, so they drop it, even if they were offline when you unlinked it. That message doesn't carry your identity: nobody can trace the character back to you from it.
 - Who's Who never sends BattleTags or Battle.net account information. It keeps your Battle.net friends' BattleTags on your computer only, to show them in the People tab.
-- In a guild that requires linking, your characters in that guild are shared with its members, even the ones you didn't link; they are never shared outside it.
+- In a guild that requires linking, nothing is shared with it until you accept. The characters you share there without linking them are seen by its members only, never outside it.
 - Your identity is signed with a key that stays on your computer, so nobody else can change it, even when it is passed along by other players.
 - What a player shares about themselves can't be changed by others. You can still give anyone your own nickname for them; only you see it.
 - **Forget me** in the settings unlinks all your characters and removes your nickname; players who know you forget you too, once Who's Who reaches them.

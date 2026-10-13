@@ -19,7 +19,7 @@ ns.Store = Store
 ---@field noIdentity table<string, number> GUID -> when (time()) the character last declared no identity (NOID), until it confirms one
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
----@field guildSettings table<integer, WhosWho.GuildSettingsRecord> by club ID: the latest record accepted for each guild
+---@field guildSettings table<integer, WhosWho.HeldGuildSettings> by club ID: each guild's settings as I hold them
 ---@field guildLists table<integer, WhosWho.GuildListRevision> by club ID: my list's revision for each guild
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
@@ -126,6 +126,10 @@ function Store.MigrateData(data)
     end
     -- 0.1.1: one signature, of the only record; each record is now signed apart (Identity.SignedRecord).
     data.identity.sig, data.identity.signedDigest = nil, nil
+    -- 0.1.1: a guild's settings were its record alone.
+    for clubId, held in pairs(data.guildSettings) do
+        if held.v then data.guildSettings[clubId] = { record = held } end
+    end
     -- 0.1.0-beta.1: a forgotten identity kept only the revision; its time is unknown, so it gets the migration's.
     for id, forgotten in pairs(data.forgotten) do
         if type(forgotten) == "number" then data.forgotten[id] = { rev = forgotten, at = time() } end

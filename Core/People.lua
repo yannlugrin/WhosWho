@@ -610,22 +610,27 @@ end
 local function forgetForced(clubId, memberGuids)
     local removed = false
     for id, person in pairs(ns.data.people) do
-        local removedFromPerson = false
+        local removedFromPerson = {}
         for guid, character in pairs(person.chars) do
             local inThatGuild = character.guild == clubId or character.guild == nil
             if not memberGuids[guid] and inThatGuild and isForced(person, guid) then
                 person.chars[guid] = nil
                 unindexCharacter(guid, id)
-                removedFromPerson = true
+                removedFromPerson[guid] = true
             end
         end
-        if removedFromPerson then
+        if next(removedFromPerson) then
             removed = true
             local hasPlayersCharacter = false
             for _, character in pairs(person.chars) do
                 if character.state ~= "added" then hasPlayersCharacter = true end
             end
-            if not hasPlayersCharacter then forget(id) end
+            if not hasPlayersCharacter then
+                forget(id)
+            elseif removedFromPerson[person.main] then
+                -- Its guild main forgotten, the person is shown under the record's main again.
+                person.main = person.signedRecord.main
+            end
         end
     end
     return removed

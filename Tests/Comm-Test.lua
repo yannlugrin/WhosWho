@@ -432,6 +432,9 @@ local function sent(filter)
     return n
 end
 
+-- What a character with no identity to share sends its guild, so its members still send theirs.
+local EMPTY_ANNOUNCEMENT = "1 ANNOUNCE 0 0 0 0 1 0 0"
+
 local function clearLog()
     world.log = {}
 end
@@ -467,7 +470,9 @@ annMain.friends = { danMain, bobMain }
 local dan = login(danAccount, danMain)
 local ann = login(annAccount, annMain)
 run(1)
-check(sent({ from = "Ann Main" }) == 0, "nothing goes out before a character is linked")
+check(sent({ from = "Ann Main" }) == 1 and sent({ from = "Ann Main", text = EMPTY_ANNOUNCEMENT, distribution = "GUILD" }) == 1,
+    "before a character is linked, only an empty announcement to the guild")
+clearLog()
 slash(ann, "link")
 run(1)
 check(sent({ from = "Ann Main" }) == 0, "a change waits")
@@ -611,7 +616,8 @@ check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1,
 logout(ann)
 ann = login(annAccount, annAlt)
 run(1)
-check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0, "an unlinked character does not announce")
+check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == sent({ from = "Ann Alt", text = EMPTY_ANNOUNCEMENT }),
+    "an unlinked character does not announce my identity, only an empty announcement")
 clearLog()
 slash(ann, "link")
 run(30)
@@ -811,7 +817,8 @@ logout(ann)
 clearLog()
 ann = login(annAccount, annAlt)
 run(10)
-check(sent({ from = "Ann Alt", type = "NOID" }) == 1 and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0
+check(sent({ from = "Ann Alt", type = "NOID" }) == 1
+    and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == sent({ from = "Ann Alt", text = EMPTY_ANNOUNCEMENT })
     and sent({ from = "Ann Alt", type = "GET" }) == 0 and sent({ from = "Bob Main", type = "GET" }) == 0,
     "at each login, the removed character declares no identity, and asks nothing")
 clearLog()
@@ -1728,15 +1735,25 @@ local niaId = nia.ns.Identity.Id()
 check(state(mia, niaMain.guid) == "confirmed" and state(oli, niaMain.guid) == "confirmed", "Mia and Oli know Nia")
 check(mia.ns.People.Find(niaAlt.guid) == nil, "not the alt she never linked")
 
-local miaRevision, niaRevision = mia.ns.Identity.Revision(), nia.ns.Identity.Revision()
+local miaRevision = mia.ns.Identity.Revision()
 clearLog()
 mia.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = true })
 run(60)
-check(nia.ns.Identity.Revision() == niaRevision + 1, "the rule turned on: a new revision for a member it adds a character to")
-check(mia.ns.Identity.Revision() == miaRevision, "none for a member whose record it doesn't change")
+check(mia.ns.Identity.Revision() == miaRevision, "the rule turned on: no new revision for a member it changes nothing to")
+check(nia.ns.Scopes.EnforcedLinkingChoiceNeeded() == GUILD3 and sent({ from = "Nia Main", distribution = "GUILD" }) == 0
+    and mia.ns.People.Get(nia.ns.Identity.Id()).signedRecord.chars[niaAlt.guid] == nil,
+    "a member with a character the rule adds must answer first: nothing goes to the guild until then")
+local niaRevision = nia.ns.Identity.Revision()
+clearLog()
+nia.ns.Identity.SetEnforcedLinkingOptIn(GUILD3, true)
+run(60)
+check(nia.ns.Identity.Revision() == niaRevision + 1 and not nia.ns.Scopes.EnforcedLinkingChoiceNeeded(),
+    "she opts in: a new revision")
 check(sent({ from = "Nia Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
     and sent({ from = "Nia Main", type = "ANNOUNCE", target = "Oli Main" }) == 0,
     "announced to the guild alone: what everyone else gets didn't change")
+check(lastWantsAnnouncement({ from = "Nia Main", distribution = "GUILD" }) and sent({ type = "ANNOUNCE", target = "Nia Main" }) >= 1,
+    "sharing with the guild just started: its members send theirs back")
 local niaAltForMia = mia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid]
 check(niaAltForMia and niaAltForMia.guild.forced, "a member of the guild gets the alt the rule adds, marked")
 
@@ -1798,6 +1815,64 @@ run(60)
 check(sent({ from = "Nia Alt", type = "REC" }) >= 1 and sent({ from = "Pia Main", type = "GET", target = "Nia Alt" }) == 1,
     "a character the rule adds answers its guild's GETs")
 check(pia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid].guild.forced, "with the guild's record")
+-- Qia never linked anything: her empty announcement brings the members' back, so she learns the guild's rule and is
+-- asked. Refusing sends nothing to the guild; opting in gives it an identity holding her character in it.
+local qiaAccount = account("Qia")
+local qiaMain = character("Qia Main", "Player-1-0000FA01", PRIEST, GUILD3)
+clearLog()
+local qia = login(qiaAccount, qiaMain)
+run(60)
+check(sent({ from = "Qia Main", text = EMPTY_ANNOUNCEMENT, distribution = "GUILD" }) == 1
+    and sent({ type = "ANNOUNCE", target = "Qia Main" }) >= 1 and sent({ type = "GET", target = "Qia Main" }) == 0,
+    "a member with nothing to share announces empty: the members answer, and nobody asks for a record")
+check(qia.ns.GuildSettings.EnforcesLinking(GUILD3) and qia.ns.Scopes.EnforcedLinkingChoiceNeeded() == GUILD3,
+    "she learns the guild's rule from their answers, and must be asked")
+qia.ns.Identity.SetEnforcedLinkingOptIn(GUILD3, false)
+clearLog()
+run(60)
+check(not qia.ns.Scopes.EnforcedLinkingChoiceNeeded() and sent({ from = "Qia Main" }) == 0, "refusing: nothing to the guild")
+qia.ns.Identity.SetEnforcedLinkingOptIn(GUILD3, true)
+run(60)
+check(state(mia, qiaMain.guid) == "confirmed" and holderId(mia, qiaMain.guid) == qia.ns.Identity.Id(),
+    "opting in: the guild knows her character, under an identity without linked characters")
+logout(qia)
+-- Rob has an identity, from a character outside the guild, and doesn't know Mia: his unlinked character in the guild
+-- still learns its rule, from settings whose signer he can't confirm, and is asked.
+local robAccount = account("Rob")
+local robMain = character("Rob Main", "Player-1-0000FB01", WARRIOR)
+local robAlt = character("Rob Alt", "Player-1-0000FB02", MAGE, GUILD3)
+local rob = login(robAccount, robMain)
+slash(rob, "link")
+run(5)
+logout(rob)
+rob = login(robAccount, robAlt)
+run(60)
+check(rob.ns.People.Get(mia.ns.Identity.Id()) == nil and rob.ns.GuildSettings.EnforcesLinking(GUILD3)
+    and rob.ns.Scopes.EnforcedLinkingChoiceNeeded() == GUILD3,
+    "a character that doesn't know the signer still learns the guild's rule, and must be asked")
+-- Until he answers, that character is anonymous outside the guild too: in a group with Mia, it doesn't announce him.
+world.group = { robAlt, miaMain }
+rob.ns.settings.scopes.group = true
+clearLog()
+mia.ns.Protocol:SendCommMessage("WhosWho",
+    mia.ns.Codec.Announcement(mia.ns.Identity.Id(), mia.ns.Identity.Revision(), 10, true, true, nil, nil, 0), "PARTY")
+run(10)
+check(sent({ from = "Rob Alt", type = "ANNOUNCE" }) == sent({ from = "Rob Alt", text = EMPTY_ANNOUNCEMENT }),
+    "a character the guild's rule would add, not answered yet, never announces his identity")
+world.group = {}
+rob.ns.settings.scopes.group = false
+-- He links that character, then unlinks it: it declares no identity. Opting in, it announces his identity to the guild.
+rob.ns.Identity.Link(robAlt.guid)
+run(30)
+rob.ns.Identity.Unlink(robAlt.guid)
+run(30)
+clearLog()
+rob.ns.Identity.SetEnforcedLinkingOptIn(GUILD3, true)
+run(60)
+check(sent({ from = "Rob Alt", type = "ANNOUNCE", distribution = "GUILD" }) >= 1 and sent({ from = "Rob Alt", type = "NOID" }) == 0,
+    "a character I unlinked, which the guild's rule adds once I opted in, announces my identity to the guild, not NOID")
+logout(rob)
+
 logout(niaOnAlt)
 logout(mia)
 logout(oli)
@@ -1820,6 +1895,9 @@ do
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 1791403200.9f2c41ab") ~= nil,
         "a guild list revision <time>.<hash> is accepted")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0 later fields") ~= nil, "fields a later version adds are ignored")
+    decoded = Codec.Decode(Codec.EmptyAnnouncement())
+    check(decoded and decoded.type == "ANNOUNCE" and decoded.id == nil and decoded.wantsAnnouncement,
+        "an empty announcement carries no identity, and asks for the receiver's")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0") == nil, "an announcement without the guild list field is refused")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 x") == nil, "a malformed guild list revision is refused")
 end

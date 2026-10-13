@@ -192,12 +192,14 @@ do
     local data = {
         identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true, guild = 7 } } },
         forgotten = { a = 7, b = { rev = 2, at = 50 } },
+        guildSettings = { [7] = { v = 1, guild = 7 } },
     }
     ns.Store.MigrateData(data)
     check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
         and data.identity.chars[G2].removedAt == nil, "a 0.1.0-beta.1 removal revision becomes a removal time")
     check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
         "a 0.1.0-beta.1 forgotten revision gets the migration's time")
+    check(data.guildSettings[7].record.guild == 7, "a 0.1.1 guild settings record is held in its entry")
     check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
         and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
 end
@@ -313,6 +315,20 @@ do
     local signed = I.SignedRecord(7, NORMAL)
     check(ns.Record.Verify(signed) and ns.Record.Verify(I.SignedRecord()), "each record is signed apart")
     check(I.SignedRecord(7, NORMAL).sig == signed.sig, "and its signature kept while its bytes stay the same")
+
+    check(not I.AllLinkedInGuild(7, NORMAL) and I.AllLinkedInGuild(8, NORMAL), "a character of mine in the guild isn't linked")
+    local revision = I.Revision()
+    I.SetEnforcedLinkingOptIn(7, false)
+    check(I.EnforcedLinkingOptIn(7) == false and I.Revision() == revision, "refusing the guild's rule changes no record")
+    I.SetEnforcedLinkingOptIn(7, true)
+    check(I.EnforcedLinkingOptIn(7) == true and I.Revision() == revision + 1, "opting in does")
+    I.SetEnforcedLinkingOptIn(7, nil)
+    check(I.EnforcedLinkingOptIn(7) == nil and I.Revision() == revision + 2, "and so does dropping it")
+
+    I.SetGuild(G1, nil)
+    I.SetGuildMain(G3)
+    guild = I.UnsignedRecord(7, NORMAL)
+    check(guild.chars[G3].guild.main and not guild.chars[G2].guild, "the guild main I chose comes before a linked character")
 end
 
 -- People: shared identities ------------------------------------------------------------------------
@@ -997,6 +1013,15 @@ do
     check(P.Get(B) == nil, "leaving the guild forgets what its rule added, and a person left without characters")
 
     P.UpdateGuildMembers(7, { [G1] = true, [G2] = true })
+    local C = string.rep("c", 64)
+    local underGuildMain = makeRecord(C, 1, { G5 })
+    underGuildMain.chars[G4] = { name = "N9", ruleset = NORMAL, classID = MAGE, guild = { forced = true, main = true } }
+    P.Accept(underGuildMain)
+    P.UpdateGuildMembers(7, { [G4] = true })
+    check(P.Get(C).main == G4, "a person shown under its guild main")
+    P.UpdateGuildMembers(7, { [G1] = true, [G2] = true })
+    check(not P.Exists(G4) and P.Get(C).main == G5, "its guild main forgotten, it is shown under the record's main again")
+
     P.MarkOutdated(7)
     check(P.Get(A).outdated and P.IsWanted(A, 2) and not P.IsNewer(A, 2),
         "joining a guild enforcing linking: a record held of a member is wanted again at its revision")
@@ -1038,6 +1063,51 @@ do
         "a later revision wins, then the greater signer")
 end
 
+-- Guild settings from a signer I don't know ----------------------------------------------------------
+
+fresh()
+do
+    local GS, I, P = ns.GuildSettings, ns.Identity, ns.People
+    -- The officer's records, signed with the officer's own identity.
+    I.EnsureKeys()
+    I.Refresh(G2, "Officer Main", PVP, PRIEST, 10)
+    I.Link(G2)
+    local officerId = I.Id()
+    local enforcing = GS.Change(7, { enable = true, enforceLinking = true }, G2, 2000)
+    ns.data.guildSettings = {}
+    local plain = GS.Change(7, { enable = true, enforceLinking = false }, G2, 1000)
+    ns.data.guildSettings = {}
+    local early = GS.Change(7, { enable = true, enforceLinking = false }, G2, 500)
+    ns.data.guildSettings = {}
+    local latest = GS.Change(7, { enable = true, enforceLinking = true }, G2, 3000)
+
+    -- My account: a linked character, but not the officer's identity.
+    fresh()
+    I.EnsureKeys()
+    I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
+    I.Link(G1)
+    check(GS.Accept(early, 3) == "refused",
+        "a guild's first settings, signed below the officers and sent by a member I don't trust: refused")
+    check(GS.Accept(early, 3, true) == "accepted" and not GS.EnforcesLinking(7),
+        "sent by a trusted member (an officer, or who invited me): taken unconfirmed")
+    check(GS.Accept(enforcing, 1) == "accepted" and GS.EnforcesLinking(7),
+        "signed by an officer in my roster, whoever sent them: taken unconfirmed, the guild's rule is known")
+    check(GS.Accept(plain, 1) == "stale", "an earlier unconfirmed one doesn't replace them")
+    check(GS.IsWanted(7, 1000) and not GS.IsWanted(7, 2000) and not GS.IsWanted(7, 0),
+        "while unconfirmed, any other revision a member announces is wanted")
+    P.Accept(makeRecord(officerId, 1, { G2 }))
+    P.Confirm(officerId, G2, 10)
+    check(GS.Accept(plain, 1) == "accepted" and not GS.EnforcesLinking(7),
+        "once the signer can be confirmed, a confirmed one replaces them, whatever its revision")
+    check(GS.Accept(enforcing, 1) == "accepted" and GS.Accept(plain, 1) == "stale" and not GS.IsWanted(7, 1000),
+        "then they compare by revision as usual")
+    check(GS.Accept(latest, nil, true) == "pending",
+        "once confirmed, a newer record waits for its signer to be confirmed and in my roster, whoever sent it")
+    GS.Joined(7)
+    check(GS.Accept(latest, nil, true) == "accepted" and GS.EnforcesLinking(7),
+        "joining the guild again, the settings held from before count as first settings: a trusted member's are taken")
+end
+
 -- Guild list ---------------------------------------------------------------------------------------
 
 fresh()
@@ -1063,6 +1133,11 @@ do
     local changedAt, changedHash = GL.Revision(7, NORMAL, 1100)
     check(changedAt == 1100 and changedHash ~= hash and GL.Revision(7, NORMAL, 1200) == 1100,
         "a change of its content gives it the time of the change, kept until the next one")
+    GL.ForgetGuild(7)
+    check(GL.Revision(7, NORMAL, 1250) == 0, "a guild's list forgotten, my next list of it is a first one again")
+    GL.Revision(7, NORMAL, 1260)
+    P.Confirm(B, G2, 10)
+    GL.Revision(7, NORMAL, 1270)
     GL.Forget()
     check(GL.Revision(7, NORMAL, 1300) == 0, "once forgotten, my next list is a first one again")
     check(GL.IsLater(5, "00", 4, "ff") and GL.IsLater(5, "ab", 5, "aa") and not GL.IsLater(5, "aa", 5, "ab"),
