@@ -2,7 +2,7 @@
 
 Architecture notes and contribution guidance for developers working on Who's Who. For end-user documentation, see [README.md](README.md).
 
-> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC), the guild settings (GSGET, GSET) and the guild lists (GLGET, GLIST, relayed records) are built and tested offline; Battle.net, guild-made identities and UI are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
+> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC), the guild settings (GSGET, GSET), enforced linking, the guild lists (GLGET, GLIST, relayed records) and the UI are built, all but the UI tested offline; Battle.net, guild-made identities and the Review tab are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
 
 ## File Map
 
@@ -89,11 +89,8 @@ WhosWho/
 Planned:
 
 ```
-├── Core/
-│   └── Trust.lua                  Rank gate for relayed identities
-├── Comm/
-└── UI/
-    └── PersonEditor.lua           Create and edit a manual identity, add alts
+└── Core/
+    └── Trust.lua                  Rank gate for relayed identities
 ```
 
 ## Architecture
@@ -133,7 +130,6 @@ Implemented:
 
 Planned:
 
-- `PLAYER_LOGIN`: decorations, settings.
 - `PLAYER_ENTERING_WORLD`: pruning, throttled.
 - `BN_CHAT_MSG_ADDON`: protocol over Battle.net.
 

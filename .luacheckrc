@@ -18,7 +18,7 @@ read_globals = {
     "C_AddOns", "C_BattleNet", "C_ChatInfo", "C_Club", "C_CreatureInfo", "C_FriendList", "C_GameRules", "C_GuildInfo", "C_Timer",
     "ChatFrame_AddMessageEventFilter", "ChatFrameUtil", "LIGHTGRAY_FONT_COLOR", "ChatFontNormal", "NUM_CHAT_WINDOWS",
     "TooltipDataProcessor", "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer",
-    "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR",
+    "CreateSettingsButtonInitializer", "StaticPopup_Show", "CANCEL", "EllesmereUI", "GetClassInfo", "C_ClassColor", "InputBoxInstructions_OnTextChanged", "NORMAL_FONT_COLOR", "GREEN_FONT_COLOR", "ORANGE_FONT_COLOR", "YELLOW_FONT_COLOR",
     "PanelTemplates_TabResize", "PanelTemplates_SetNumTabs", "PanelTemplates_SetTab", "CreateScrollBoxListLinearView",
     "ScrollUtil", "CreateDataProvider", "FriendsFrame_GetLastOnline", "MenuUtil", "GameTooltip", "GameTooltip_Hide", "HIGHLIGHT_FONT_COLOR", "GRAY_FONT_COLOR", "RED_FONT_COLOR", "GameTooltipTextLeft1", "MinimalSliderWithSteppersMixin", "UnitIsFriend", "GetPlayerInfoByGUID", "C_PlayerInfo", "PlayerLocation", "ChatFrame_SendTell", "CreateSettingsCheckboxWithButtonInitializer", "WHISPER", "INVITE", "C_PartyInfo", "CreateColor", "Mixin", "ScrollBoxConstants",
     "Ambiguate", "BNConnected", "BNGetNumFriends", "C_EventUtils", "BNSendGameData", "BNET_CLIENT_WOW",

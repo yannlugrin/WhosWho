@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-14
+
 ### Added
 
 - **Guild settings**: the guild master and officers get a Who's Who tab in the guild panel, to enable Who's Who for the guild. The setting reaches every member who uses Who's Who, signed so that only those ranks can change it; `/ww status` shows it.
@@ -14,7 +16,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ### Changed
 
-- **People tab filter**: show your friends, your guild mates, everyone else, or any mix of them, instead of filtering by how an identity was confirmed. A Battle.net friend's BattleTag shows in their detail panel.
+- **People tab filter**: show your friends, your guildmates, everyone else, or any mix of them, instead of filtering by how an identity was confirmed. A Battle.net friend's BattleTag shows in their detail panel.
 - **Last seen**: a guild member you haven't seen online no longer gets a last seen time from the guild roster, only their level.
 
 ### Fixed
@@ -81,7 +83,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.1.1...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.0-beta.1...0.1.0
 [0.1.0-beta.1]: https://github.com/yannlugrin/WhosWho/releases/tag/0.1.0-beta.1
