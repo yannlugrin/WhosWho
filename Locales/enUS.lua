@@ -232,6 +232,19 @@ L["Linking also turns sharing with your guild on: it then sees all your linked c
 L["Share without linking"] = true
 L["Refuse"] = true
 L["Only this guild's members see the characters you share without linking."] = true
+L["%s requires linking: your characters in it stay shared with its members. Leave the guild to stop."] = true
+L["Your characters in a guild whose rule you accepted stay shared with its members. Leave it to stop."] = true
 
 -- Guild tab
+L["Requires linking:"] = true
+L["your characters here are linked and shared with the guild."] = true
+L["your characters here are shared with the guild without being linked."] = true
+L["you refused, so Who's Who shares nothing with this guild."] = true
+L["you haven't answered yet, so Who's Who shares nothing with this guild."] = true
+L["Nothing is shared with this guild: no character is linked to your identity."] = true
+L["Your identity is shared with this guild's members."] = true
+L["Your identity isn't shared with this guild: sharing with your guild is off."] = true
+L["Change"] = true
+L["Answer"] = true
+L["Share"] = true
 L["%d |4main character:main characters; · %d |4alt:alts; · %d unknown"] = true

@@ -26,7 +26,7 @@ Open the window with the minimap button, the add-on compartment next to the mini
 - Nothing about you leaves your client until you link a character to your identity or accept a guild's rule. A character that shares nothing still lets its guild know it uses Who's Who, without any identity, to learn the guild's rules.
 - A character you unlink tells the players who knew it, each time you log in on it, that it belongs to no identity, so they drop it, even if they were offline when you unlinked it. That message doesn't carry your identity: nobody can trace the character back to you from it.
 - Who's Who never sends BattleTags or Battle.net account information. It keeps your Battle.net friends' BattleTags on your computer only, to show them in the People tab.
-- In a guild that requires linking, nothing is shared with it until you accept. The characters you share there without linking them are seen by its members only, never outside it.
+- In a guild that requires linking, nothing is shared with it until you accept. The characters you share there without linking them are seen by its members only, never outside it. Once you accepted, only leaving the guild stops sharing with it.
 - Your identity is signed with a key that stays on your computer, so nobody else can change it, even when it is passed along by other players.
 - What a player shares about themselves can't be changed by others. You can still give anyone your own nickname for them; only you see it.
 - **Forget me** in the settings unlinks all your characters and removes your nickname; players who know you forget you too, once Who's Who reaches them.

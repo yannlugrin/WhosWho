@@ -283,6 +283,50 @@ function Identity.EnforcedLinkingOptIn(clubId)
     return optIns and optIns[clubId]
 end
 
+---Whether my identity is complete in a guild enforcing linking: I opted in, or all my characters in it are linked with
+---my Guild scope on.
+---@param clubId integer
+---@param ruleset WhosWho.Ruleset
+---@return boolean
+function Identity.CompleteInGuild(clubId, ruleset)
+    return Identity.EnforcedLinkingOptIn(clubId) == true
+        or (ns.Scopes.Get("guild") and Identity.AllLinkedInGuild(clubId, ruleset))
+end
+
+---@type fun(clubId: integer)[]
+local guildRuleKeptListeners = {}
+
+---Adds a function called with a guild's club ID when a change would have stopped sharing with that guild, whose rule I
+---had accepted: its members keep getting my characters in it.
+---@param listener fun(clubId: integer)
+function Identity.OnGuildRuleKept(listener)
+    guildRuleKeptListeners[#guildRuleKeptListeners + 1] = listener
+end
+
+-- Before a change that would leave my identity incomplete in a guild enforcing linking (the Guild scope turned off, a
+-- character unlinked): my identity complete there means I accepted its rule, which only leaving the guild undoes. It is
+-- saved as accepted, so the guild keeps getting my characters in it. Only that guild (clubId), or all of them.
+local function keepGuildRulesAccepted(clubId)
+    local kept = {}
+    for _, character in pairs(data().chars) do
+        local guildId = character.guild and character.guild.id
+        if guildId and (clubId == nil or guildId == clubId) and not kept[guildId]
+            and ns.GuildSettings.EnforcesLinking(guildId) and Identity.EnforcedLinkingOptIn(guildId) ~= true
+            and Identity.CompleteInGuild(guildId, character.ruleset) then
+            kept[guildId] = true
+        end
+    end
+    for guildId in pairs(kept) do
+        Identity.SetEnforcedLinkingOptIn(guildId, true)
+        for _, listener in ipairs(guildRuleKeptListeners) do listener(guildId) end
+    end
+end
+
+---Before the Guild scope turns off: the guilds whose rule I accepted keep getting my characters in them.
+function Identity.KeepGuildRulesAccepted()
+    keepGuildRulesAccepted(nil)
+end
+
 ---Saves my answer to a guild enforcing linking, or drops it (nil). Opting in or out changes what its members get.
 ---@param clubId integer
 ---@param optIn boolean?
@@ -379,6 +423,8 @@ end
 ---character the main.
 ---@param guid string
 function Identity.Unlink(guid)
+    local clubId = Identity.GuildId(guid)
+    if clubId then keepGuildRulesAccepted(clubId) end
     setLinked(guid, false)
 end
 
@@ -386,6 +432,7 @@ end
 ---players forget the identity once its last character did. Every character becomes unregistered, so each one is asked
 ---again at its next login.
 function Identity.Forget()
+    keepGuildRulesAccepted(nil)
     local identity = data()
     local unlinked = {}
     for _, character in pairs(identity.chars) do

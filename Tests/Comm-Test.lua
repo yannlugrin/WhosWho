@@ -1863,16 +1863,30 @@ check(sent({ from = "Rob Alt", type = "ANNOUNCE" }) == sent({ from = "Rob Alt", 
     "a character the guild's rule would add, not answered yet, never announces his identity")
 world.group = {}
 rob.ns.settings.scopes.group = false
--- He links that character, then unlinks it: it declares no identity. Opting in, it announces his identity to the guild.
+-- He links that character: his identity is complete in the guild, so he accepted its rule. Unlinking it keeps that:
+-- the guild still gets the character, which announces his identity to it, not NOID; turning the Guild scope off too.
+local robKept = 0
+rob.ns.Identity.OnGuildRuleKept(function(clubId) if clubId == GUILD3 then robKept = robKept + 1 end end)
 rob.ns.Identity.Link(robAlt.guid)
 run(30)
-rob.ns.Identity.Unlink(robAlt.guid)
-run(30)
 clearLog()
-rob.ns.Identity.SetEnforcedLinkingOptIn(GUILD3, true)
+rob.ns.Identity.Unlink(robAlt.guid)
 run(60)
+check(rob.ns.Identity.EnforcedLinkingOptIn(GUILD3) == true and robKept == 1 and rob.ns.Scopes.EnforcedGuild() == GUILD3,
+    "unlinking a character of a guild whose rule I accepted keeps the rule accepted, with a notice")
 check(sent({ from = "Rob Alt", type = "ANNOUNCE", distribution = "GUILD" }) >= 1 and sent({ from = "Rob Alt", type = "NOID" }) == 0,
-    "a character I unlinked, which the guild's rule adds once I opted in, announces my identity to the guild, not NOID")
+    "the character, unlinked, announces my identity to the guild, not NOID")
+rob.ns.Scopes.Set("guild", false)
+check(rob.ns.Scopes.SharesWithGuild() and robKept == 1, "the Guild scope off, the guild still gets my characters in it")
+rob.ns.Scopes.Set("guild", true)
+-- Mia, all her characters in the guild linked, accepted its rule without answering it: turning the Guild scope off
+-- saves that answer, and the guild still gets her.
+check(mia.ns.Identity.EnforcedLinkingOptIn(GUILD3) == nil and mia.ns.Scopes.GuildRuleAnswer() == "accepted",
+    "all linked, the rule is accepted without an answer saved")
+mia.ns.Scopes.Set("guild", false)
+check(mia.ns.Identity.EnforcedLinkingOptIn(GUILD3) == true and mia.ns.Scopes.SharesWithGuild(),
+    "turning the Guild scope off saves it as accepted: the guild still gets her characters in it")
+mia.ns.Scopes.Set("guild", true)
 logout(rob)
 -- Sam refused the guild's rule on his alt in it; his main, linked, with the Guild scope on, joins it. The game gives the
 -- roster before the club ID: until it does, the guild can't be told apart from one without the rule, so nothing goes.

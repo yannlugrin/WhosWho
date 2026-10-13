@@ -72,7 +72,7 @@ panel.LinkedCount:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT", -SIDE_PADDING, -82)
 
 local inset = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
 inset:SetPoint("TOPLEFT", 8, -88)
-inset:SetPoint("BOTTOMRIGHT", -6, 34)
+inset:SetPoint("BOTTOMRIGHT", -6, Lists.FOOTER_SPACE + 4)
 
 local COLUMNS = {
     { key = "Linked", width = 50, label = L["Linked"], justify = "CENTER" },
@@ -237,15 +237,18 @@ ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
 
 -- My identity: footer ----------------------------------------------------------------------------
 
-panel.SharingSettingsButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local footer = Lists.CreateFooter(panel)
+panel.Footer = footer
+
+panel.SharingSettingsButton = CreateFrame("Button", nil, footer.Content, "UIPanelButtonTemplate")
 panel.SharingSettingsButton:SetText(L["Sharing settings"])
 panel.SharingSettingsButton:SetSize(panel.SharingSettingsButton:GetTextWidth() + 40, 22)
-panel.SharingSettingsButton:SetPoint("BOTTOMRIGHT", -8, 6)
+panel.SharingSettingsButton:SetPoint("RIGHT", -5, 0)
 panel.SharingSettingsButton:SetScript("OnClick", function() ns.Commands.settings("") end)
 
-panel.NicknameNote = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-panel.NicknameNote:SetPoint("BOTTOMLEFT", SIDE_PADDING, 6)
-panel.NicknameNote:SetPoint("TOPRIGHT", panel.SharingSettingsButton, "TOPLEFT", -16, 0)
+panel.NicknameNote = footer.Content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+panel.NicknameNote:SetPoint("LEFT", 10, 0)
+panel.NicknameNote:SetPoint("RIGHT", panel.SharingSettingsButton, "LEFT", -16, 0)
 panel.NicknameNote:SetJustifyH("LEFT")
 panel.NicknameNote:SetText(L["Other players see your nickname instead of your main character's name; each of them can still give you their own nickname, which only they see."])
 

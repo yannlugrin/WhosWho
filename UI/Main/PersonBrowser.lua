@@ -168,19 +168,20 @@ function Browser:ScrollTo(id)
         ScrollBoxConstants.AlignCenter)
 end
 
----Builds the list from listTop down, the detail panel at its right and the key under both. A left click on a person's
----row calls panel:Select with its ID.
+---Builds the list from listTop down, the detail panel at its right and the key under both, listBottom above the
+---panel's bottom. A left click on a person's row calls panel:Select with its ID.
 ---@param panel Frame the tab, with a Select method
 ---@param listTop number offset of the list's top from the panel's top
+---@param listBottom number space the tab keeps under the key
 ---@return WhosWho.PersonBrowserFrames
-function PersonBrowser.Create(panel, listTop)
+function PersonBrowser.Create(panel, listTop, listBottom)
     local browser = Mixin({}, Browser)
 
     -- List -------------------------------------------------------------------------------------------
 
     local listInset = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
     listInset:SetPoint("TOPLEFT", 8, listTop)
-    listInset:SetPoint("BOTTOMLEFT", 8, KEY_HEIGHT + 4)
+    listInset:SetPoint("BOTTOMLEFT", 8, listBottom + KEY_HEIGHT + 4)
     listInset:SetWidth(LIST_WIDTH)
     browser.ListInset = listInset
 
@@ -274,7 +275,7 @@ function PersonBrowser.Create(panel, listTop)
 
     local detailInset = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
     detailInset:SetPoint("TOPLEFT", listInset, "TOPRIGHT", PANEL_GAP, 0)
-    detailInset:SetPoint("BOTTOMRIGHT", -6, KEY_HEIGHT + 4)
+    detailInset:SetPoint("BOTTOMRIGHT", -6, listBottom + KEY_HEIGHT + 4)
     browser.DetailInset = detailInset
 
     browser.NoSelection = detailInset:CreateFontString(nil, "OVERLAY", "GameFontDisable")
@@ -431,7 +432,7 @@ function PersonBrowser.Create(panel, listTop)
         if previous then
             texture:SetPoint("LEFT", previous, "RIGHT", 14, 0)
         else
-            texture:SetPoint("BOTTOMLEFT", 14, 10)
+            texture:SetPoint("BOTTOMLEFT", 14, listBottom + 10)
         end
         local label = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         label:SetPoint("LEFT", texture, "RIGHT", 3, 0)

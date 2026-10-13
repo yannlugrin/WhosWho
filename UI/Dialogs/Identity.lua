@@ -362,11 +362,28 @@ local function askGuildRule()
         return true
     end
     guildRuleAsked, waitingForCombatEnd = true, false
-    IdentityDialogs.HideLinkPrompts()
-    IdentityDialogs.GuildRule:SetGuild(clubId, ns.Identity.Ruleset(guid))
-    IdentityDialogs.GuildRule:Show()
+    IdentityDialogs.ShowGuildRule()
     return true
 end
+
+---Shows the guild rule dialog for my current guild, in place of the first-login prompt.
+function IdentityDialogs.ShowGuildRule()
+    local guid = UnitGUID("player")
+    IdentityDialogs.HideLinkPrompts()
+    IdentityDialogs.GuildRule:SetGuild(ns.Identity.GuildId(guid), ns.Identity.Ruleset(guid))
+    IdentityDialogs.GuildRule:Show()
+end
+
+-- A change that would have stopped sharing with a guild whose rule I accepted: it keeps getting my characters in it.
+ns.Identity.OnGuildRuleKept(function(clubId)
+    local guildName = clubId == ns.Identity.GuildId(UnitGUID("player")) and GetGuildInfo("player")
+    if guildName then
+        ns.Print(L["%s requires linking: your characters in it stay shared with its members. Leave the guild to stop."]
+            :format(guildName))
+    else
+        ns.Print(L["Your characters in a guild whose rule you accepted stay shared with its members. Leave it to stop."])
+    end
+end)
 
 local guildRuleEvents = CreateFrame("Frame")
 guildRuleEvents:RegisterEvent("PLAYER_LOGIN")

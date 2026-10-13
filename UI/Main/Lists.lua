@@ -125,6 +125,38 @@ function Lists.Place(region, row, column)
     if region.SetJustifyH then region:SetJustifyH(column.justify or "LEFT") end
 end
 
+-- Footer -----------------------------------------------------------------------------------------
+
+Lists.FOOTER_HEIGHT = 30
+-- What a tab keeps under its content for the footer, the divider above it included.
+Lists.FOOTER_SPACE = Lists.FOOTER_HEIGHT + 10
+
+---A tab's footer: a box along its bottom, under a divider.
+---@class WhosWho.Footer: Frame
+---@field Content Frame where the footer's regions go: a frame of its own, which the skin leaves as it is
+---@field Divider Texture
+
+---@param panel Frame the tab
+---@return WhosWho.Footer
+function Lists.CreateFooter(panel)
+    local footer = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
+    footer:SetPoint("BOTTOMLEFT", 8, 8)
+    footer:SetPoint("BOTTOMRIGHT", -6, 8)
+    footer:SetHeight(Lists.FOOTER_HEIGHT)
+
+    footer.Divider = panel:CreateTexture(nil, "ARTWORK")
+    footer.Divider:SetAtlas("Options_HorizontalDivider")
+    footer.Divider:SetHeight(1)
+    footer.Divider:SetPoint("BOTTOMLEFT", footer, "TOPLEFT", 0, 4)
+    footer.Divider:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT", 0, 4)
+
+    footer.Content = CreateFrame("Frame", nil, footer)
+    footer.Content:SetAllPoints()
+
+    ns.Skin.Apply(function(S) S.Inset(footer) end)
+    return footer
+end
+
 -- Headers ----------------------------------------------------------------------------------------
 
 -- A column label: plain text, or a button for a sortable column, white on hover, with the sort arrow when it is the

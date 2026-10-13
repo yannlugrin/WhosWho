@@ -59,7 +59,7 @@ end)
 
 -- List and detail panel --------------------------------------------------------------------------
 
-local browser = PersonBrowser.Create(panel, LIST_TOP)
+local browser = PersonBrowser.Create(panel, LIST_TOP, 0)
 panel.Browser = browser
 
 -- Empty state ------------------------------------------------------------------------------------

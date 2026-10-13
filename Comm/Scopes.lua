@@ -47,17 +47,10 @@ local function guildMember(name)
     return false
 end
 
--- Whether my identity is complete in a guild enforcing linking: I opted in, or all my characters in it are linked with
--- my Guild scope on.
-local function completeIn(clubId, ruleset)
-    return Identity.EnforcedLinkingOptIn(clubId) == true
-        or (Scopes.Get("guild") and Identity.AllLinkedInGuild(clubId, ruleset))
-end
-
 -- Whether I share with a guild one of my characters is in: with the Guild scope; one enforcing linking, only once my
 -- identity is complete there, whatever my Guild scope.
 local function sharesWith(clubId, ruleset)
-    if GuildSettings.EnforcesLinking(clubId) then return completeIn(clubId, ruleset) end
+    if GuildSettings.EnforcesLinking(clubId) then return Identity.CompleteInGuild(clubId, ruleset) end
     return Scopes.Get("guild")
 end
 
@@ -68,7 +61,9 @@ end
 function Scopes.EnforcedGuild()
     local guid = UnitGUID("player")
     local clubId, ruleset = IsInGuild() and Identity.GuildId(guid), Identity.Ruleset(guid)
-    if not (clubId and GuildSettings.EnforcesLinking(clubId) and completeIn(clubId, ruleset)) then return nil, nil end
+    if not (clubId and GuildSettings.EnforcesLinking(clubId) and Identity.CompleteInGuild(clubId, ruleset)) then
+        return nil, nil
+    end
     return clubId, ruleset
 end
 
@@ -80,6 +75,16 @@ function Scopes.EnforcedLinkingChoiceNeeded()
     if not (clubId and GuildSettings.EnforcesLinking(clubId)) then return nil end
     if Scopes.EnforcedGuild() or Identity.EnforcedLinkingOptIn(clubId) ~= nil then return nil end
     return clubId
+end
+
+---My answer to my current guild's rule, nil while it doesn't enforce linking: accepted (my identity is complete there),
+---refused, or not answered yet.
+---@return "accepted"|"refused"|"unanswered"?
+function Scopes.GuildRuleAnswer()
+    local clubId = IsInGuild() and Identity.GuildId(UnitGUID("player"))
+    if not (clubId and GuildSettings.EnforcesLinking(clubId)) then return nil end
+    if Scopes.EnforcedGuild() then return "accepted" end
+    return Identity.EnforcedLinkingOptIn(clubId) == false and "refused" or "unanswered"
 end
 
 -- Whether the character I play shares with my guild only: one I didn't link, which my guild's rule adds.
@@ -540,6 +545,7 @@ end
 ---@param enabled boolean
 function Scopes.Set(key, enabled)
     if Scopes.Get(key) == enabled then return end
+    if key == "guild" and not enabled then Identity.KeepGuildRulesAccepted() end
     ns.settings.scopes[key] = enabled
     if key == "guild" then Identity.GuildScopeChanged() end
     if not enabled then return end
