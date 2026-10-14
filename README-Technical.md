@@ -2,7 +2,7 @@
 
 Architecture notes and contribution guidance for developers working on Who's Who. For end-user documentation, see [README.md](README.md).
 
-> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC), the guild settings (GSGET, GSET), enforced linking, the guild lists (GLGET, GLIST, relayed records) and the UI are built, all but the UI tested offline; Battle.net, guild-made identities and the Review tab are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
+> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC), the guild settings (GSGET, GSET), enforced linking, the guild lists (GLGET, GLIST, relayed records) and the UI are built, all but the UI tested offline; Battle.net, guild records (GIGET, GIREC) and the Review tab are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
 
 ## File Map
 
@@ -149,8 +149,8 @@ Everything is an **identity** (a person): a nickname and characters.
 | **Shared identity** | Another player, about themselves (signed record) | Authoritative: its characters and main |
 | **Manual identity** | This player, for someone without the add-on (ID `M<n>`) | Local claim |
 | **Added alt** | This player, on a shared or manual identity | Local claim, state `added` |
-
-Guild identities, set at guild level for players without the add-on, are decided but not built (see Guild Sharing).
+| **Guild identity** | The guild master or an officer, for someone in the guild without an identity (ID `G<hex>`, planned, see Guild Sharing, Guild records) | Guild claim, shared with that guild only |
+| **Guild link** | The guild master or an officer: a character in the guild on a guild identity or a shared one (planned) | Guild claim, state `guildLinked`; a player's record wins |
 
 Each character of a person has a **state**:
 
@@ -160,6 +160,7 @@ Each character of a person has a **state**:
 | `listed` | Listed in the player's record, not confirmed yet: trusted by default, shown as unconfirmed |
 | `guild` | Listed in the player's record, which a trusted member of my guild passed on, not the player (see Guild Lists); not confirmed yet |
 | `added` | Added by me (manual identity, or an alt on a shared one) |
+| `guildLinked` | Linked by an officer of my guild, on a guild identity or a shared one (planned, see Guild Sharing) |
 
 Each person has **one table of characters** (`chars`), each with its state; that table is what the frames list. A shared person also keeps the player's **record** exactly as received: what the player declared, signed, used to compare revisions and to relay it to others. A new revision copies the player's nickname, main and characters into the person, keeping confirmed states, activity and my added characters; everything else reads the person, not the record.
 
@@ -194,6 +195,27 @@ Identity record (shared)
   sig       signature over the other fields; a record holding any other key, or a character or guild any other
             field, is refused
 ```
+
+A field added to the identity record or the guild settings record is refused by every older client: its signed bytes are a fixed list of fields, so any other field would be unsigned. Guild records (planned) are signed in a form that leaves room for later fields:
+
+```
+Guild record (planned, see Guild Sharing, Guild records)
+  v           format version; a higher one is refused: raised only for a field older clients must not ignore
+  guild       club ID
+  id          the identity it is about: a player's identity ID, or a guild identity's "G<16 hex>"
+  nickname    guild identity only, optional
+  main        guild identity only: GUID, one of chars
+  chars       { [guid] = { name, ruleset, classID } }   characters the guild links to that identity
+  signer      identity ID of the member of the trusted rank who signed it
+  signerGuid  the character it was signed from
+  rev         server time when signed
+  sig         signature over every other field
+  (later: the guild's info about the person, such as a role, a note or a join date, and about each character)
+```
+
+- **Signed bytes**: every field but `sig`, whatever its name: keys sorted, strings with their length before them, each value with its type; strings, integers, booleans and tables only. A client verifies a record holding fields it doesn't know, keeps and passes it on whole, and shows only the fields it knows. Known fields are checked as strictly as in the identity record.
+- **Limits**, checked by `Validate` before the record enters the verification queue: the number of keys per table and in all, each string's length, the nesting depth, and the length of the signed bytes, at most 16 KB (hashing them takes about 75 ms in game, in one frame; measured: 4.6 ms per KB). Each limit is set from the largest legitimate record, built by a test from the field limits (`Record.MAX_CHARACTERS`, `Record.MAX_NAME_LENGTH` in multi-byte characters, the later fields' own limits), which must stay under half of it: a limit raised later is refused by every older client.
+- The identity record and the guild settings move to this form at the protocol review before 1.0.0, when a raised `v` no longer leaves clients behind.
 
 ### Character Confirmations
 
@@ -237,7 +259,9 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 | `GSGET` | nothing | To one member of my guild who announced newer guild settings, by whisper (see Guild Settings) |
 | `GSET` | the signed guild settings record | When the guild master or an officer changes them, to the guild; in answer to a `GSGET`, by whisper |
 | `GLGET` | nothing | To one member of my guild who announced a later guild list, by whisper (see Guild Lists) |
-| `GLIST` | the club ID, the list's revision and its identities with their revisions | In answer to `GLGET`s: on `GUILD` for several, by whisper for one |
+| `GLIST` | the club ID, the list's revision and its identities with their revisions; planned: its guild records with their revisions (`guildEntries`, ignored by older clients) | In answer to `GLGET`s: on `GUILD` for several, by whisper for one |
+| `GIGET` | planned: 1 to 3 identity IDs, a guild record about each asked for | To members of my guild whose list has a newer guild record (see Guild Lists) |
+| `GIREC` | planned: one signed guild record | When the guild master or an officer changes it, on `GUILD`; in answer to `GIGET`s (see Guild Sharing, Guild records) |
 
 The 30 and 60 second values below are starting values, to adjust in game.
 
@@ -366,7 +390,7 @@ My own identity ID is ignored. An anonymous character stores less (see Linked an
 
 ### Guild Sharing
 
-Built: the consent, the guild settings, enforced linking with its opt-in, the guild lists and the relayed records, each below. Not built: guild identities for players without the add-on (see Data Model), and the parts each item marks.
+Built: the consent, the guild settings, enforced linking with its opt-in, the guild lists and the relayed records, each below. Not built: guild identities and guild links (below), and the parts each item marks.
 
 - **Consent.** A record is passed on to a guild only when its `guild.consent` is true: the owner's Guild scope. A player who shares with friends only is never spread through their guild.
 - **Guild settings record.** Built: see Guild Settings. Whether linking characters in the guild is enforced is built (see Enforced linking). Later settings: the rank trusted for relayed identities (see Rank Gate), and which ranks may change the settings.
@@ -390,12 +414,21 @@ Built: the consent, the guild settings, enforced linking with its opt-in, the gu
     - **Joining**: the game may give the roster before the guild's club ID; until it does, the character's guild has no ID (`Identity.GuildIdPending`), nothing goes to the guild (`Scopes.SharesWithGuild`), and the join announcement waits (`Protocol.GuildRosterChanged`; the roster is asked for again every 10 seconds until it comes with the club ID). With it, the rule of a guild whose settings I hold applies from the first message: a guild I refused or haven't answered gets only the empty announcement. The settings of a guild I never held settings of come from its members' answers to that announcement; until they arrive, that guild counts as not enforcing linking.
     - **Going back** on a choice: only a refusal, or an unanswered rule, can be answered again (Guild tab, see above); an accepted rule stays accepted until I leave the guild.
   - **Not built yet**: a member of a guild enforcing linking whom another scope allows (my Guild scope off, a friend in the guild) is entitled to my linked characters and my characters in the guild, but may pass on in the guild only the latter. That needs two records from me, held apart; until then, such a member gets the guild's record only: less than allowed, never more.
-- **Guild lists.** Built: see Guild Lists. Each member keeps its own list: for each identity with consent and a confirmed character in the guild, and each guild-made identity (planned), its ID and the highest revision the member holds. The list's revision is `<server time>.<hash>`: when it last gained a newer identity revision, and a short hash of its content. The announcement carries it.
+- **Guild lists.** Built: see Guild Lists. Each member keeps its own list: for each identity with consent and a confirmed character in the guild, its ID and the highest revision the member holds; and, apart, each guild record (planned, `guildEntries`), its ID and revision. The list's revision is `<server time>.<hash>`: when it last gained a newer identity revision, and a short hash of its content. The announcement carries it.
   - Mine older (or the same time with a lower hash): I ask **one** member who announced a newer list for it, take the highest revision per identity, fetch the records I lack (one `GET` may name several), then give my list a new time, so members holding an older list ask me in turn.
   - Mine newer or equal: I do nothing; several members asking me at once get one answer on `GUILD` (fewest messages, as for `REC`s).
   - Lists are hints, not data: every record is still verified with its owner's signature, so lists are not signed. A revision nobody delivers is dropped after the usual retry.
 - **Relayed records.** Built (see Guild Lists). From a guild member who is not the record's owner: a newer revision of an identity I hold is accepted from any member; an identity I don't hold yet only from a member of the trusted rank, stored with every character listed until I see one. A record sent by the owner's own character is handled as today.
-- **Guild-made identities**, for players without the add-on: one record each, signed by the member of the trusted rank who wrote it, revision = server time, the most recent wins. A player's own identity takes precedence, as over my manual identities.
+- **Guild records** (guild identities and guild links). Not built. The guild master and the officers, from the guild panel's Who's Who tab, create a guild identity for a character in the guild, and link characters in the guild to it or to a member's shared identity. The guild shows who is whose alt without enforcing linking, and keeps it up to date with as little work from its officers as possible. Shared with that guild only.
+  - **One record per guild and identity**: what the guild says about one person (see Records, Guild record). About a member who shares an identity, it has that identity's ID: the same person, and an ID is enough to ask for either record, the player's (`GET`) or the guild's (`GIGET`). About someone without an identity, the guild makes one: a random ID `G<16 hex>`. A change sends that one record again, never the guild's whole set.
+  - **Characters**: only characters in the guild. A character listed in a player's own record is that player's and is not linked by the guild.
+  - **Signed** by the member of the trusted rank who last changed it, checked as for the guild settings (the signing character confirmed under the signer's identity, its rank index in my own roster at most `GuildList.TRUSTED_RANK_INDEX`); revision = server time, the most recent wins. Two officers changing the same identity at once: the later signature wins, for that identity only.
+  - **Sending**: one `GIREC` on `GUILD` when an officer changes it; otherwise through the guild lists (`guildEntries`, see Guild Lists), asked for with `GIGET` from the members holding it. Never outside the guild. Only while Who's Who is enabled for the guild.
+  - **Received**: from a member of my guild, about that guild. Its characters go into the person's `chars` with state `guildLinked` and that guild in their `guild`, as my added characters do: the player's `signedRecord` is never changed, and a new revision of it keeps them. A guild identity is a person of its own, `G…`, with the guild's nickname and main. A guild link wins over a `NOID` from the character and over my own links: a manual identity holding the character merges into the guild identity, an alt I added elsewhere moves (automatic changes, as for a player's record). Forgotten once my roster no longer lists the character, and with every guild record of that guild when none of my characters is left in it (`People.GuildLeft`). A record without characters (or later fields) removes the guild identity; its revision stays held, so an older copy is stale.
+  - **A player's record takes the characters it lists**: on every member's client, at once, whatever the guild record says.
+    - When a player's record lists every character of a guild identity, nothing is left to decide: the first client of the trusted rank online that sees it signs the guild's record about that player (the guild identity's remaining fields, such as its later info) and an empty revision of the guild identity, without its player doing anything. Two officers doing it at once sign the same content.
+    - When it lists only some of them, the guild tab shows the conflict to the guild master and officers, who choose: move the guild identity's other characters and fields to the player (same two records as above), or keep them apart (the guild identity signed again without the characters the player listed). Either answer ends the conflict, which is read from the two records: nothing else is saved.
+  - **Open**: a character known both from a guild record and from a record received outside the guild, close to the two-scope member of Enforced linking (Not built yet).
 
 ### Guild Settings
 
@@ -467,12 +500,16 @@ identity    id (public key, hex), seed (private key, hex), rev, nickname (overri
             enforcedLinkingOptIns = { [club ID] = true (opted in) | false (refused) } (see Enforced linking),
             lastLogout = { guid, at } (the account's last logout or /reload), lastBroadcastRevision (the revision my
             last announcement to every audience with acceptsGet = 1 carried; both for the quick relog, see Announcements)
-people      { [identityID or "M<n>"] = { id (the same as the key), signedRecord (shared only), nickname (the player's own), customNickname, note, main,
-                                   chars = { [guid] = { name, ruleset, classID, state (confirmed | listed | guild | added), level, lastSeen,
+people      { [identityID or "M<n>" or "G<hex>"] = { id (the same as the key), signedRecord (shared only), nickname (the player's own, or the guild's),
+                                   customNickname, note, main,
+                                   chars = { [guid] = { name, ruleset, classID, state (confirmed | listed | guild | added | guildLinked), level, lastSeen,
                                                         guild, friendOf = { [my character's GUID] = true }, bnetFriend (BattleTag),
                                                         whisperedAt } },
-                                   updatedAt, outdated (true: fetched again, see Enforced linking) } }
-            guild (club ID), friendOf and whisperedAt: what my characters saw; only confirmed characters count (see Scopes)
+                                   guild (club ID: a guild identity, planned), updatedAt, outdated (true: fetched again, see Enforced linking) } }
+            a character's guild (club ID), friendOf and whisperedAt: what my characters saw; only confirmed characters count (see Scopes);
+            for a guildLinked character, its guild is the guild whose record links it
+guildRecords  { [club ID] = { [identity ID or "G<hex>"] = signed guild record } }   planned: the guild records held, as received; one
+            without characters stays as the guild identity's removal (see Guild Sharing, Guild records)
 whispers    { [other character's GUID] = { name, ruleset, sentAt, receivedAt } }   within the whisper window (see Scopes)
 guildSettings  { [club ID] = { record (the latest signed record accepted), signerUnconfirmed (true: the guild's first settings, taken before I could confirm their signer) } }   (see Guild Settings)
 guildLists  { [club ID] = { at, hash } }   my list's revision for each guild (see Guild Lists)
@@ -545,6 +582,8 @@ Code that works around a bug of the game, to remove once the game is fixed.
   - Removing it: `Scopes.GuildJoined`, `Scopes.CanSendOnGuild`, `Scopes.OnlineGuildMembers` and the audience's `guildMembers`, with their callers; `Identity.GuildJoined` and `Identity.JoinedGuildSinceLogin` (`guild.joinedAt` may stay; the login announcement may stay at `PLAYER_ENTERING_WORLD`); `Protocol.GuildRosterChanged` and its pending flag, the join announcement going back to one message on `GUILD` sent right away (`announceToChannel("GUILD")`); in Comm-Test, the `joinedGuild` flag and the cases that use it; this entry, and the Channels and Announcements sentences pointing here.
 
 ## Open Questions
+
+- **Unpacking before checking the sender**: `Codec.Decode` unpacks a `REC`, `GSET` or `GLIST` payload (LibDeflate, then LibSerialize) before any check of its sender, and LibDeflate has no limit on what it unpacks. Measured in game: about 41 ms per KB received at worst (2.6 KB unpacked to 1 MB in 106 ms, 10.4 KB to 4 MB in 423 ms), so anyone can freeze a client for a moment. Proposed: read the version and type first and unpack only a type that sender may send me (the checks that run after decoding today), and a length limit per type on the payload before unpacking: 4 KB for `REC`, `GSET` and `GIREC` (a legitimate record is 0.6 to 1.5 KB; unpacking a legitimate 50-character record takes 1.8 ms), and for `GLIST` one set from the largest legitimate list, taken from my guild's members only.
 
 - **Purging old people**: identities received through groups and whispers pile up in `people` over time, and so do `forgotten` and `noIdentity`. Everything needed to date them is saved (`lastSeen`, `updatedAt`, `forgotten.at`, the `noIdentity` times). Remove the people not seen for a long time (no activity on any of their characters) who are neither in my guild nor among my friends. To decide: how (a button in the settings, or automatic), whether people I created or renamed are kept, and whether the age is fixed or chosen.
 
