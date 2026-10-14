@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-14
+
 ### Changed
 
 - **Record format**: identities and guild settings are signed in a new format that later versions can add to without breaking this one. Players on 0.2.0 and on this version can't read each other's identities until both have updated. Guild masters and officers: change your guild's settings once after updating, so new members get them.
@@ -91,7 +93,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/yannlugrin/WhosWho/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.0-beta.1...0.1.0
