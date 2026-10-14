@@ -106,27 +106,34 @@ function Record.IsGuid(s)
     return type(s) == "string" and s:find("^Player%-%d+%-%x+$") ~= nil
 end
 
-local function isName(s)
+---A name as a record holds it: already clean (Record.CleanName).
+---@param s any
+---@return boolean
+function Record.IsName(s)
     return type(s) == "string" and Record.CleanName(s) == s
 end
 
-local function isPositiveInteger(n)
-    return type(n) == "number" and n >= 1 and n % 1 == 0
+---An integer from 1 to Record.MAX_REVISION, the largest the signed bytes write exactly: a revision, a club ID.
+---@param n any
+---@return boolean
+function Record.IsPositiveInteger(n)
+    return type(n) == "number" and n >= 1 and n <= Record.MAX_REVISION and n % 1 == 0
 end
 
-local function isRevision(n)
-    return isPositiveInteger(n) and n <= Record.MAX_REVISION
-end
-
-local function isRuleset(n)
+---@param n any
+---@return boolean
+function Record.IsRuleset(n)
     for _, ruleset in pairs(Record.RULESET) do
         if n == ruleset then return true end
     end
     return false
 end
 
-local function isClassID(n)
-    return isPositiveInteger(n) and C_CreatureInfo.GetClassInfo(n) ~= nil
+---A class the game knows.
+---@param n any
+---@return boolean
+function Record.IsClassID(n)
+    return Record.IsPositiveInteger(n) and C_CreatureInfo.GetClassInfo(n) ~= nil
 end
 
 -- Absent, or a table of markers, each one this version knows true.
@@ -138,9 +145,9 @@ end
 
 local function isCharacter(character)
     return type(character) == "table"
-        and isName(character.name)
-        and isRuleset(character.ruleset)
-        and isClassID(character.classID)
+        and Record.IsName(character.name)
+        and Record.IsRuleset(character.ruleset)
+        and Record.IsClassID(character.classID)
         and isCharacterGuild(character.guild)
 end
 
@@ -153,8 +160,8 @@ function Record.Validate(record)
     if type(record) ~= "table" then return false, "not a table" end
     if record.v ~= Record.VERSION then return false, "version" end
     if not Record.IsId(record.id) then return false, "id" end
-    if not isRevision(record.rev) then return false, "rev" end
-    if record.nickname ~= nil and not isName(record.nickname) then return false, "nickname" end
+    if not Record.IsPositiveInteger(record.rev) then return false, "rev" end
+    if record.nickname ~= nil and not Record.IsName(record.nickname) then return false, "nickname" end
     if record.sig ~= nil and not Record.IsSignature(record.sig) then return false, "sig" end
     if type(record.chars) ~= "table" then return false, "chars" end
     if type(record.guild) ~= "table" or type(record.guild.consent) ~= "boolean" then

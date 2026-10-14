@@ -113,10 +113,6 @@ end
 
 -- Format -----------------------------------------------------------------------------------------
 
-local function isPositiveInteger(n)
-    return type(n) == "number" and n >= 1 and n <= Record.MAX_REVISION and n % 1 == 0
-end
-
 ---Checks the structure only: the fields this version knows, and the limits of the signed bytes; fields a later version
 ---adds are kept. The signature is checked by GuildSettings.Verify.
 ---@param record any
@@ -124,13 +120,13 @@ end
 function GuildSettings.Validate(record)
     return type(record) == "table"
         and record.v == GuildSettings.VERSION
-        and isPositiveInteger(record.guild)
+        and Record.IsPositiveInteger(record.guild)
         and type(record.settings) == "table"
         and type(record.settings.enable) == "boolean"
         and type(record.settings.enforceLinking) == "boolean"
         and Record.IsId(record.signer)
         and Record.IsGuid(record.signerGuid)
-        and isPositiveInteger(record.rev)
+        and Record.IsPositiveInteger(record.rev)
         and Record.IsSignature(record.sig)
         and GuildSettings.Canonical(record) ~= nil
 end

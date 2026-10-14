@@ -22,6 +22,7 @@ local addonName, ns = ...
 ---@field Resolver WhosWho.Resolver
 ---@field RecordVerification WhosWho.RecordVerification
 ---@field GuildSettings WhosWho.GuildSettings
+---@field GuildRecord WhosWho.GuildRecord
 ---@field GuildList WhosWho.GuildList
 ---@field Codec WhosWho.Codec
 ---@field Diagnostic WhosWho.Diagnostic

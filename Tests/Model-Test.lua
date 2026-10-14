@@ -20,7 +20,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 local ns = {}
 for _, file in ipairs({
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Migrations.lua", "Core/Record.lua",
-    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Core/GuildList.lua", "Comm/Scopes.lua",
+    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Core/GuildRecord.lua", "Core/GuildList.lua", "Comm/Scopes.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end
@@ -1242,6 +1242,63 @@ do
     local held, unknown = GL.Missing({ [A] = 3, [B] = 3, [C] = 2, [D] = 1 })
     check(#held == 2 and held[1] == A and held[2] == C and #unknown == 1 and unknown[1] == D,
         "another list's newer revisions: of identities I hold, and of ones I don't")
+end
+
+-- Guild record format -----------------------------------------------------------------------------------
+
+do
+    local GR, Crypto = ns.GuildRecord, ns.Crypto
+    local seed = Crypto.FromHex(("11"):rep(32))
+    local signer = Crypto.ToHex(Crypto.Ed25519.PublicKey(seed))
+    local function sign(record)
+        record.sig = Crypto.ToHex(Crypto.Ed25519.Sign(GR.Canonical(record), seed, Crypto.FromHex(signer)))
+        return record
+    end
+    local function guildIdentity()
+        return {
+            v = GR.VERSION, guild = 22835221, id = "G3f9a1c207b4e5d61", nickname = "Bob", main = G1,
+            chars = {
+                [G1] = { name = "Bob Stone", ruleset = NORMAL, classID = WARRIOR },
+                [G2] = { name = "Bobby Stone", ruleset = NORMAL, classID = MAGE },
+            },
+            signer = signer, signerGuid = "Player-70-000000FF", rev = 1792000000,
+        }
+    end
+
+    local record = sign(guildIdentity())
+    check(GR.Validate(record) and GR.Verify(record), "a guild identity's record validates and verifies")
+    local tampered = guildIdentity()
+    tampered.sig, tampered.nickname = record.sig, "Robert"
+    check(not GR.Verify(tampered), "a field changed after signing breaks the signature")
+    check(GR.Canonical(record) ~= ns.Record.SignedBytes("WWI", record), "signed under its own prefix")
+
+    local later = guildIdentity()
+    later.info = { role = "Raid leader" }
+    later.chars[G1].info = { role = "Tank" }
+    sign(later)
+    check(GR.Validate(later) and GR.Verify(later), "fields a later version adds are signed, and verified by this one")
+
+    local shared = sign({
+        v = GR.VERSION, guild = 22835221, id = ("ab"):rep(32),
+        chars = { [G3] = { name = "Annie Fields", ruleset = NORMAL, classID = PRIEST } },
+        signer = signer, signerGuid = "Player-70-000000FF", rev = 1792000000,
+    })
+    check(GR.Validate(shared), "a record about a shared identity holds its characters only")
+    shared.main = G3
+    check(select(2, GR.Validate(shared)) == "main", "with a main, refused: the player's own applies")
+
+    local function refusal(change)
+        local changed = guildIdentity()
+        change(changed)
+        changed.sig = record.sig
+        return select(2, GR.Validate(changed))
+    end
+    check(refusal(function(r) r.main = nil end) == "main", "a guild identity with characters needs its main")
+    check(refusal(function(r) r.chars, r.main = {}, nil end) == nil, "without characters, a guild identity is removed: no main")
+    check(refusal(function(r) r.id = "G3F9A1C207B4E5D61" end) == "id", "a guild identity ID is G and 16 lowercase hex")
+    check(refusal(function(r) r.v = GR.VERSION + 1 end) == "version", "a later version is refused")
+    check(refusal(function(r) r.chars[G2].classID = 99 end) == "character", "known fields are checked strictly")
+    check(refusal(function(r) r.info = { note = ("x"):rep(4097) } end) == "limits", "the limits of the signed bytes apply")
 end
 
 if failures > 0 then

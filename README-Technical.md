@@ -40,6 +40,7 @@ WhosWho/
 │   ├── Resolver.lua               One answer per character, by precedence
 │   ├── RecordVerification.lua     Signature verification queue for received records and guild settings, sliced over frames
 │   ├── GuildSettings.lua          A guild's settings: the record its guild master or an officer signs, held per guild
+│   ├── GuildRecord.lua            What a guild says about one person: guild record format (validation, signed bytes, verify)
 │   └── GuildList.lua              My list of a guild's identities, its revision, and what another member's list has newer
 ├── Comm/
 │   ├── Diagnostic.lua             Diagnostic mode: the message log, and the messages printed in chat
@@ -204,7 +205,7 @@ Every signed record (identity records, guild settings, and the planned guild rec
 - **Version 1**, up to 0.2.0, was signed over a fixed list of fields, so a record holding any other field was refused. It is refused now. What I hold from it stays shown until a newer revision arrives. My own record gets a new revision once (migration step 4, see Saved Variables), so the others fetch it: one they hold at the same revision would not be asked for again. Guild settings held in version 1 stay in use by the members who hold them; a member who never held them refuses them, until the guild master or an officer changes the settings once.
 
 ```
-Guild record (planned, see Guild Sharing, Guild records)
+Guild record (GuildRecord: format built, the rest planned; see Guild Sharing, Guild records)
   v           format version; a higher one is refused: raised only for a field older clients must not ignore
   guild       club ID
   id          the identity it is about: a player's identity ID, or a guild identity's "G<16 hex>"
