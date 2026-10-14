@@ -75,8 +75,14 @@ local LibSerialize = {
     end,
 }
 local function same(_, text) return text end
+-- Payloads unpacked by any client: one refused before unpacking doesn't count.
+local unpackedCount = 0
 local LibDeflate = {
-    CompressDeflate = same, DecompressDeflate = same,
+    CompressDeflate = same,
+    DecompressDeflate = function(_, text)
+        unpackedCount = unpackedCount + 1
+        return text
+    end,
     EncodeForWoWAddonChannel = same, DecodeForWoWAddonChannel = same,
 }
 
@@ -664,9 +670,11 @@ local eve = login(eveAccount, eveMain)
 slash(eve, "link")
 run(10)
 local eveId = eve.ns.Identity.Id()
+local unpackedBefore = unpackedCount
 eve.ns.Protocol:SendCommMessage("WhosWho", eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord()), "WHISPER", "Bob Main")
 run(1)
 check(bob.ns.People.Get(eveId) == nil, "a REC whispered by a stranger is ignored")
+check(unpackedCount == unpackedBefore, "without being unpacked")
 
 ann = login(annAccount, annMain)
 run(10)
@@ -1970,6 +1978,18 @@ do
         "an empty announcement carries no identity, and asks for the receiver's")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0") == nil, "an announcement without the guild list field is refused")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 x") == nil, "a malformed guild list revision is refused")
+end
+
+-- Payload limits ----------------------------------------------------------------------------------------
+
+do
+    local Codec, before = ann.ns.Codec, unpackedCount
+    check(Codec.Decode("1 REC " .. ("x"):rep(8193)) == nil and Codec.Decode("1 GSET " .. ("x"):rep(8193)) == nil
+        and Codec.Decode("1 GLIST " .. ("x"):rep(131073)) == nil and unpackedCount == before,
+        "a payload over its limit is refused before unpacking: 8 KB for a REC or a GSET, 128 KB for a GLIST")
+    Codec.Decode("1 REC " .. ("x"):rep(8192))
+    Codec.Decode("1 GLIST " .. ("x"):rep(131072))
+    check(unpackedCount == before + 2, "one at its limit is unpacked")
 end
 
 if failures > 0 then

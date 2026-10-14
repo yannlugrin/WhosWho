@@ -62,6 +62,11 @@ local VERSION = "1"
 Codec.MAX_REQUESTED_IDS = 3
 -- The identities one GLIST holds at most.
 local MAX_LIST_ENTRIES = 2000
+-- Encoded payload lengths, checked before unpacking: LibDeflate unpacks without limit, about 41 ms per KB received at
+-- worst in game. The largest legitimate payloads: a REC of 50 characters, 2 470 bytes; a GSET, 232 bytes; a GLIST of
+-- MAX_LIST_ENTRIES identities, 90 731 bytes. A limit raised later is refused by every older client.
+local MAX_RECORD_PAYLOAD = 8192
+local MAX_LIST_PAYLOAD = 131072
 
 -- Encoding ---------------------------------------------------------------------------------------
 
@@ -177,12 +182,19 @@ local function decodeRecordRequest(fields)
     return { type = "GET", ids = ids }
 end
 
-local function decodeRecordUpdate(fields)
+-- A payload no longer than maxLength, decoded, unpacked and deserialized; nil when it isn't.
+local function unpackPayload(fields, maxLength)
+    if #fields > maxLength then return nil end
     local compressed = LibDeflate:DecodeForWoWAddonChannel(fields)
     local serialized = compressed and LibDeflate:DecompressDeflate(compressed)
     if not serialized then return nil end
-    local ok, signedRecord = LibSerialize:Deserialize(serialized)
-    if not (ok and Record.Validate(signedRecord) and signedRecord.sig) then return nil end
+    local ok, value = LibSerialize:Deserialize(serialized)
+    return ok and value or nil
+end
+
+local function decodeRecordUpdate(fields)
+    local signedRecord = unpackPayload(fields, MAX_RECORD_PAYLOAD)
+    if not (Record.Validate(signedRecord) and signedRecord.sig) then return nil end
     return { type = "REC", signedRecord = signedRecord }
 end
 
@@ -197,11 +209,8 @@ local function decodeGuildSettingsRequest()
 end
 
 local function decodeGuildSettingsUpdate(fields)
-    local compressed = LibDeflate:DecodeForWoWAddonChannel(fields)
-    local serialized = compressed and LibDeflate:DecompressDeflate(compressed)
-    if not serialized then return nil end
-    local ok, signedRecord = LibSerialize:Deserialize(serialized)
-    if not (ok and GuildSettings.Validate(signedRecord)) then return nil end
+    local signedRecord = unpackPayload(fields, MAX_RECORD_PAYLOAD)
+    if not GuildSettings.Validate(signedRecord) then return nil end
     return { type = "GSET", signedRecord = signedRecord }
 end
 
@@ -211,11 +220,8 @@ local function decodeGuildListRequest()
 end
 
 local function decodeGuildListUpdate(fields)
-    local compressed = LibDeflate:DecodeForWoWAddonChannel(fields)
-    local serialized = compressed and LibDeflate:DecompressDeflate(compressed)
-    if not serialized then return nil end
-    local ok, list = LibSerialize:Deserialize(serialized)
-    if not (ok and type(list) == "table" and type(list.guild) == "number" and revision(list.at)
+    local list = unpackPayload(fields, MAX_LIST_PAYLOAD)
+    if not (type(list) == "table" and type(list.guild) == "number" and revision(list.at)
         and type(list.hash) == "string" and list.hash:match("^%x+$") and type(list.entries) == "table") then
         return nil
     end
@@ -232,6 +238,14 @@ local DECODERS = {
     GSGET = decodeGuildSettingsRequest, GSET = decodeGuildSettingsUpdate,
     GLGET = decodeGuildListRequest, GLIST = decodeGuildListUpdate,
 }
+
+---The type of a message in this protocol version, read without its fields; nil for another version.
+---@param text string
+---@return string?
+function Codec.Type(text)
+    local version, messageType = text:match("^(%d+) (%u+)")
+    return version == VERSION and messageType or nil
+end
 
 ---Unknown versions and types, and malformed fields, give nil.
 ---@param text string

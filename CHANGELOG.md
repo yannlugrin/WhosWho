@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Security
+
+- **Messages from other players**: Who's Who no longer unpacks a record or a guild list from a player it doesn't take them from, and refuses one too long, so another player can't freeze your game for a moment with a crafted message.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added

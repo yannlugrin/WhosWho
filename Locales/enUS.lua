@@ -26,6 +26,7 @@ L["off"] = true
 L["on"] = true
 L["Received, %s: %s"] = true
 L["Guild settings %d: %s"] = true
+L["%s from %s not unpacked: not taken from that sender"] = true
 L["Sent, %s: %s"] = true
 L["shared, revision %d"] = true
 L["This character is now your main."] = true

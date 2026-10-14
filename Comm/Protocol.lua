@@ -725,7 +725,7 @@ local function receiveRecordRequest(request, sender)
     end
 end
 
--- A REC is used only from a channel I share on, so strangers cannot fill my saved data.
+-- Whether I share with that sender on that channel.
 local function sharedChannel(distribution, sender)
     if distribution == "GUILD" then return Scopes.SharesWithGuild() end
     if distribution == "PARTY" or distribution == "RAID" then return Scopes.Get("group") end
@@ -744,7 +744,7 @@ end
 ---@param recordUpdate WhosWho.RecordUpdate
 local function receiveRecordUpdate(recordUpdate, distribution, sender)
     local signedRecord = recordUpdate.signedRecord
-    if signedRecord.id == Identity.Id() or not sharedChannel(distribution, sender) then return end
+    if signedRecord.id == Identity.Id() then return end
     local fromMyGuild = distribution == "GUILD" or (distribution == "WHISPER" and Scopes.GuildReaches(sender))
     local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or People.ReplacesHeld(signedRecord, fromMyGuild)
     if not wanted then return end
@@ -794,7 +794,6 @@ end
 ---@param update WhosWho.GuildSettingsUpdate
 local function receiveGuildSettingsUpdate(update, sender)
     local signedRecord = update.signedRecord
-    if not Scopes.GuildMember(sender) then return traceGuildSettings(signedRecord, "sender not in my guild") end
     -- Right after joining, the game may not give my guild's club ID yet: the record is then kept under its own.
     local clubId = Identity.GuildId(UnitGUID("player"))
     if clubId and signedRecord.guild ~= clubId then return traceGuildSettings(signedRecord, "another guild") end
@@ -817,7 +816,6 @@ end
 -- as mine.
 ---@param update WhosWho.GuildListUpdate
 local function receiveGuildListUpdate(update, sender)
-    if not (guildListsActive() and Scopes.GuildReaches(sender)) then return end
     local clubId, _, hash = ownGuildList()
     if update.guild ~= clubId then return end
     listOffers[sender] = { at = update.at, hash = update.hash }
@@ -826,19 +824,35 @@ local function receiveGuildListUpdate(update, sender)
     takeGuildList(update)
 end
 
+-- Who may send me a payload, checked before it is unpacked (Codec.Decode): unpacking costs up to 41 ms per KB received.
+-- A REC, from a channel I share on, so strangers cannot fill my saved data; my current guild's settings, from any of its
+-- members, whatever I share with the guild (they hold no identity); a guild list, from a member of my guild while I
+-- exchange lists.
+local PAYLOAD_SENDERS = {
+    REC = sharedChannel,
+    GSET = function(_, sender) return Scopes.GuildMember(sender) end,
+    GLIST = function(_, sender) return guildListsActive() and Scopes.GuildReaches(sender) end,
+}
+
 local function receive(_, text, distribution, sender)
     if issecretvalue(text) or issecretvalue(sender) then return end
     Diagnostic.MessageReceived(text, distribution, sender)
+    local messageType = Codec.Type(text)
+    if not messageType then return end
+    -- Without a linked character, I take nothing but announcements and my guild's settings, which hold no identity, and
+    -- what a guild I opted in to sends; a character I unlinked still answers an announcement with NOID.
+    local takenAnyway = messageType == "ANNOUNCE" or messageType == "GSGET" or messageType == "GSET"
+    if Identity.LinkedCount() == 0 and not Scopes.EnforcedGuild() and not takenAnyway then return end
+    local allowedSender = PAYLOAD_SENDERS[messageType]
+    if allowedSender and not allowedSender(distribution, sender) then
+        return Diagnostic.Print(L["%s from %s not unpacked: not taken from that sender"]:format(messageType, sender))
+    end
     local message = Codec.Decode(text)
     if not message then return end
     -- A member who joined the guild since my roster was read.
     if distribution == "GUILD" and not Scopes.ReceivedOnGuild(sender) and message.type == "ANNOUNCE" then
         C_GuildInfo.GuildRoster()
     end
-    -- Without a linked character, I take nothing but announcements and my guild's settings, which hold no identity, and
-    -- what a guild I opted in to sends; a character I unlinked still answers an announcement with NOID.
-    local takenAnyway = message.type == "ANNOUNCE" or message.type == "GSGET" or message.type == "GSET"
-    if Identity.LinkedCount() == 0 and not Scopes.EnforcedGuild() and not takenAnyway then return end
 
     if message.type == "ANNOUNCE" then
         receiveAnnouncement(message, sender)
