@@ -1,9 +1,10 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Crypto, Identity, People = ns.Crypto, ns.Identity, ns.People
+local Crypto, GuildRecord, Identity, People = ns.Crypto, ns.GuildRecord, ns.Identity, ns.People
 
--- My guild list: the identities of a guild I hold, each with the highest revision I hold, which members compare to
--- pass newer revisions to each other. A hint, not data: every record is still verified with its owner's key.
+-- My guild list: the identities of a guild I hold, each with the highest revision I hold, and the guild's records I
+-- hold, each with its revision, which members compare to pass newer revisions to each other. A hint, not data: every
+-- record is still verified with its signer's key.
 
 ---@class WhosWho.GuildList
 local GuildList = {}
@@ -51,7 +52,16 @@ function GuildList.Entries(clubId, ruleset)
     return entries
 end
 
--- The hashed bytes: "id:rev" for each identity, sorted.
+---The guild's records I hold for that guild, removals included: they are how a removal spreads.
+---@param clubId integer
+---@return table<string, integer> revision by identity ID
+function GuildList.GuildRecordEntries(clubId)
+    local entries = {}
+    for id, signedRecord in pairs(ns.data.guildRecords[clubId] or {}) do entries[id] = signedRecord.rev end
+    return entries
+end
+
+-- "id:rev" for each entry, sorted.
 local function canonical(entries)
     local pairsList = {}
     for id, rev in pairs(entries) do pairsList[#pairsList + 1] = id .. ":" .. rev end
@@ -59,11 +69,18 @@ local function canonical(entries)
     return table.concat(pairsList, ",")
 end
 
----The short hash of a list's content: the same content always gives the same hash.
+---The short hash of a list's content, its identities then its guild records: the same content always gives the same
+---hash.
 ---@param entries table<string, integer>
+---@param guildRecordEntries table<string, integer>
 ---@return string hash 8 hex characters
-function GuildList.Hash(entries)
-    return Crypto.ToHex(Crypto.SHA512(canonical(entries))):sub(1, 8)
+function GuildList.Hash(entries, guildRecordEntries)
+    return Crypto.ToHex(Crypto.SHA512(canonical(entries) .. "|" .. canonical(guildRecordEntries))):sub(1, 8)
+end
+
+-- The hash of my list of that guild.
+local function ownHash(clubId, ruleset)
+    return GuildList.Hash(GuildList.Entries(clubId, ruleset), GuildList.GuildRecordEntries(clubId))
 end
 
 ---My list's revision for that guild: when its content last changed, at the latest when this is called, and its hash.
@@ -73,7 +90,7 @@ end
 ---@return integer at
 ---@return string hash
 function GuildList.Revision(clubId, ruleset, serverTime)
-    local hash = GuildList.Hash(GuildList.Entries(clubId, ruleset))
+    local hash = ownHash(clubId, ruleset)
     local revision = revisions()[clubId]
     if not revision or revision.hash ~= hash then
         revision = { at = revision and serverTime or 0, hash = hash }
@@ -87,7 +104,7 @@ end
 ---@param ruleset WhosWho.Ruleset
 ---@param serverTime integer GetServerTime()
 function GuildList.Renew(clubId, ruleset, serverTime)
-    revisions()[clubId] = { at = serverTime, hash = GuildList.Hash(GuildList.Entries(clubId, ruleset)) }
+    revisions()[clubId] = { at = serverTime, hash = ownHash(clubId, ruleset) }
 end
 
 ---Forgets my lists' revisions, with the people they listed: my next list of each guild is a first one, older than
@@ -128,4 +145,19 @@ function GuildList.Missing(entries)
     table.sort(held)
     table.sort(unknown)
     return held, unknown
+end
+
+---The guild's records another member's list holds at a newer revision than I do: any member may pass them on, their
+---signer's rank being checked.
+---@param clubId integer
+---@param guildRecordEntries table<string, integer> revision by identity ID
+---@return string[] ids
+function GuildList.MissingGuildRecords(clubId, guildRecordEntries)
+    local ids = {}
+    for id, rev in pairs(guildRecordEntries) do
+        local held = GuildRecord.Held(clubId, id)
+        if not held or held.rev < rev then ids[#ids + 1] = id end
+    end
+    table.sort(ids)
+    return ids
 end

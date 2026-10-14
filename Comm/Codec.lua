@@ -1,11 +1,11 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local GuildSettings, Record = ns.GuildSettings, ns.Record
+local GuildRecord, GuildSettings, Record = ns.GuildRecord, ns.GuildSettings, ns.Record
 local LibSerialize, LibDeflate = LibStub("LibSerialize"), LibStub("LibDeflate")
 
--- Message text: "<version> <type> <fields>". Announcements and GETs are plain text that fits in one message; a REC, a
--- GSET and a GLIST carry their record or list serialized, compressed and encoded for the add-on channel; NOID, GSGET
--- and GLGET have no fields.
+-- Message text: "<version> <type> <fields>". Announcements, GETs and GIGETs are plain text that fits in one message; a
+-- REC, a GSET, a GLIST and a GIREC carry their record or list serialized, compressed and encoded for the add-on channel;
+-- NOID, GSGET and GLGET have no fields.
 
 ---@class WhosWho.Codec
 local Codec = {}
@@ -55,12 +55,22 @@ local VERSION = "1"
 ---@field at integer when the list last changed (server time)
 ---@field hash string the hash of its content
 ---@field entries table<string, integer> revision by identity ID
+---@field guildEntries table<string, integer> revision by identity ID of the guild's records; empty from 0.3.0
 
----@alias WhosWho.Message WhosWho.Announcement|WhosWho.RecordRequest|WhosWho.RecordUpdate|WhosWho.NoIdentity|WhosWho.GuildSettingsRequest|WhosWho.GuildSettingsUpdate|WhosWho.GuildListRequest|WhosWho.GuildListUpdate
+---A request for what the guild says about some identities.
+---@class WhosWho.GuildRecordRequest
+---@field type "GIGET"
+---@field ids string[] player or guild identity IDs, 1 to Codec.MAX_REQUESTED_IDS
+
+---@class WhosWho.GuildRecordUpdate
+---@field type "GIREC"
+---@field signedRecord WhosWho.SignedGuildRecord structure validated, signature not verified
+
+---@alias WhosWho.Message WhosWho.Announcement|WhosWho.RecordRequest|WhosWho.RecordUpdate|WhosWho.NoIdentity|WhosWho.GuildSettingsRequest|WhosWho.GuildSettingsUpdate|WhosWho.GuildListRequest|WhosWho.GuildListUpdate|WhosWho.GuildRecordRequest|WhosWho.GuildRecordUpdate
 
 -- The identity IDs one GET names: three fit in one message.
 Codec.MAX_REQUESTED_IDS = 3
--- The identities one GLIST holds at most.
+-- The identities and guild records one GLIST holds at most, together.
 local MAX_LIST_ENTRIES = 2000
 -- Encoded payload lengths, checked before unpacking: LibDeflate unpacks without limit, about 41 ms per KB received at
 -- worst in game. The largest legitimate payloads: a REC of 50 characters, 2 470 bytes; a GSET, 232 bytes; a GLIST of
@@ -134,11 +144,25 @@ end
 ---@param at integer
 ---@param hash string
 ---@param entries table<string, integer>
+---@param guildEntries table<string, integer>
 ---@return string
-function Codec.GuildListUpdate(guild, at, hash, entries)
-    local list = { guild = guild, at = at, hash = hash, entries = entries }
+function Codec.GuildListUpdate(guild, at, hash, entries, guildEntries)
+    local list = { guild = guild, at = at, hash = hash, entries = entries, guildEntries = guildEntries }
     local payload = LibDeflate:EncodeForWoWAddonChannel(LibDeflate:CompressDeflate(LibSerialize:Serialize(list)))
     return ("%s GLIST %s"):format(VERSION, payload)
+end
+
+---@param ids string[] 1 to Codec.MAX_REQUESTED_IDS player or guild identity IDs
+---@return string
+function Codec.GuildRecordRequest(ids)
+    return ("%s GIGET %s"):format(VERSION, table.concat(ids, " "))
+end
+
+---@param signedRecord WhosWho.SignedGuildRecord
+---@return string
+function Codec.GuildRecordUpdate(signedRecord)
+    local payload = LibDeflate:EncodeForWoWAddonChannel(LibDeflate:CompressDeflate(LibSerialize:Serialize(signedRecord)))
+    return ("%s GIREC %s"):format(VERSION, payload)
 end
 
 -- Decoding ---------------------------------------------------------------------------------------
@@ -222,24 +246,56 @@ local function decodeGuildListRequest()
     return { type = "GLGET" }
 end
 
+-- A player's identity ID or a guild identity ID: what a guild record is about.
+local function isGuildRecordId(id)
+    return Record.IsId(id) or GuildRecord.IsGuildIdentityId(id)
+end
+
 local function decodeGuildListUpdate(fields)
     local list = unpackPayload(fields, MAX_LIST_PAYLOAD)
     if not (type(list) == "table" and type(list.guild) == "number" and revision(list.at)
         and type(list.hash) == "string" and list.hash:match("^%x+$") and type(list.entries) == "table") then
         return nil
     end
+    -- A list from 0.3.0 has no guild records.
+    local guildEntries = list.guildEntries or {}
+    if type(guildEntries) ~= "table" then return nil end
     local count = 0
     for id, rev in pairs(list.entries) do
         count = count + 1
         if not (Record.IsId(id) and revision(rev)) or count > MAX_LIST_ENTRIES then return nil end
     end
-    return { type = "GLIST", guild = list.guild, at = list.at, hash = list.hash, entries = list.entries }
+    for id, rev in pairs(guildEntries) do
+        count = count + 1
+        if not (isGuildRecordId(id) and revision(rev)) or count > MAX_LIST_ENTRIES then return nil end
+    end
+    return {
+        type = "GLIST", guild = list.guild, at = list.at, hash = list.hash, entries = list.entries,
+        guildEntries = guildEntries,
+    }
+end
+
+local function decodeGuildRecordRequest(fields)
+    local ids = {}
+    for id in fields:gmatch("%S+") do
+        if not isGuildRecordId(id) or #ids == Codec.MAX_REQUESTED_IDS then return nil end
+        ids[#ids + 1] = id
+    end
+    if not ids[1] then return nil end
+    return { type = "GIGET", ids = ids }
+end
+
+local function decodeGuildRecordUpdate(fields)
+    local signedRecord = unpackPayload(fields, MAX_RECORD_PAYLOAD)
+    if not GuildRecord.Validate(signedRecord) then return nil end
+    return { type = "GIREC", signedRecord = signedRecord }
 end
 
 local DECODERS = {
     ANNOUNCE = decodeAnnouncement, GET = decodeRecordRequest, REC = decodeRecordUpdate, NOID = decodeNoIdentity,
     GSGET = decodeGuildSettingsRequest, GSET = decodeGuildSettingsUpdate,
     GLGET = decodeGuildListRequest, GLIST = decodeGuildListUpdate,
+    GIGET = decodeGuildRecordRequest, GIREC = decodeGuildRecordUpdate,
 }
 
 ---The type of a message in this protocol version, read without its fields; nil for another version.

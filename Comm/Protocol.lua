@@ -1,11 +1,11 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Codec, Diagnostic, GuildList, GuildSettings, Identity, People, Record, RecordVerification, Scopes, Store =
-    ns.Codec, ns.Diagnostic, ns.GuildList, ns.GuildSettings, ns.Identity, ns.People, ns.Record, ns.RecordVerification,
-    ns.Scopes, ns.Store
+local Codec, Diagnostic, GuildList, GuildRecord, GuildSettings, Identity, People, Record, RecordVerification, Scopes, Store =
+    ns.Codec, ns.Diagnostic, ns.GuildList, ns.GuildRecord, ns.GuildSettings, ns.Identity, ns.People, ns.Record,
+    ns.RecordVerification, ns.Scopes, ns.Store
 
--- Announcements, record requests (GET) and records (REC) between clients, the guild settings (GSGET, GSET) and the
--- guild lists (GLGET, GLIST).
+-- Announcements, record requests (GET) and records (REC) between clients, the guild settings (GSGET, GSET), the guild
+-- lists (GLGET, GLIST) and the guild's records (GIGET, GIREC).
 
 ---@class WhosWho.Protocol
 ---@field RegisterComm fun(self, prefix: string, method: function)
@@ -371,40 +371,52 @@ end
 ---@field sentAt number
 ---@field retries integer GETs sent again, REQUEST_DELAY_SECONDS apart, without an answer
 
----@type table<string, WhosWho.Request> by identity ID
-local requests = {}
+---@type table<string, WhosWho.Request> by identity ID: players' records asked for (GET)
+local recordRequests = {}
+---@type table<string, WhosWho.Request> by identity ID: my guild's records asked for (GIGET)
+local guildRecordRequests = {}
 
----@param ids string[]
-local function sendRequest(ids, name)
+---What is asked for: the requests waiting for an answer, and the message that asks.
+---@class WhosWho.RequestedRecords
+---@field requests table<string, WhosWho.Request>
+---@field encode fun(ids: string[]): string
+
+---@type WhosWho.RequestedRecords players' records
+local RECORDS = { requests = recordRequests, encode = Codec.RecordRequest }
+---@type WhosWho.RequestedRecords my guild's records
+local GUILD_RECORDS = { requests = guildRecordRequests, encode = Codec.GuildRecordRequest }
+
+local function sendRequest(message, name)
     if loggingOut then return end
-    local message = Codec.RecordRequest(ids)
     Diagnostic.MessageSent(message, "WHISPER", name)
     Protocol:SendCommMessage(PREFIX, message, "WHISPER", name)
 end
 
 local function requestRecord(id, name)
-    local request = requests[id]
+    local request = recordRequests[id]
     if request and GetTime() - request.sentAt < REQUEST_DELAY_SECONDS then return end
 
     request = { sentAt = GetTime(), retries = 0 }
-    requests[id] = request
-    sendRequest({ id }, name)
+    recordRequests[id] = request
+    sendRequest(Codec.RecordRequest({ id }), name)
 
     local function retry()
-        if requests[id] ~= request or request.retries >= RETRY_LIMIT then return end
+        if recordRequests[id] ~= request or request.retries >= RETRY_LIMIT then return end
         request.sentAt, request.retries = GetTime(), request.retries + 1
-        sendRequest({ id }, name)
+        sendRequest(Codec.RecordRequest({ id }), name)
         C_Timer.After(REQUEST_DELAY_SECONDS, retry)
     end
     C_Timer.After(REQUEST_DELAY_SECONDS, retry)
 end
 
--- GETs for identities from the members holding them: a batch of up to Codec.MAX_REQUESTED_IDS to each holder in turn,
--- from a random one, so that the requests of several members spread over the holders. A batch not answered within
--- REQUEST_DELAY_SECONDS goes once to the next holder. An identity already asked for meanwhile is left out.
+-- Records from the members holding them, players' (RECORDS: GET) or my guild's (GUILD_RECORDS: GIGET): a batch of up
+-- to Codec.MAX_REQUESTED_IDS to each holder in turn, from a random one, so that the requests of several members spread
+-- over the holders. A batch not answered within REQUEST_DELAY_SECONDS goes once to the next holder. An identity already
+-- asked for meanwhile is left out.
 ---@param ids string[]
 ---@param holders string[]
-local function requestFromHolders(ids, holders)
+---@param records WhosWho.RequestedRecords RECORDS or GUILD_RECORDS
+local function requestFromHolders(ids, holders, records)
     if not holders[1] then return end
     local holderIndex, batch = fastrandom(1, #holders), {}
 
@@ -413,22 +425,22 @@ local function requestFromHolders(ids, holders)
         local sentBatch, holder = batch, holderIndex
         batch, holderIndex = {}, holderIndex % #holders + 1
         local request = { sentAt = GetTime(), retries = 0 }
-        for _, id in ipairs(sentBatch) do requests[id] = request end
-        sendRequest(sentBatch, holders[holder])
+        for _, id in ipairs(sentBatch) do records.requests[id] = request end
+        sendRequest(records.encode(sentBatch), holders[holder])
 
         C_Timer.After(REQUEST_DELAY_SECONDS, function()
             local unanswered = {}
             for _, id in ipairs(sentBatch) do
-                if requests[id] == request then unanswered[#unanswered + 1] = id end
+                if records.requests[id] == request then unanswered[#unanswered + 1] = id end
             end
             if not unanswered[1] then return end
             request.sentAt, request.retries = GetTime(), request.retries + 1
-            sendRequest(unanswered, holders[holder % #holders + 1])
+            sendRequest(records.encode(unanswered), holders[holder % #holders + 1])
         end)
     end
 
     for _, id in ipairs(ids) do
-        local request = requests[id]
+        local request = records.requests[id]
         if not (request and GetTime() - request.sentAt < REQUEST_DELAY_SECONDS) then
             batch[#batch + 1] = id
             if #batch == Codec.MAX_REQUESTED_IDS then sendBatch() end
@@ -534,6 +546,9 @@ local listAnswerWaiting = false
 ---@type table<string, table<string, true>> by identity ID, then name: members asking me for an identity I hold
 local relayRequesters = {}
 local relayAnswerWaiting = false
+---@type table<string, table<string, true>> by identity ID, then name: members asking me for a guild's record I hold
+local guildRecordRequesters = {}
+local guildRecordAnswerWaiting = false
 
 -- Whether that member's rank in my roster lets it pass on identities I don't hold yet.
 local function trustedMember(name)
@@ -598,17 +613,20 @@ local function scheduleGuildListEvaluation()
     C_Timer.After(ANNOUNCEMENT_WAIT_SECONDS, evaluateGuildLists)
 end
 
--- A member's list: the identities I hold at an older revision, from the members holding that list; the ones I don't
--- hold, from its trusted holders only, otherwise from the most recent list a trusted member announced.
+-- A member's list: the identities I hold at an older revision, and the guild's records I lack or hold older, from the
+-- members holding that list; the identities I don't hold, from its trusted holders only, otherwise from the most recent
+-- list a trusted member announced.
 ---@param update WhosWho.GuildListUpdate
 local function takeGuildList(update)
     takenListHashes[update.hash] = true
     local held, unknown = GuildList.Missing(update.entries)
-    requestFromHolders(held, listHolders(update.hash))
+    requestFromHolders(held, listHolders(update.hash), RECORDS)
+    requestFromHolders(GuildList.MissingGuildRecords(update.guild, update.guildEntries), listHolders(update.hash),
+        GUILD_RECORDS)
     if not unknown[1] then return end
     local trusted = listHolders(update.hash, true)
     if trusted[1] then
-        requestFromHolders(unknown, trusted)
+        requestFromHolders(unknown, trusted, RECORDS)
         return
     end
     local newest = newestOffer(true)
@@ -626,7 +644,8 @@ local function sendGuildList()
     if not (names[1] and guildListsActive()) then return end
 
     local clubId, at, hash = ownGuildList()
-    local message = Codec.GuildListUpdate(clubId, at, hash, GuildList.Entries(clubId, Identity.Ruleset(UnitGUID("player"))))
+    local message = Codec.GuildListUpdate(clubId, at, hash, GuildList.Entries(clubId, Identity.Ruleset(UnitGUID("player"))),
+        GuildList.GuildRecordEntries(clubId))
     if names[2] and Scopes.CanSendOnGuild() then
         sendQueued(message, "GUILD")
         return
@@ -634,7 +653,25 @@ local function sendGuildList()
     for _, name in ipairs(names) do sendQueued(message, "WHISPER", name) end
 end
 
--- The identities members asked me for, each to its requesters: one REC on GUILD for several, a whisper for one.
+-- Each record members asked me for, to its requesters: one message on GUILD for several, a whisper for one.
+---@param asked table<string, table<string, true>> by identity ID, then name
+---@param messageFor fun(id: string): string? the message carrying that record, nil when I don't pass it on
+local function answerRelayed(asked, messageFor)
+    for id, requesterNames in pairs(asked) do
+        local names = {}
+        for name in pairs(requesterNames) do
+            if Scopes.GuildReaches(name) then names[#names + 1] = name end
+        end
+        local message = names[1] and messageFor(id)
+        if message and names[2] and Scopes.CanSendOnGuild() then
+            sendQueued(message, "GUILD")
+        elseif message then
+            for _, name in ipairs(names) do sendQueued(message, "WHISPER", name) end
+        end
+    end
+end
+
+-- The identities members asked me for, from my list (REC).
 local function sendRelayedRecords()
     relayAnswerWaiting = false
     local asked = relayRequesters
@@ -643,21 +680,24 @@ local function sendRelayedRecords()
 
     local guid = UnitGUID("player")
     local entries = GuildList.Entries(Identity.GuildId(guid), Identity.Ruleset(guid))
-    for id, requesterNames in pairs(asked) do
+    answerRelayed(asked, function(id)
         local person = People.Get(id)
-        local names = {}
-        for name in pairs(requesterNames) do
-            if Scopes.GuildReaches(name) then names[#names + 1] = name end
-        end
-        if entries[id] and person and person.signedRecord and names[1] then
-            local message = Codec.RecordUpdate(person.signedRecord)
-            if names[2] and Scopes.CanSendOnGuild() then
-                sendQueued(message, "GUILD")
-            else
-                for _, name in ipairs(names) do sendQueued(message, "WHISPER", name) end
-            end
-        end
-    end
+        return entries[id] and person and person.signedRecord and Codec.RecordUpdate(person.signedRecord) or nil
+    end)
+end
+
+-- My guild's records members asked me for (GIREC).
+local function sendGuildRecords()
+    guildRecordAnswerWaiting = false
+    local asked = guildRecordRequesters
+    guildRecordRequesters = {}
+    if not guildListsActive() then return end
+
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    answerRelayed(asked, function(id)
+        local signedRecord = GuildRecord.Held(clubId, id)
+        return signedRecord and Codec.GuildRecordUpdate(signedRecord)
+    end)
 end
 
 -- Receiving --------------------------------------------------------------------------------------
@@ -698,7 +738,7 @@ local function receiveAnnouncement(announcement, sender)
 
     if not announcement.acceptsGet then
         -- The owner left: a GET would get no answer, and my announcement would not reach them.
-        requests[id] = nil
+        recordRequests[id] = nil
         announcementRecipients[sender] = nil
     elseif sharing and People.IsWanted(id, announcement.rev) then
         requestRecord(id, sender)
@@ -769,7 +809,7 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
         -- My guild vouches for its members' characters, even after their NOID.
         local guildMembers = fromMyGuild and Scopes.GuildMembersIn(verified) or nil
         if People.Accept(verified, fromGuild, guildMembers) ~= "stale" then
-            requests[verified.id] = nil
+            recordRequests[verified.id] = nil
             Scopes.KeepSentWhispers()
             Scopes.KeepGuildMembers(verified)
         end
@@ -824,14 +864,39 @@ local function receiveGuildListUpdate(update, sender)
     takeGuildList(update)
 end
 
+-- A member of my current guild asking me for its records about these identities.
+---@param request WhosWho.GuildRecordRequest
+local function receiveGuildRecordRequest(request, sender)
+    if not (guildListsActive() and Scopes.GuildReaches(sender)) then return end
+    for _, id in ipairs(request.ids) do
+        guildRecordRequesters[id] = guildRecordRequesters[id] or {}
+        guildRecordRequesters[id][sender] = true
+    end
+    if guildRecordAnswerWaiting then return end
+    guildRecordAnswerWaiting = true
+    C_Timer.After(REQUEST_WAIT_SECONDS, sendGuildRecords)
+end
+
+-- A record of my current guild, from any of its members (PAYLOAD_SENDERS): the signature and the signer's rank decide.
+---@param update WhosWho.GuildRecordUpdate
+local function receiveGuildRecordUpdate(update)
+    local signedRecord = update.signedRecord
+    if signedRecord.guild ~= Identity.GuildId(UnitGUID("player")) or not GuildRecord.IsNewer(signedRecord) then return end
+    RecordVerification.Queue(signedRecord, GuildRecord, function(verified)
+        guildRecordRequests[verified.id] = nil
+        GuildRecord.Accept(verified, Scopes.GuildRankIndex(verified.signerGuid))
+    end)
+end
+
 -- Who may send me a payload, checked before it is unpacked (Codec.Decode): unpacking costs up to 41 ms per KB received.
 -- A REC, from a channel I share on, so strangers cannot fill my saved data; my current guild's settings, from any of its
--- members, whatever I share with the guild (they hold no identity); a guild list, from a member of my guild while I
--- exchange lists.
+-- members, whatever I share with the guild (they hold no identity); a guild list or a guild's record, from a member of
+-- my guild while I exchange lists.
 local PAYLOAD_SENDERS = {
     REC = sharedChannel,
     GSET = function(_, sender) return Scopes.GuildMember(sender) end,
     GLIST = function(_, sender) return guildListsActive() and Scopes.GuildReaches(sender) end,
+    GIREC = function(_, sender) return guildListsActive() and Scopes.GuildReaches(sender) end,
 }
 
 local function receive(_, text, distribution, sender)
@@ -870,6 +935,10 @@ local function receive(_, text, distribution, sender)
         receiveGuildListRequest(sender)
     elseif message.type == "GLIST" then
         receiveGuildListUpdate(message, sender)
+    elseif message.type == "GIGET" then
+        receiveGuildRecordRequest(message, sender)
+    elseif message.type == "GIREC" then
+        receiveGuildRecordUpdate(message)
     end
 end
 

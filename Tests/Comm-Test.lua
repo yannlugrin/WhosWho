@@ -1669,7 +1669,7 @@ check(sent({ type = "GSGET", target = "Ivy Main" }) == 0, "and their revision is
 local function listHash(session)
     local guid = session.character.guid
     local GuildList = session.ns.GuildList
-    return GuildList.Hash(GuildList.Entries(GUILD2, session.ns.Identity.Ruleset(guid)))
+    return GuildList.Hash(GuildList.Entries(GUILD2, session.ns.Identity.Ruleset(guid)), GuildList.GuildRecordEntries(GUILD2))
 end
 check(listHash(hal) == listHash(ivy) and listHash(ivy) == listHash(joe), "members who know each other hold the same list")
 
@@ -1721,6 +1721,44 @@ check(sent({ from = "Hal Main", type = "GSET", distribution = "GUILD" }) == 1
     "turning it on sends the settings, then one announcement that asks for none back")
 check(sent({ type = "ANNOUNCE", target = "Hal Main" }) == 0 and sent({ type = "GLGET" }) == 0,
     "members holding the officer's list send nothing")
+
+-- Guild records: what an officer links spreads to the members through the guild lists.
+local maxMain = character("Max Main", "Player-1-0000F601", WARRIOR, GUILD2)
+maxMain.rankIndex = 3
+local MAX = "G000000000000f601"
+local guildRecordRev = os.time()
+local function guildRecordBy(session, characters, clubId)
+    local ruleset = session.ns.Identity.Ruleset(session.character.guid)
+    local chars = {}
+    for _, c in ipairs(characters) do chars[c.guid] = { name = c.name, ruleset = ruleset, classID = c.classID } end
+    guildRecordRev = guildRecordRev + 1
+    local record = {
+        v = session.ns.GuildRecord.VERSION, guild = clubId or GUILD2, id = MAX, main = characters[1].guid, chars = chars,
+        signer = session.ns.Identity.Id(), signerGuid = session.character.guid, rev = guildRecordRev,
+    }
+    record.sig = session.ns.Identity.Sign(session.ns.GuildRecord.Canonical(record))
+    return record
+end
+check(hal.ns.GuildRecord.Accept(guildRecordBy(hal, { maxMain }), 1) == "accepted" and state(hal, maxMain.guid) == "guild",
+    "an officer holds the guild's record of a member without Who's Who")
+logout(kim)
+clearLog()
+kim = login(kimAccount, kimMain)
+run(60)
+check(sent({ from = "Kim Main", type = "GIGET" }) == 1 and sent({ type = "GIREC", target = "Kim Main" }) == 1,
+    "a member taking a list asks one holder for the guild's records it lacks")
+check(holderId(kim, maxMain.guid) == MAX and state(kim, maxMain.guid) == "guild" and kim.ns.People.Nickname(MAX) == "Max Main",
+    "and holds the guild identity, its character linked by the guild")
+
+local joeRecord = guildRecordBy(joe, { maxMain, kimMain })
+joe.ns.Protocol:SendCommMessage("WhosWho", joe.ns.Codec.GuildRecordUpdate(joeRecord), "GUILD")
+run(10)
+check(kim.ns.GuildRecord.Held(GUILD2, MAX).signer == hal.ns.Identity.Id() and holderId(kim, kimMain.guid) == nil,
+    "a guild record signed by a member below the trusted rank is refused")
+hal.ns.Protocol:SendCommMessage("WhosWho", hal.ns.Codec.GuildRecordUpdate(guildRecordBy(hal, { maxMain }, 31000099)), "GUILD")
+run(10)
+check(kim.ns.GuildRecord.Held(31000099, MAX) == nil, "and one about another guild is dropped")
+
 logout(hal)
 logout(kim)
 logout(lea)
@@ -1978,6 +2016,26 @@ do
         "an empty announcement carries no identity, and asks for the receiver's")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0") == nil, "an announcement without the guild list field is refused")
     check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 x") == nil, "a malformed guild list revision is refused")
+end
+
+-- Guild record messages ---------------------------------------------------------------------------------
+
+do
+    local Codec, id, guildId = ann.ns.Codec, ann.ns.Identity.Id(), "G000000000000f601"
+    local request = Codec.Decode(Codec.GuildRecordRequest({ id, guildId }))
+    check(request and request.type == "GIGET" and request.ids[1] == id and request.ids[2] == guildId,
+        "a GIGET names player and guild identity IDs")
+    check(Codec.Decode("1 GIGET G123") == nil, "and nothing else")
+    local list = Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }, { [guildId] = 5, [id] = 4 }))
+    check(list and list.entries[id] == 3 and list.guildEntries[guildId] == 5 and list.guildEntries[id] == 4,
+        "a GLIST carries the guild's records apart from the identities, the same ID in both")
+    list = Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }))
+    check(list and next(list.guildEntries) == nil, "one from 0.3.0 has no guild records")
+    local entries, guildEntries = {}, {}
+    for i = 1, 1500 do entries[("%064x"):format(i)] = 1 end
+    for i = 1, 501 do guildEntries[("G%016x"):format(i)] = 1 end
+    check(Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", entries, guildEntries)) == nil,
+        "a GLIST holds at most 2 000 identities and guild records together")
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

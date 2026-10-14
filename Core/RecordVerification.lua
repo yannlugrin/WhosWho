@@ -11,9 +11,9 @@ ns.RecordVerification = RecordVerification
 -- At 16 bits per slice, one verification takes about 33 frames of at most 21 ms each (build 1.60.1).
 local SLICE_BITS = 16
 
----A kind of signed record: Record for identity records, GuildSettings for guild settings.
+---A kind of signed record: Record for identity records, GuildSettings for guild settings, GuildRecord for guild records.
 ---@class WhosWho.SignedFormat
----@field Canonical fun(signedRecord: table): string the signed bytes
+---@field Canonical fun(signedRecord: table): string? the signed bytes; never nil for a record its Validate accepts
 ---@field Verify fun(signedRecord: table): boolean
 
 ---@class WhosWho.QueuedRecord
