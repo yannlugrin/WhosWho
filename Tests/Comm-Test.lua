@@ -1686,7 +1686,7 @@ run(60)
 check(sent({ from = "Kim Main", type = "GLGET" }) == 1 and sent({ from = "Kim Main", type = "GLGET", target = "Hal Main" }) == 1,
     "a member whose list is older asks one member for its list, an officer when one holds it")
 check(sent({ from = "Hal Main", type = "GLIST", target = "Kim Main" }) == 1, "the officer answers by whisper")
-check(state(kim, ivyMain.guid) == "guild" and holderId(kim, ivyMain.guid) == ivy.ns.Identity.Id(),
+check(state(kim, ivyMain.guid) == "relayed" and holderId(kim, ivyMain.guid) == ivy.ns.Identity.Id(),
     "an identity she didn't hold comes from the officer, listed by the guild")
 check(select(2, kim.ns.People.Find(ivyMain.guid)).level == ivyMain.level
     and select(2, kim.ns.People.Find(ivyMain.guid)).lastSeen == nil,
@@ -1698,7 +1698,7 @@ local lea = login(leaAccount, leaMain)
 slash(lea, "link")
 run(60)
 local ivyId = ivy.ns.Identity.Id()
-check(state(lea, ivyMain.guid) == "guild", "another member joining gets it the same way")
+check(state(lea, ivyMain.guid) == "relayed", "another member joining gets it the same way")
 lea.ns.People.Forget(ivyId)
 local ivyRecordText = kim.ns.Codec.RecordUpdate(kim.ns.People.Get(ivyId).signedRecord)
 kim.ns.Protocol:SendCommMessage("WhosWho", ivyRecordText, "WHISPER", "Lea Main")
@@ -1706,7 +1706,7 @@ run(5)
 check(lea.ns.People.Get(ivyId) == nil, "an identity she doesn't hold, relayed by a member below the officers, is refused")
 hal.ns.Protocol:SendCommMessage("WhosWho", ivyRecordText, "WHISPER", "Lea Main")
 run(5)
-check(state(lea, ivyMain.guid) == "guild", "and taken from an officer")
+check(state(lea, ivyMain.guid) == "relayed", "and taken from an officer")
 
 -- Hal turns Who's Who off for the guild, then on again.
 hal.ns.Protocol.ChangeGuildSettings({ enable = false, enforceLinking = false })

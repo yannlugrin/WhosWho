@@ -197,6 +197,7 @@ do
         identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true, guild = 7 } } },
         forgotten = { a = 7, b = { rev = 2, at = 50 } },
         guildSettings = { [7] = { v = 1, guild = 7 } },
+        people = { p = { id = "p", chars = { [G3] = { state = "guild" }, [G4] = { state = "listed" } } } },
     }
     ns.Migrations.Data(data)
     check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
@@ -204,6 +205,8 @@ do
     check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
         "a 0.1.0-beta.1 forgotten revision gets the migration's time")
     check(data.guildSettings[7].record.guild == 7, "a 0.1.1 guild settings record is held in its entry")
+    check(data.people.p.chars[G3].state == "relayed" and data.people.p.chars[G4].state == "listed",
+        "a character 0.3.0 had as passed on by the guild (\"guild\") is now \"relayed\"")
 
     check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
         and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
@@ -220,13 +223,14 @@ do
 
     local saved = {
         identity = { id = string.rep("a", 64), rev = 5, signatures = { x = "y" }, chars = {} }, forgotten = {}, guildSettings = {},
+        people = {},
     }
     ns.Migrations.Data(saved)
     check(saved.identity.rev == 6 and saved.identity.signatures == nil,
         "my record, signed by 0.2.0 over a fixed list of fields, gets a new revision: the others fetch it in the new format")
     ns.Migrations.Data(saved)
     check(saved.identity.rev == 6, "once")
-    local notCreated = { identity = { rev = 1, chars = {} }, forgotten = {}, guildSettings = {} }
+    local notCreated = { identity = { rev = 1, chars = {} }, forgotten = {}, guildSettings = {}, people = {} }
     ns.Migrations.Data(notCreated)
     check(notCreated.identity.rev == 1, "an identity not created yet keeps its revision")
 end
@@ -1112,7 +1116,7 @@ do
     P.Accept(makeRecord(F, 1, { G5 }), true)
     local manual = P.Create("Player-70-0000000F", { name = "Tank", ruleset = NORMAL, classID = MAGE })
     P.UpdateGuildMembers(9, { [G1] = true, [G3] = true, [G4] = true, [G5] = true, ["Player-70-0000000F"] = true })
-    check(state(G1) == "guild" and state(G4) == "guild", "characters a guild passed on stay while its roster lists them")
+    check(state(G1) == "relayed" and state(G4) == "relayed", "characters a guild passed on stay while its roster lists them")
 
     P.UpdateGuildMembers(9, { [G1] = true, [G3] = true, [G4] = true, ["Player-70-0000000F"] = true })
     check(P.Get(F) == nil, "a person known only through the guild goes once the roster no longer lists it")
@@ -1120,7 +1124,7 @@ do
 
     P.GuildLeft(9)
     check(P.Get(D) == nil and not P.Exists(G2), "leaving the guild forgets a person known only through it, alts too")
-    check(state(G3) == "confirmed" and state(G4) == "guild", "a person with a confirmed character stays whole")
+    check(state(G3) == "confirmed" and state(G4) == "relayed", "a person with a confirmed character stays whole")
     check(P.Get(manual) ~= nil, "a person I created stays")
 end
 

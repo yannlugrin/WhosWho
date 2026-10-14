@@ -39,7 +39,7 @@ local function otherCharactersLine(person, guid)
         if settings.classColor then
             name = ns.Lists.ClassColoredName(name, character.classID)
         end
-        if character.state == "listed" or character.state == "guild" then
+        if character.state == "listed" or character.state == "relayed" then
             name = Glyphs.Markup(Glyphs.Character[character.state]) .. name
         end
         if entry.guid == person.main then name = name .. Glyphs.Markup(Glyphs.Main) end

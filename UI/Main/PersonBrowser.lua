@@ -86,7 +86,7 @@ end
 ---@field guid string
 ---@field name string
 ---@field classID integer
----@field state "confirmed"|"listed"|"added"|"guild"
+---@field state WhosWho.CharacterState
 ---@field main boolean
 ---@field online boolean
 ---@field lastSeen number? seconds, from time()

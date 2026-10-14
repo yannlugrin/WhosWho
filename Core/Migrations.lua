@@ -42,6 +42,15 @@ local DATA_STEPS = {
         local identity = data.identity
         if identity.id then identity.rev, identity.signatures = identity.rev + 1, nil end
     end,
+    -- 5. 0.3.0: a character of a player's record passed on by my guild had the state "guild", now "relayed" ("guild"
+    -- is what the guild itself links).
+    function(data)
+        for _, person in pairs(data.people) do
+            for _, character in pairs(person.chars) do
+                if character.state == "guild" then character.state = "relayed" end
+            end
+        end
+    end,
 }
 
 ---@type fun(settings: WhosWho.Settings)[]

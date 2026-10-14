@@ -242,7 +242,7 @@ end
 
 local PEOPLE_LISTED = 10
 local STATE_NAMES = {
-    confirmed = L["confirmed"], listed = L["listed"], guild = L["listed by the guild"], added = L["added by you"],
+    confirmed = L["confirmed"], listed = L["listed"], relayed = L["listed by the guild"], added = L["added by you"],
 }
 
 local function printPerson(person)

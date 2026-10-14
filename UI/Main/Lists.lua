@@ -65,7 +65,7 @@ function Lists.NicknameSource(person)
     local listedByGuild = false
     for _, character in pairs(person.chars) do
         if character.state == "confirmed" then return person.customNickname and "renamed" or "confirmed" end
-        listedByGuild = listedByGuild or character.state == "guild"
+        listedByGuild = listedByGuild or character.state == "relayed"
     end
     return listedByGuild and "guild" or "unconfirmed"
 end

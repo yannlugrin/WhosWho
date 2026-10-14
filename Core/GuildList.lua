@@ -12,7 +12,7 @@ ns.GuildList = GuildList
 -- A member at this rank index or above (0 = guild master) passes on identities I don't hold yet.
 GuildList.TRUSTED_RANK_INDEX = 1
 -- Characters of an identity that place it in the guild's list.
-local IN_LIST_STATES = { confirmed = true, guild = true }
+local IN_LIST_STATES = { confirmed = true, relayed = true }
 
 ---When my list of a guild last changed, and the hash of its content then.
 ---@class WhosWho.GuildListRevision

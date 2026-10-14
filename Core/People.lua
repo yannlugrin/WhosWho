@@ -26,7 +26,7 @@ ns.People = People
 ---@alias WhosWho.CharacterState
 ---| "confirmed"  # in the player's record, and a message sent from that character carried the identity
 ---| "listed"     # in the player's record, not confirmed yet
----| "guild"      # in the player's record, received from a trusted member of my guild, not from the player; not confirmed yet
+---| "relayed"    # in the player's record, passed on by a trusted member of my guild, not by the player; not confirmed yet
 ---| "added"      # added by me
 
 ---@class WhosWho.PersonCharacter: WhosWho.Character
@@ -435,7 +435,7 @@ local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel, f
     local character = toPerson.chars[guid] or fromCharacter or {}
     character.name, character.ruleset, character.classID = recordCharacter.name, recordCharacter.ruleset, recordCharacter.classID
     if character.state ~= "confirmed" and not (fromGuild and character.state == "listed") then
-        character.state = fromGuild and "guild" or "listed"
+        character.state = fromGuild and "relayed" or "listed"
     end
     if confirmedLevel then character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time() end
     toPerson.chars[guid] = character
@@ -612,7 +612,7 @@ end
 -- on, still in it (members).
 local function holdsPlayersCharacter(person, memberGuids)
     for guid, character in pairs(person.chars) do
-        if character.state ~= "added" and (character.state ~= "guild" or memberGuids[guid]) then return true end
+        if character.state ~= "added" and (character.state ~= "relayed" or memberGuids[guid]) then return true end
     end
     return false
 end

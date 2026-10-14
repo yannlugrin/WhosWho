@@ -35,7 +35,7 @@ Glyphs.Nickname = {
 }
 
 ---A character's state in a person.
----@type table<"confirmed"|"listed"|"added"|"guild", WhosWho.Glyph>
+---@type table<WhosWho.CharacterState, WhosWho.Glyph>
 Glyphs.Character = {
     confirmed = { texture = PATH .. "Person", color = NORMAL_FONT_COLOR, label = L["Confirmed"],
         text = L["Declared by the player and seen."] },
@@ -43,7 +43,7 @@ Glyphs.Character = {
         text = L["Declared by the player, not seen yet."] },
     added = { texture = PATH .. "Question", color = GRAY_FONT_COLOR, label = L["Added by me"],
         text = L["Not listed by the player: you added it yourself."] },
-    guild = { texture = PATH .. "Banner", color = GREEN_FONT_COLOR, label = L["Guild"],
+    relayed = { texture = PATH .. "Banner", color = GREEN_FONT_COLOR, label = L["Guild"],
         text = L["Listed by your guild."] },
 }
 
