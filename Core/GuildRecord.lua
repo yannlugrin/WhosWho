@@ -1,6 +1,6 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local Crypto, Record = ns.Crypto, ns.Record
+local Crypto, People, Record = ns.Crypto, ns.People, ns.Record
 
 -- What a guild says about one person: the characters it links to them, signed by its guild master or one of its
 -- officers.
@@ -17,8 +17,8 @@ GuildRecord.VERSION = 1
 ---@field v integer GuildRecord.VERSION
 ---@field guild integer club ID
 ---@field id string the identity it is about: a player's identity ID, or a guild identity ID
----@field nickname string? guild identity only
----@field main string? guild identity only: GUID, one of chars; nil without characters
+---@field nickname string? read for a guild identity only
+---@field main string? read for a guild identity only: GUID, one of chars; nil without characters
 ---@field chars table<string, WhosWho.Character> by GUID, the characters in the guild it links to that identity
 ---@field signer string identity ID of the member who signed it
 ---@field signerGuid string the character it was signed from
@@ -63,10 +63,8 @@ function GuildRecord.Validate(record)
     end
     if count > Record.MAX_CHARACTERS then return false, "chars" end
 
-    -- The player's own nickname and main apply to a shared identity.
-    if not guildIdentity then
-        if record.nickname ~= nil or record.main ~= nil then return false, "main" end
-    else
+    -- A guild identity's own nickname and main; a shared identity has the player's.
+    if guildIdentity then
         if record.nickname ~= nil and not Record.IsName(record.nickname) then return false, "nickname" end
         if count == 0 then
             if record.main ~= nil then return false, "main" end
@@ -93,4 +91,56 @@ function GuildRecord.Verify(signedRecord)
     if not GuildRecord.Validate(signedRecord) then return false end
     return Crypto.Ed25519.Verify(GuildRecord.Canonical(signedRecord), Crypto.FromHex(signedRecord.sig),
         Crypto.FromHex(signedRecord.signer))
+end
+
+-- Records ----------------------------------------------------------------------------------------
+
+---@return table<integer, table<string, WhosWho.SignedGuildRecord>> by club ID, then identity ID
+local function heldByGuild()
+    return ns.data.guildRecords
+end
+
+---The record I hold of what that guild says about that identity.
+---@param clubId integer
+---@param id string
+---@return WhosWho.SignedGuildRecord?
+function GuildRecord.Held(clubId, id)
+    local held = heldByGuild()[clubId]
+    return held and held[id]
+end
+
+---Whether that record replaces the one I hold: a later revision, or the same one from a greater signer ID, so that
+---every member keeps the same one.
+---@param signedRecord WhosWho.SignedGuildRecord
+---@return boolean
+function GuildRecord.IsNewer(signedRecord)
+    local held = GuildRecord.Held(signedRecord.guild, signedRecord.id)
+    if not held then return true end
+    if signedRecord.rev ~= held.rev then return signedRecord.rev > held.rev end
+    return signedRecord.signer > held.signer
+end
+
+---Holds a verified record that is newer, when its signer may write it: its signing character confirmed under its
+---identity (a record refused for that is asked for again with the guild's next list), at a rank index up to
+---GuildList.TRUSTED_RANK_INDEX in my roster. Then applies it to the people I hold.
+---@param signedRecord WhosWho.SignedGuildRecord signature verified
+---@param signerRankIndex integer? the signing character's rank index in my roster, nil when it does not list it
+---@return "accepted"|"stale"|"refused"
+function GuildRecord.Accept(signedRecord, signerRankIndex)
+    if not GuildRecord.IsNewer(signedRecord) then return "stale" end
+    if not (signerRankIndex and signerRankIndex <= ns.GuildList.TRUSTED_RANK_INDEX
+        and People.IsConfirmedCharacter(signedRecord.signer, signedRecord.signerGuid)) then
+        return "refused"
+    end
+    local held = heldByGuild()
+    held[signedRecord.guild] = held[signedRecord.guild] or {}
+    held[signedRecord.guild][signedRecord.id] = signedRecord
+    People.ApplyGuildRecord(signedRecord)
+    return "accepted"
+end
+
+---None of my characters is in that guild any more: its records go (People.GuildLeft removes what they linked).
+---@param clubId integer
+function GuildRecord.ForgetGuild(clubId)
+    heldByGuild()[clubId] = nil
 end

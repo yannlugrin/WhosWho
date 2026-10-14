@@ -3,7 +3,7 @@ local _, ns = ...
 local AutomaticChanges = ns.AutomaticChanges
 
 -- Other players' identities, by identity ID: shared ones built from the player's record, manual ones ("M<n>")
--- created by me for players without the add-on.
+-- created by me for players without the add-on, and guild identities ("G<hex>") a guild's record makes (GuildRecord).
 
 ---@class WhosWho.People
 local People = {}
@@ -14,8 +14,9 @@ ns.People = People
 ---Saved in ns.data.people, by identity ID.
 ---@class WhosWho.Person
 ---@field id string identity ID, the same as its key in ns.data.people
----@field signedRecord WhosWho.SignedIdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person
----@field nickname string? the player's own nickname, from the record
+---@field signedRecord WhosWho.SignedIdentityRecord? the player's record as received, for revisions and relaying; nil for a manual person or a guild identity
+---@field madeByGuild integer? for a guild identity, the guild (club ID) whose record makes it
+---@field nickname string? the player's own nickname, from the record; a guild identity's, from its guild's record
 ---@field customNickname string? my nickname for this person
 ---@field note string? my note about this person, never shared; may hold several lines
 ---@field main string GUID of the main, or of the record's guild main; another identity can hold a shared person's main
@@ -28,12 +29,13 @@ ns.People = People
 ---| "listed"     # in the player's record, not confirmed yet
 ---| "relayed"    # in the player's record, passed on by a trusted member of my guild, not by the player; not confirmed yet
 ---| "added"      # added by me
+---| "guild"      # linked by my guild's record (GuildRecord), not by the player
 
 ---@class WhosWho.PersonCharacter: WhosWho.Character
 ---@field state WhosWho.CharacterState
 ---@field level integer?
 ---@field lastSeen number? seconds, from time()
----@field guild integer? club ID of the guild in which one of my characters saw it
+---@field guild integer? club ID of the guild in which one of my characters saw it; for the state "guild", the guild whose record links it
 ---@field friendOf table<string, true>? GUIDs of my characters that have it as a WoW friend
 ---@field bnetFriend string? BattleTag of my Battle.net friend seen playing it; kept locally, never sent
 ---@field whisperedAt number? seconds, from time(): when one of my characters last whispered it
@@ -124,6 +126,17 @@ function People.Exists(guid)
     return index()[guid] ~= nil
 end
 
+---Whether a message sent from that character proved it belongs to that identity: a confirmed character of a person I
+---hold, or one of my linked characters for my own identity.
+---@param id string
+---@param guid string
+---@return boolean
+function People.IsConfirmedCharacter(id, guid)
+    if id == ns.Identity.Id() then return ns.Identity.IsLinked(guid) end
+    local person, character = People.Find(guid)
+    return person ~= nil and person.id == id and character ~= nil and character.state == "confirmed"
+end
+
 ---The person holding a confirmed character with that whole name in that ruleset (the secondary key).
 ---@param name string "First Surname"
 ---@param ruleset WhosWho.Ruleset
@@ -186,8 +199,10 @@ function People.IdentityNickname(id)
     local person = ns.data.people[id]
     if not person then return nil end
 
-    -- Another identity can hold the main (a confirmation moved it there); its name is still in the record.
-    local main = person.chars[person.main] or (person.signedRecord and person.signedRecord.chars[person.main])
+    -- Another identity can hold the main (a confirmation moved it there); its name is still in the record, the player's
+    -- or the guild's.
+    local record = person.signedRecord or (person.madeByGuild and ns.data.guildRecords[person.madeByGuild][id])
+    local main = person.chars[person.main] or (record and record.chars[person.main])
     return person.nickname or (main and main.name)
 end
 
@@ -401,43 +416,60 @@ end
 
 -- Received from players --------------------------------------------------------------------------
 
--- Puts one of a record's characters in `toPerson`, and removes it from the person it no longer belongs to.
--- `confirmedLevel` is given when a message from the character proved it (its level then); without it, another
--- player's identity keeps the character. `fromGuild`: the record came from my guild, not from the player.
-local function storeCharacter(toPerson, guid, recordCharacter, confirmedLevel, fromGuild)
-    -- Another player keeps a character they declared, unless this is a confirmation.
+-- One of my manual identities merges into the identity a player's record or my guild's links one of its characters
+-- to: its characters, my nickname unless I already named that identity, and my note below the one I had.
+local function mergeManualPerson(fromPerson, toPerson)
+    AutomaticChanges.Record("merged", fromPerson, toPerson, fromPerson.chars)
+    for movedGuid, movedCharacter in pairs(fromPerson.chars) do
+        toPerson.chars[movedGuid] = movedCharacter
+        indexCharacter(movedGuid, toPerson.id)
+    end
+    toPerson.customNickname = toPerson.customNickname or fromPerson.customNickname
+    if fromPerson.note then
+        toPerson.note = toPerson.note and (toPerson.note .. "\n" .. fromPerson.note) or fromPerson.note
+    end
+    forget(fromPerson.id)
+end
+
+-- Who declares a character, weakest first: me, my guild, the player.
+local CLAIMS = { added = 1, guild = 2, relayed = 3, listed = 3, confirmed = 3 }
+-- A message from the character itself, which takes it whatever declares it.
+local CONFIRMATION_CLAIM = 4
+
+-- Puts a character a record declares in `toPerson` with that state ("listed" or "relayed" from a player's record,
+-- "guild" from my guild's), and removes it from the person it no longer belongs to. A stronger claim takes it from
+-- another person, an equal one updates it on its own person: a player keeps a character they declared, my guild's
+-- link gives way to the player's record, mine to both. `confirmedLevel` is given when a message from the character
+-- proved it (its level then). My manual identity holding the character merges into `toPerson`; a guild identity left
+-- without characters goes. Whether the character is in `toPerson`.
+local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedLevel)
+    local claim = confirmedLevel and CONFIRMATION_CLAIM or CLAIMS[state]
     local fromPersonId = index()[guid]
-    local fromPerson = fromPersonId and fromPersonId ~= toPerson.id and ns.data.people[fromPersonId] or nil
-    local fromCharacter
-    if fromPerson and fromPerson.signedRecord then
-        fromCharacter = fromPerson.chars[guid]
-        if not confirmedLevel and fromCharacter.state ~= "added" then return false end
-        AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPerson, toPerson, { [guid] = true })
+    local fromPerson = fromPersonId and ns.data.people[fromPersonId]
+    local fromCharacter = fromPerson and fromPerson.chars[guid]
+    if fromPerson == toPerson then
+        if claim < CLAIMS[fromCharacter.state] then return false end
+    elseif fromPerson and (fromPerson.signedRecord or fromPerson.madeByGuild) then
+        if claim <= CLAIMS[fromCharacter.state] then return false end
+        -- My link moved, or a player's character taken by a confirmation; my guild's link is not mine.
+        if fromCharacter.state ~= "guild" then
+            AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPerson, toPerson, { [guid] = true })
+        end
         fromPerson.chars[guid] = nil
+        if fromPerson.madeByGuild and not next(fromPerson.chars) then forget(fromPerson.id) end
+    elseif fromPerson then
+        mergeManualPerson(fromPerson, toPerson)
     end
 
-    -- A manual identity I created for this player: merge it into this identity.
-    if fromPerson and not fromPerson.signedRecord then
-        AutomaticChanges.Record("merged", fromPerson, toPerson, fromPerson.chars)
-        for movedGuid, movedCharacter in pairs(fromPerson.chars) do
-            toPerson.chars[movedGuid] = movedCharacter
-            indexCharacter(movedGuid, toPerson.id)
-        end
-        toPerson.customNickname = toPerson.customNickname or fromPerson.customNickname
-        if fromPerson.note then
-            toPerson.note = toPerson.note and (toPerson.note .. "\n" .. fromPerson.note) or fromPerson.note
-        end
-        forget(fromPerson.id)
-    end
-
-    -- The character itself, its entry moved from the identity it left, with the record's data: listed (by the guild
-    -- for a record it relayed, unless the player's own record already listed it), or confirmed once proven.
+    -- The character itself, its entry moved from the identity it left, with the record's data. A player's record
+    -- passed on by my guild doesn't make listed relayed again, nor anything make confirmed less.
     local character = toPerson.chars[guid] or fromCharacter or {}
     character.name, character.ruleset, character.classID = recordCharacter.name, recordCharacter.ruleset, recordCharacter.classID
-    if character.state ~= "confirmed" and not (fromGuild and character.state == "listed") then
-        character.state = fromGuild and "relayed" or "listed"
+    if confirmedLevel then
+        character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time()
+    elseif character.state ~= "confirmed" and not (state == "relayed" and character.state == "listed") then
+        character.state = state
     end
-    if confirmedLevel then character.state, character.level, character.lastSeen = "confirmed", confirmedLevel, time() end
     toPerson.chars[guid] = character
     indexCharacter(guid, toPerson.id)
 
@@ -449,6 +481,54 @@ end
 local function forgetUnlinked(id, rev)
     forget(id)
     ns.data.forgotten[id] = { rev = rev, at = time() }
+end
+
+-- Received from my guild ------------------------------------------------------------------------
+
+-- Brings the person a guild's record is about in line with it: the characters that guild linked and the record no
+-- longer lists leave, the ones it lists are linked; a guild identity takes its nickname and main, and goes when the
+-- record holds no characters (my nickname and note with it) or none is left to it. A link to a shared identity I don't
+-- hold waits in ns.data.guildRecords until its record arrives (People.Accept).
+---@param signedRecord WhosWho.SignedGuildRecord
+local function applyGuildRecord(signedRecord)
+    local people, clubId, id = ns.data.people, signedRecord.guild, signedRecord.id
+    local guildIdentity = ns.GuildRecord.IsGuildIdentityId(id)
+    local person = people[id]
+    if not (person or guildIdentity) then return end
+
+    if person then
+        for guid, character in pairs(person.chars) do
+            if character.state == "guild" and character.guild == clubId and not signedRecord.chars[guid] then
+                person.chars[guid] = nil
+                unindexCharacter(guid, id)
+            end
+        end
+    end
+    if guildIdentity and not next(signedRecord.chars) then
+        forget(id)
+        return
+    end
+    if guildIdentity then
+        person = person or { id = id, madeByGuild = clubId, chars = {} }
+        people[id] = person
+        person.nickname, person.main = signedRecord.nickname, signedRecord.main
+    end
+    ---@cast person WhosWho.Person
+    person.updatedAt = time()
+
+    AutomaticChanges.BeginOperation(person)
+    for guid, recordCharacter in pairs(signedRecord.chars) do
+        if storeCharacter(person, guid, recordCharacter, "guild") then person.chars[guid].guild = clubId end
+    end
+    AutomaticChanges.EndOperation()
+    if guildIdentity and not next(person.chars) then forget(id) end
+end
+
+---Applies a guild's record I accepted (GuildRecord.Accept) to the people I hold.
+---@param signedRecord WhosWho.SignedGuildRecord signature and signer checked
+function People.ApplyGuildRecord(signedRecord)
+    applyGuildRecord(signedRecord)
+    changed()
 end
 
 ---Stores a newer revision of a player's record, or the one replacing the revision I hold. Its characters that declared
@@ -479,16 +559,17 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
     end
     ns.data.forgotten[signedRecord.id] = nil
 
-    -- Characters the player removed leave, silently; my added alts stay.
+    -- Characters the player removed leave, silently; the alts I or my guild linked stay.
     if sharedPerson then
         for guid, character in pairs(sharedPerson.chars) do
-            if character.state ~= "added" and not recordCharacters[guid] then
+            if character.state ~= "added" and character.state ~= "guild" and not recordCharacters[guid] then
                 sharedPerson.chars[guid] = nil
                 unindexCharacter(guid, signedRecord.id)
             end
         end
     end
 
+    local created = sharedPerson == nil
     sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
     people[signedRecord.id] = sharedPerson
     sharedPerson.signedRecord, sharedPerson.nickname = signedRecord, signedRecord.nickname
@@ -501,9 +582,15 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
     -- Update or add the characters this revision lists.
     AutomaticChanges.BeginOperation(sharedPerson)
     for guid, recordCharacter in pairs(recordCharacters) do
-        storeCharacter(sharedPerson, guid, recordCharacter, pending[guid], fromGuild)
+        storeCharacter(sharedPerson, guid, recordCharacter, fromGuild and "relayed" or "listed", pending[guid])
     end
     AutomaticChanges.EndOperation()
+    -- What my guilds link to this identity, held until it arrived.
+    if created then
+        for _, records in pairs(ns.data.guildRecords) do
+            if records[signedRecord.id] then applyGuildRecord(records[signedRecord.id]) end
+        end
+    end
     changed()
 
     return "updated"
@@ -538,26 +625,28 @@ function People.Confirm(id, guid, level)
     end
 
     AutomaticChanges.BeginOperation(person)
-    local stored = storeCharacter(person, guid, recordCharacter, level)
+    local stored = storeCharacter(person, guid, recordCharacter, "listed", level)
     AutomaticChanges.EndOperation()
     if stored then changed() end
     return stored
 end
 
 ---A message from that character declared that it belongs to no identity (NOID): it leaves the shared identity holding it,
----listed or confirmed, silently; a character I added stays. A shared person left without characters of the player's
----is forgotten. Records listing it leave it out until a message from it confirms an identity.
+---listed or confirmed, silently; a character I or my guild linked stays. A shared person left without characters of
+---the player's is forgotten. Records listing it leave it out until a message from it confirms an identity.
 ---@param guid string
 function People.DeclaredNoIdentity(guid)
     ns.data.noIdentity[guid] = time()
     local person, character = People.Find(guid)
-    if not (person and person.signedRecord and character and character.state ~= "added") then return end
+    if not (person and person.signedRecord and character and character.state ~= "added" and character.state ~= "guild") then
+        return
+    end
 
     person.chars[guid] = nil
     person.updatedAt = time()
     unindexCharacter(guid, person.id)
     for _, other in pairs(person.chars) do
-        if other.state ~= "added" then
+        if other.state ~= "added" and other.state ~= "guild" then
             changed()
             return
         end
@@ -608,28 +697,40 @@ local function isForced(person, guid)
     return recordCharacter ~= nil and recordCharacter.guild ~= nil and recordCharacter.guild.forced == true
 end
 
--- Whether the person holds a character the player told me of: one I didn't add, and, for one only that guild passed
--- on, still in it (members).
+-- Whether the person holds a character the player told me of: one neither I nor my guild linked, and, for one only
+-- that guild passed on, still in it (members).
 local function holdsPlayersCharacter(person, memberGuids)
     for guid, character in pairs(person.chars) do
-        if character.state ~= "added" and (character.state ~= "relayed" or memberGuids[guid]) then return true end
+        if character.state ~= "added" and character.state ~= "guild" and (character.state ~= "relayed" or memberGuids[guid]) then
+            return true
+        end
     end
     return false
 end
 
--- Forgets what I hold of a shared person through that guild, for the characters its roster no longer lists (members):
--- the characters its rule added, but those never seen in my roster; the person too, when it had a character in that
--- guild and is left without a character the player told me of. Whether anything was forgotten.
+-- Forgets what I hold of a person through that guild, for the characters its roster no longer lists (members): the
+-- characters its rule added, but those never seen in my roster, and the ones its records linked. A shared person goes
+-- too when it had a character in that guild and is left without a character the player told me of; a guild identity
+-- that guild made, when it is left without characters, or when no roster is given (I left the guild). Whether anything
+-- was forgotten.
 local function forgetFormerMember(person, clubId, memberGuids)
     local inThatGuild, removedFromPerson = false, {}
     for guid, character in pairs(person.chars) do
         inThatGuild = inThatGuild or character.guild == clubId
-        local forcedThere = character.guild == clubId or character.guild == nil
-        if not memberGuids[guid] and forcedThere and isForced(person, guid) then
+        local forcedThere = (character.guild == clubId or character.guild == nil) and isForced(person, guid)
+        local linkedThere = character.state == "guild" and character.guild == clubId
+        if not memberGuids[guid] and (forcedThere or linkedThere) then
             person.chars[guid] = nil
             unindexCharacter(guid, person.id)
             removedFromPerson[guid] = true
         end
+    end
+    if person.madeByGuild then
+        if person.madeByGuild == clubId and not (next(person.chars) and next(memberGuids)) then
+            forget(person.id)
+            return true
+        end
+        return next(removedFromPerson) ~= nil
     end
     if (inThatGuild or next(removedFromPerson)) and not holdsPlayersCharacter(person, memberGuids) then
         forget(person.id)
@@ -641,17 +742,19 @@ local function forgetFormerMember(person, clubId, memberGuids)
     return true
 end
 
--- forgetFormerMember for every shared person. Whether anything was forgotten.
+-- forgetFormerMember for every shared person and guild identity. Whether anything was forgotten.
 local function forgetFormerMembers(clubId, memberGuids)
     local removed = false
     for _, person in pairs(ns.data.people) do
-        if person.signedRecord and forgetFormerMember(person, clubId, memberGuids) then removed = true end
+        if (person.signedRecord or person.madeByGuild) and forgetFormerMember(person, clubId, memberGuids) then
+            removed = true
+        end
     end
     return removed
 end
 
----Applies a whole guild roster: its characters get the guild, the others lose it. What I hold of a player only through
----that guild is forgotten once the roster no longer lists them.
+---Applies a whole guild roster: its characters get the guild, the others lose it. What I hold only through that guild,
+---a player or what its records linked, is forgotten once the roster no longer lists them.
 ---@param clubId integer
 ---@param memberGuids table<string, true>
 function People.UpdateGuildMembers(clubId, memberGuids)
@@ -668,7 +771,8 @@ function People.UpdateGuildMembers(clubId, memberGuids)
     if removed then changed() end
 end
 
----None of my characters is in that guild any more: what I hold of its members only through it is forgotten.
+---None of my characters is in that guild any more: what I hold only through it, its members or what its records linked,
+---is forgotten.
 ---@param clubId integer
 function People.GuildLeft(clubId)
     if forgetFormerMembers(clubId, {}) then changed() end

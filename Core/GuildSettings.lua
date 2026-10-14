@@ -208,14 +208,6 @@ function GuildSettings.IsNewer(signedRecord)
     return not held or held.signerUnconfirmed == true or GuildSettings.IsNewerThan(signedRecord, held.record)
 end
 
--- Whether the record's signing character is a confirmed character of its signing identity; for my own identity, one of
--- my linked characters.
-local function signerConfirmed(signedRecord)
-    if signedRecord.signer == Identity.Id() then return Identity.IsLinked(signedRecord.signerGuid) end
-    local person, character = People.Find(signedRecord.signerGuid)
-    return person ~= nil and person.id == signedRecord.signer and character ~= nil and character.state == "confirmed"
-end
-
 ---Holds a verified record that is newer, when its signer may change the settings: its signing character confirmed,
 ---and at a rank index up to GuildSettings.LOWEST_RANK_INDEX in my roster. A guild's first settings (none held, or held
 ---unconfirmed), whose signer I can't confirm yet, are taken unconfirmed when their signer is at such a rank, or when a
@@ -228,7 +220,7 @@ end
 function GuildSettings.Accept(signedRecord, signerRankIndex, sentByTrusted)
     if not GuildSettings.IsNewer(signedRecord) then return "stale" end
     local signerOfficer = signerRankIndex ~= nil and signerRankIndex <= GuildSettings.LOWEST_RANK_INDEX
-    if signerOfficer and signerConfirmed(signedRecord) then
+    if signerOfficer and People.IsConfirmedCharacter(signedRecord.signer, signedRecord.signerGuid) then
         hold(signedRecord, false)
         return "accepted"
     end

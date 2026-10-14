@@ -1,6 +1,6 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
-local GuildList, GuildSettings, Identity, People = ns.GuildList, ns.GuildSettings, ns.Identity, ns.People
+local GuildList, GuildRecord, GuildSettings, Identity, People = ns.GuildList, ns.GuildRecord, ns.GuildSettings, ns.Identity, ns.People
 
 -- Who my record goes to and through which channel, the GUIDs the game gives for the players I share with, and the
 -- relationships kept on confirmed characters (guild, friendOf, whisperedAt).
@@ -429,6 +429,7 @@ function Scopes.GuildChanged()
     Identity.SetGuild(guid, nil)
     if clubId and not Identity.HasCharacterInGuild(clubId, Identity.Ruleset(guid)) then
         People.GuildLeft(clubId)
+        GuildRecord.ForgetGuild(clubId)
         Identity.SetEnforcedLinkingOptIn(clubId, nil)
         GuildList.ForgetGuild(clubId)
     end

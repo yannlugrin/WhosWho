@@ -20,6 +20,7 @@ ns.Store = Store
 ---@field automaticChanges WhosWho.AutomaticChange[] most recent first, at most 100
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
 ---@field guildSettings table<integer, WhosWho.HeldGuildSettings> by club ID: each guild's settings as I hold them
+---@field guildRecords table<integer, table<string, WhosWho.SignedGuildRecord>> by club ID, then identity ID: what each guild says about a person (GuildRecord)
 ---@field guildLists table<integer, WhosWho.GuildListRevision> by club ID: my list's revision for each guild
 ---@field migrationVersion integer? the last migration step run on the data (Migrations)
 ---@field messageLog WhosWho.LoggedMessage[] while the diagnostic mode is on, most recent first, at most Diagnostic.KEPT_MESSAGES; emptied at logout while it is off
@@ -43,6 +44,7 @@ Store.DEFAULTS = {
         noIdentity = {},
         automaticChanges = {},
         guildSettings = {},
+        guildRecords = {},
         guildLists = {},
         messageLog = {},
     },

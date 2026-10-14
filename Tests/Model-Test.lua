@@ -1287,9 +1287,7 @@ do
         chars = { [G3] = { name = "Annie Fields", ruleset = NORMAL, classID = PRIEST } },
         signer = signer, signerGuid = "Player-70-000000FF", rev = 1792000000,
     })
-    check(GR.Validate(shared), "a record about a shared identity holds its characters only")
-    shared.main = G3
-    check(select(2, GR.Validate(shared)) == "main", "with a main, refused: the player's own applies")
+    check(GR.Validate(shared), "a record about a shared identity holds its characters")
 
     local function refusal(change)
         local changed = guildIdentity()
@@ -1303,6 +1301,83 @@ do
     check(refusal(function(r) r.v = GR.VERSION + 1 end) == "version", "a later version is refused")
     check(refusal(function(r) r.chars[G2].classID = 99 end) == "character", "known fields are checked strictly")
     check(refusal(function(r) r.info = { note = ("x"):rep(4097) } end) == "limits", "the limits of the signed bytes apply")
+end
+
+-- Guild records applied -----------------------------------------------------------------------------------
+
+fresh()
+do
+    local P, GR = ns.People, ns.GuildRecord
+    local CLUB = 22835221
+    local O, A, B, C = string.rep("1", 64), string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+    local GO, G6, G7, G8 = "Player-70-000000F0", "Player-70-00000016", "Player-70-00000017", "Player-70-00000018"
+    local BOB, BOB2 = "G3f9a1c207b4e5d61", "G00000000000000b2"
+    local revision = 1792000000
+    local function guildRecord(id, guids, main, nickname)
+        local chars = {}
+        for _, guid in ipairs(guids) do chars[guid] = { name = "Bob Stone", ruleset = NORMAL, classID = WARRIOR } end
+        revision = revision + 1
+        return { v = GR.VERSION, guild = CLUB, id = id, nickname = nickname, main = main, chars = chars,
+            signer = O, signerGuid = GO, rev = revision, sig = ("cd"):rep(64) }
+    end
+
+    -- The officer, confirmed.
+    P.Accept(makeRecord(O, 1, { GO }))
+    check(GR.Accept(guildRecord(BOB, { G1 }, G1), 1) == "refused", "a record whose signer isn't confirmed yet is refused")
+    P.Confirm(O, GO, 60)
+    check(GR.Accept(guildRecord(BOB, { G1 }, G1), 3) == "refused", "so is one signed below the trusted rank")
+
+    local bob = guildRecord(BOB, { G1, G2 }, G1, "Bob")
+    check(GR.Accept(bob, 1) == "accepted" and P.Get(BOB).madeByGuild == CLUB and state(G1) == "guild" and state(G2) == "guild"
+        and select(2, P.Find(G1)).guild == CLUB and P.Nickname(BOB) == "Bob",
+        "a guild identity becomes a person of its own, its characters linked by the guild")
+    check(GR.Accept(bob, 1) == "stale", "the same record again is stale")
+
+    -- A link to a shared identity, held before or after the guild's record.
+    P.Accept(makeRecord(A, 1, { G3 }))
+    GR.Accept(guildRecord(A, { G4 }), 1)
+    check(holderId(G4) == A and state(G4) == "guild", "the guild links a character to a member's shared identity")
+    P.Accept(makeRecord(A, 2, { G3 }, "Annie"))
+    check(state(G4) == "guild", "a new revision of the player's record keeps it")
+    P.DeclaredNoIdentity(G4)
+    check(state(G4) == "guild", "and a NOID from the character doesn't remove it")
+    GR.Accept(guildRecord(B, { G5 }), 1)
+    check(not P.Exists(G5), "a link to an identity I don't hold waits")
+    P.Accept(makeRecord(B, 1, { G6 }))
+    check(holderId(G5) == B and state(G5) == "guild", "and applies once its record arrives")
+
+    -- The player's own record wins.
+    P.Accept(makeRecord(C, 1, { G2 }))
+    check(holderId(G2) == C and state(G2) == "listed" and holderId(G1) == BOB,
+        "a player's record takes the character it lists from a guild identity, the others stay")
+    P.Accept(makeRecord(C, 2, { G2, G1 }))
+    check(holderId(G1) == C and P.Get(BOB) == nil and #ns.AutomaticChanges.List() == 0,
+        "a guild identity left without characters goes, without automatic changes: they weren't my links")
+    GR.Accept(guildRecord(A, { G4, G6 }), 1)
+    check(holderId(G6) == B, "a character a player's record declares is not linked by the guild")
+
+    -- My own links give way.
+    local manual = P.Create(G7, INFO)
+    P.AddCharacter(manual, G8, INFO)
+    GR.Accept(guildRecord(BOB2, { G7 }, G7, "Bobby"), 1)
+    check(P.Get(manual) == nil and holderId(G7) == BOB2 and state(G7) == "guild" and state(G8) == "added"
+        and ns.AutomaticChanges.List()[1].kind == "merged",
+        "my manual identity holding a character merges into the guild identity")
+
+    -- Changes, the roster and leaving.
+    GR.Accept(guildRecord(A, { G6 }), 1)
+    check(not P.Exists(G4), "a character the guild's newer record no longer links leaves")
+    GR.Accept(guildRecord(A, { G4 }), 1)
+    P.UpdateGuildMembers(CLUB, { [G7] = true, [G8] = true, [G3] = true })
+    check(not P.Exists(G4) and not P.Exists(G5) and holderId(G7) == BOB2,
+        "a character the roster no longer lists loses its guild link")
+    GR.Accept(guildRecord(BOB2, {}), 1)
+    check(P.Get(BOB2) == nil and not P.Exists(G8), "a guild identity whose record holds no characters goes, my alts with it")
+    GR.Accept(guildRecord(BOB, { G1 }, G1), 1)
+    P.GuildLeft(CLUB)
+    GR.ForgetGuild(CLUB)
+    check(P.Get(BOB) == nil and GR.Held(CLUB, A) == nil and holderId(G3) == A,
+        "leaving the guild forgets its records and what they linked, not the players' own")
 end
 
 if failures > 0 then
