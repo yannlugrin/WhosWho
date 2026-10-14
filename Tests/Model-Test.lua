@@ -19,7 +19,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 
 local ns = {}
 for _, file in ipairs({
-    "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Record.lua",
+    "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Migrations.lua", "Core/Record.lua",
     "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Core/GuildList.lua", "Comm/Scopes.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
@@ -161,7 +161,7 @@ do
         "a character unlinked by forgetting announces nothing and declares no identity")
 end
 
--- Settings migration ------------------------------------------------------------------------------
+-- Migrations --------------------------------------------------------------------------------------
 
 do
     local function profile(old)
@@ -174,7 +174,7 @@ do
             diagnostic = { enable = false, chat = true },
         }
         for key, value in pairs(old) do settings[key] = value end
-        ns.Store.MigrateSettings(settings)
+        ns.Migrations.Settings(settings)
         return settings
     end
 
@@ -198,7 +198,7 @@ do
         forgotten = { a = 7, b = { rev = 2, at = 50 } },
         guildSettings = { [7] = { v = 1, guild = 7 } },
     }
-    ns.Store.MigrateData(data)
+    ns.Migrations.Data(data)
     check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
         and data.identity.chars[G2].removedAt == nil, "a 0.1.0-beta.1 removal revision becomes a removal time")
     check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
@@ -206,6 +206,16 @@ do
     check(data.guildSettings[7].record.guild == 7, "a 0.1.1 guild settings record is held in its entry")
     check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
         and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
+
+    local version = data.migrationVersion
+    check(version and version > 0 and s.migrationVersion and s.migrationVersion > 0, "the last step run is saved")
+    data.identity.chars[G1].removedInRevision, data.forgotten.c = 5, 9
+    ns.Migrations.Data(data)
+    check(data.identity.chars[G1].removedInRevision == 5 and data.forgotten.c == 9 and data.migrationVersion == version,
+        "a step runs once: data saved after it stays as it is")
+    data.migrationVersion = version + 10
+    ns.Migrations.Data(data)
+    check(data.migrationVersion == version + 10, "a later release's number is kept, so its steps don't run again")
 end
 
 -- Record validation -------------------------------------------------------------------------------

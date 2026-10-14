@@ -21,6 +21,7 @@ ns.Store = Store
 ---@field whispers table<string, WhosWho.Whisper> by the other character's GUID, within the whisper window
 ---@field guildSettings table<integer, WhosWho.HeldGuildSettings> by club ID: each guild's settings as I hold them
 ---@field guildLists table<integer, WhosWho.GuildListRevision> by club ID: my list's revision for each guild
+---@field migrationVersion integer? the last migration step run on the data (Migrations)
 ---@field messageLog WhosWho.LoggedMessage[] while the diagnostic mode is on, most recent first, at most Diagnostic.KEPT_MESSAGES; emptied at logout while it is off
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
@@ -32,6 +33,7 @@ ns.Store = Store
 ---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer }, note: { enable: boolean } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted; the start of my note about the person
 ---@field diagnostic { enable: boolean, chat: boolean } the diagnostic mode: every Who's Who message sent or received kept in the message log, and printed in chat
 ---@field launcher { hide: boolean, showInCompartment: boolean, minimapPos: number? } LibDBIcon's own format: the minimap button and the add-on compartment entry
+---@field migrationVersion integer? the last migration step run on the settings (Migrations)
 
 Store.DEFAULTS = {
     global = {
@@ -89,69 +91,15 @@ function Store.Advanced(key)
     return value
 end
 
----Moves settings saved under older keys to the current ones, and removes the older keys.
----@param settings table the profile, with the current defaults
-function Store.MigrateSettings(settings)
-    -- 0.1.0-beta.1: chatNicknames, tooltipNickname, tooltipOtherCharacters (a boolean, later a table).
-    if settings.chatNicknames ~= nil then
-        settings.chat.nickname.enable = settings.chatNicknames
-        settings.chatNicknames = nil
-    end
-    if settings.tooltipNickname ~= nil then
-        if settings.tooltipNickname == "hidden" then
-            settings.tooltip.nickname.enable = false
-        else
-            settings.tooltip.nickname.position = settings.tooltipNickname
-        end
-        settings.tooltipNickname = nil
-    end
-    local otherCharacters = settings.tooltipOtherCharacters
-    if type(otherCharacters) == "table" then
-        for key, value in pairs(otherCharacters) do settings.tooltip.otherCharacters[key] = value end
-    elseif otherCharacters ~= nil then
-        settings.tooltip.otherCharacters.enable = otherCharacters
-    end
-    settings.tooltipOtherCharacters = nil
-    -- 0.1.1: debugMessages, the diagnostic mode, which printed every message in chat.
-    if settings.debugMessages ~= nil then
-        settings.diagnostic.enable = settings.debugMessages
-        settings.debugMessages = nil
-    end
-end
-
----Moves data saved in older formats to the current one.
----@param data WhosWho.Data
-function Store.MigrateData(data)
-    -- 0.1.0-beta.1: an unlinked character kept the revision that removed it, which it announced; its removal time is
-    -- unknown, so it gets the migration's.
-    for _, character in pairs(data.identity.chars) do
-        if character.removedInRevision then character.removedAt, character.removedInRevision = time(), nil end
-    end
-    -- 0.1.0: my character's guild was its club ID.
-    for _, character in pairs(data.identity.chars) do
-        if type(character.guild) == "number" then character.guild = { id = character.guild } end
-    end
-    -- 0.1.1: one signature, of the only record; each record is now signed apart (Identity.SignedRecord).
-    data.identity.sig, data.identity.signedDigest = nil, nil
-    -- 0.1.1: a guild's settings were its record alone.
-    for clubId, held in pairs(data.guildSettings) do
-        if held.v then data.guildSettings[clubId] = { record = held } end
-    end
-    -- 0.1.0-beta.1: a forgotten identity kept only the revision; its time is unknown, so it gets the migration's.
-    for id, forgotten in pairs(data.forgotten) do
-        if type(forgotten) == "number" then data.forgotten[id] = { rev = forgotten, at = time() } end
-    end
-end
-
 ---Sets ns.db, ns.data and ns.settings. Call on ADDON_LOADED.
 function Store.Init()
     local db = LibStub("AceDB-3.0"):New(addonName .. "DB", Store.DEFAULTS, true)
     ns.db = db
     ns.data = db.global
     createLogoutTables(ns.data)
-    Store.MigrateData(ns.data)
+    ns.Migrations.Data(ns.data)
     ns.settings = db.profile
-    Store.MigrateSettings(ns.settings)
+    ns.Migrations.Settings(ns.settings)
 end
 
 ---A fresh data table with the defaults, for the offline tests.

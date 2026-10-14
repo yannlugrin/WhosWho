@@ -24,6 +24,7 @@ Crypto\Ed25519.lua
 
 Core\Core.lua
 Core\Store.lua
+Core\Migrations.lua
 Core\Record.lua
 Core\Identity.lua
 Core\AutomaticChanges.lua

@@ -32,6 +32,7 @@ WhosWho/
 ├── Core/
 │   ├── Core.lua                   Init and character refresh (login, logout, level up), player name and ruleset, slash commands
 │   ├── Store.lua                  AceDB defaults and init (ns.data = account-wide data, ns.settings = profile)
+│   ├── Migrations.lua             Saved data and settings moved from older formats, once each, at load
 │   ├── Record.lua                 Shared data format: name rules, identity record validation, canonical bytes, sign, verify
 │   ├── Identity.lua               Own identity: keys (and their entropy), characters and links, nickname, signed record
 │   ├── AutomaticChanges.lua       Changes to my links made by Who's Who on its own, for the Review tab
@@ -525,6 +526,7 @@ messageLog  { { time, sent, distribution, name (the receiver of a whisper, or th
             messages sent and received while the diagnostic mode is on, most recent first, at most 1000; a REC, GSET or
             GLIST keeps only its version and type in text, size being the whole message's; emptied on PLAYER_LOGOUT
             (logout or /reload) while the mode is off
+migrationVersion  the last migration step run on the data (see Migrations below)
 ```
 
 Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared by every character), so they can be reset without touching the data:
@@ -535,10 +537,11 @@ advanced = { revisionWaitSeconds (15), quickRelogSeconds (300), whisperAnnouncem
            (delays of the protocol a player may change, no screen yet; read through Store.Advanced, which falls back on the default)
 tooltip = { nickname = { enable, position ("afterName" | "ownLine") }, otherCharacters = { enable, classColor, limit } (the "Also:" line), note = { enable } },
 diagnostic = { enable, chat } (the diagnostic mode: every Who's Who message sent or received kept in messageLog, and printed in chat),
-launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the minimap button and the add-on compartment entry)
+launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the minimap button and the add-on compartment entry),
+migrationVersion (the last migration step run on the settings, see Migrations below)
 ```
 
-`Store.MigrateData`, at load, turns the removal revision 0.1.0-beta.1 saved on an unlinked character (`removedInRevision`) into `removedAt`, and each `forgotten` revision into `{ rev, at }`, both set to the migration's time (the real one is unknown), and the club ID 0.1.0 saved as my character's `guild` into `{ id }`, without a join time. `Store.MigrateSettings`, at load, moves settings saved by 0.1.0-beta.1 (`chatNicknames`, `tooltipNickname`, `tooltipOtherCharacters`, a boolean then, a table in development builds) to these keys and removes the old ones, and `debugMessages`, saved up to 0.1.1, to `diagnostic.enable`. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
+**Migrations** (`Migrations`), at load only, from `Store.Init`: numbered steps, one per older version, run once each and in order, for the data (`Migrations.Data`) and for the settings (`Migrations.Settings`); the number of the last step run is saved as `migrationVersion` in each (a later release's number is kept, so its steps don't run again after going back to it). A step only reads and changes the saved tables: what needs the game, the roster or sending is not a migration. Data: 0.1.0-beta.1's removal revision on an unlinked character (`removedInRevision`) becomes `removedAt`, and each `forgotten` revision `{ rev, at }`, both set to the migration's time (the real one is unknown); the club ID 0.1.0 saved as my character's `guild` becomes `{ id }`, without a join time; 0.1.1's single signature is dropped and its guild settings record moves into its entry. Settings: 0.1.0-beta.1's `chatNicknames`, `tooltipNickname` and `tooltipOtherCharacters` (a boolean then, a table in development builds) move to these keys, and `debugMessages`, saved up to 0.1.1, to `diagnostic.enable`; the old keys are removed. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
 
 Planned: `scopes.selected` and the list of selected players.
 

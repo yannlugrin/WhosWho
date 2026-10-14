@@ -14,6 +14,7 @@ local addonName, ns = ...
 ---@field settings WhosWho.Settings
 ---@field Crypto WhosWho.Crypto
 ---@field Store WhosWho.Store
+---@field Migrations WhosWho.Migrations
 ---@field Record WhosWho.Record
 ---@field Identity WhosWho.Identity
 ---@field AutomaticChanges WhosWho.AutomaticChanges

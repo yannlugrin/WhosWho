@@ -8,7 +8,7 @@ dofile(root .. "/Tests/Support/Bit.lua")
 
 local FILES = {
     "Crypto/SHA512.lua", "Crypto/Ed25519.lua",
-    "Core/Core.lua", "Core/Store.lua", "Core/Record.lua", "Core/Identity.lua", "Core/AutomaticChanges.lua",
+    "Core/Core.lua", "Core/Store.lua", "Core/Migrations.lua", "Core/Record.lua", "Core/Identity.lua", "Core/AutomaticChanges.lua",
     "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua", "Core/GuildList.lua",
     "Comm/Diagnostic.lua", "Comm/Codec.lua", "Comm/Scopes.lua", "Comm/Protocol.lua",
 }
