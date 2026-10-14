@@ -35,6 +35,13 @@ local DATA_STEPS = {
             if held.v then data.guildSettings[clubId] = { record = held } end
         end
     end,
+    -- 4. 0.2.0: records were signed over a fixed list of fields (Record.VERSION 1), which the current version refuses.
+    -- The others hold my revision in that format and would not ask for the same revision again: a new one makes them
+    -- fetch it in the current format.
+    function(data)
+        local identity = data.identity
+        if identity.id then identity.rev, identity.signatures = identity.rev + 1, nil end
+    end,
 }
 
 ---@type fun(settings: WhosWho.Settings)[]

@@ -204,6 +204,7 @@ do
     check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
         "a 0.1.0-beta.1 forgotten revision gets the migration's time")
     check(data.guildSettings[7].record.guild == 7, "a 0.1.1 guild settings record is held in its entry")
+
     check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
         and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
 
@@ -216,6 +217,18 @@ do
     data.migrationVersion = version + 10
     ns.Migrations.Data(data)
     check(data.migrationVersion == version + 10, "a later release's number is kept, so its steps don't run again")
+
+    local saved = {
+        identity = { id = string.rep("a", 64), rev = 5, signatures = { x = "y" }, chars = {} }, forgotten = {}, guildSettings = {},
+    }
+    ns.Migrations.Data(saved)
+    check(saved.identity.rev == 6 and saved.identity.signatures == nil,
+        "my record, signed by 0.2.0 over a fixed list of fields, gets a new revision: the others fetch it in the new format")
+    ns.Migrations.Data(saved)
+    check(saved.identity.rev == 6, "once")
+    local notCreated = { identity = { rev = 1, chars = {} }, forgotten = {}, guildSettings = {} }
+    ns.Migrations.Data(notCreated)
+    check(notCreated.identity.rev == 1, "an identity not created yet keeps its revision")
 end
 
 -- Record validation -------------------------------------------------------------------------------
@@ -223,7 +236,7 @@ end
 do
     local R = ns.Record
     local base = function()
-        return { v = 1, id = string.rep("a", 64), rev = 2, main = G1,
+        return { v = R.VERSION, id = string.rep("a", 64), rev = 2, main = G1,
             chars = { [G1] = { name = "A B", ruleset = NORMAL, classID = MAGE } }, guild = { consent = true } }
     end
     check(R.Validate(base()), "base record valid")
@@ -251,8 +264,10 @@ do
     check(select(2, R.Validate(r)) == "character", "ruleset 0 refused")
     r = base(); r.chars[G1].name = string.rep("a", 26)
     check(not R.Validate(r), "26-character name refused")
-    r = base(); r.v = 2
-    check(not R.Validate(r), "unknown version refused")
+    r = base(); r.v = R.VERSION + 1
+    check(select(2, R.Validate(r)) == "version", "a later version refused: it may hold a field not to ignore")
+    r = base(); r.v = 1
+    check(select(2, R.Validate(r)) == "version", "a record from 0.2.0, signed over a fixed list of fields, refused")
     r = base(); r.main = nil
     check(not R.Validate(r), "missing main refused")
     r = base(); r.main = G2
@@ -262,7 +277,7 @@ do
     r = base(); r.guild.consent = "yes"
     check(select(2, R.Validate(r)) == "guild", "guild consent not a boolean refused")
     r = base(); r.guild.other = true
-    check(select(2, R.Validate(r)) == "guild", "unknown guild field refused")
+    check(R.Validate(r), "a guild field a later version adds is kept")
 
     r = base(); r.chars[G1].guild = { forced = true }
     check(R.Validate(r), "a character marked forced, in the record of a guild's members")
@@ -271,7 +286,7 @@ do
     r = base(); r.chars[G1].guild = { forced = false }
     check(select(2, R.Validate(r)) == "character", "a marker other than true refused")
     r = base(); r.chars[G1].guild = { other = true }
-    check(select(2, R.Validate(r)) == "character", "an unknown guild marker refused")
+    check(R.Validate(r), "a guild marker a later version adds is kept")
     r = base(); r.main = nil; r.chars[G1].guild = { main = true }
     check(R.Validate(r), "a guild main stands for a main the record doesn't hold")
     r = base(); r.chars[G2] = { name = "C D", ruleset = NORMAL, classID = MAGE, guild = { main = true } }
@@ -283,6 +298,40 @@ do
     check(R.Canonical(r) ~= bytes, "the guild markers are signed")
     r.chars[G1].guild = nil
     check(R.Canonical(r) == bytes, "a record without markers keeps its bytes")
+
+    -- Fields a later version adds.
+    r = base(); r.role = "Healer"; r.chars[G1].note = "alt"
+    check(R.Validate(r) and R.Canonical(r) ~= R.Canonical(base()), "fields a later version adds are kept and signed")
+    local reordered = {}
+    for _, key in ipairs({ "guild", "chars", "main", "rev", "id", "v" }) do reordered[key] = base()[key] end
+    check(R.Canonical(reordered) == R.Canonical(base()), "the signed bytes don't depend on the order of the keys")
+    check(R.Canonical(base()) ~= ns.GuildSettings.Canonical(base()), "each kind of record signs under its own prefix")
+
+    -- Limits of the signed bytes.
+    r = base(); r.score = 1.5
+    check(select(2, R.Validate(r)) == "limits", "a number that isn't an integer refused")
+    r = base(); r.note = ("x"):rep(4097)
+    check(select(2, R.Validate(r)) == "limits", "a string over 4 KB refused")
+    r = base(); r.list = {}
+    for i = 1, 1100 do r.list[i] = true end
+    check(select(2, R.Validate(r)) == "limits", "more than 1 024 keys refused")
+    r = base(); r.deep = { { { { { { true } } } } } }
+    check(select(2, R.Validate(r)) == "limits", "tables deeper than 6 refused")
+    r = base(); r.notes = {}
+    for i = 1, 9 do r.notes[i] = ("x"):rep(4000) end
+    check(select(2, R.Validate(r)) == "limits", "signed bytes over 32 KB refused")
+
+    -- The largest legitimate record: 50 characters, names of 25 two-byte letters, the longest GUIDs, guild markers.
+    r = base(); r.chars, r.nickname = {}, string.rep("é", 25)
+    for i = 1, R.MAX_CHARACTERS do
+        local guid = ("Player-99999-%08X"):format(i)
+        r.chars[guid] = { name = string.rep("é", 12) .. " " .. string.rep("è", 12), ruleset = 4, classID = 13,
+            guild = { forced = true, main = i == 1 or nil } }
+        r.main = guid
+    end
+    bytes = R.Canonical(r)
+    check(R.Validate(r) and #bytes <= R.MAX_SIGNED_LENGTH / 2,
+        ("the largest legitimate record, %d signed bytes, stays under half the limit"):format(bytes and #bytes or 0))
 end
 
 -- The record of a guild's members ------------------------------------------------------------------
@@ -350,7 +399,7 @@ end
 local function makeRecord(id, rev, guids, nickname)
     local chars = {}
     for i, g in ipairs(guids) do chars[g] = { name = "N" .. i, ruleset = NORMAL, classID = MAGE } end
-    return { v = 1, id = id, rev = rev, nickname = nickname, main = guids[1], chars = chars, guild = { consent = true } }
+    return { v = ns.Record.VERSION, id = id, rev = rev, nickname = nickname, main = guids[1], chars = chars, guild = { consent = true } }
 end
 local INFO = { name = "Tank Bob", ruleset = NORMAL, classID = WARRIOR }
 local G5 = "Player-70-0000000E"
@@ -539,9 +588,9 @@ fresh()
 do
     local P = ns.People
     local A = string.rep("a", 64)
-    local empty = { v = 1, id = A, rev = 2, chars = {}, guild = { consent = true } }
+    local empty = { v = ns.Record.VERSION, id = A, rev = 2, chars = {}, guild = { consent = true } }
     check(ns.Record.Validate(empty), "a record without characters is valid")
-    check(not ns.Record.Validate({ v = 1, id = A, rev = 2, main = G1, chars = {}, guild = { consent = true } }),
+    check(not ns.Record.Validate({ v = ns.Record.VERSION, id = A, rev = 2, main = G1, chars = {}, guild = { consent = true } }),
         "a main without characters refused")
 
     P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann"))
@@ -701,7 +750,7 @@ do
     check(#AC.List() == before and not P.Exists(G3), "a character the player removed leaves, silently")
 
     P.AddCharacter(A, G8, INFO)
-    P.Accept({ v = 1, id = A, rev = 4, chars = {}, guild = { consent = true } })
+    P.Accept({ v = ns.Record.VERSION, id = A, rev = 4, chars = {}, guild = { consent = true } })
     check(#AC.List() == before and P.Get(A) == nil, "an identity whose player unlinked every character is forgotten, silently")
 
     check(AC.UnreadCount() == before, "every change unread")
@@ -754,7 +803,7 @@ do
     check(P.IsNewer(A, 1), "an identity not held yet is new")
     P.Accept(makeRecord(A, 2, { G1, G2 }))
     check(not P.IsNewer(A, 2) and not P.IsNewer(A, 1) and P.IsNewer(A, 3), "only a later revision is newer")
-    P.Accept({ v = 1, id = B, rev = 4, chars = {}, guild = { consent = true } })
+    P.Accept({ v = ns.Record.VERSION, id = B, rev = 4, chars = {}, guild = { consent = true } })
     check(not P.IsNewer(B, 4) and P.IsNewer(B, 5), "a forgotten identity is newer only past the revision that forgot it")
 
     check(P.FindConfirmedByName("N1", NORMAL) == nil, "a listed character is not found by name")
@@ -1102,7 +1151,8 @@ do
     changed.settings = { enable = true }
     check(not GS.Validate(changed), "a record without the enforcing setting is refused")
     changed.settings, changed.extra = record.settings, 1
-    check(not GS.Validate(changed), "a record with an unknown field is refused")
+    check(GS.Validate(changed) and not GS.Verify(changed),
+        "a field a later version adds is kept, and signed: added after signing, it breaks the signature")
     local lowSigner, highSigner = { rev = 5, signer = ("a"):rep(64) }, { rev = 5, signer = ("b"):rep(64) }
     check(GS.IsNewerThan({ rev = 6, signer = ("a"):rep(64) }, highSigner)
         and GS.IsNewerThan(highSigner, lowSigner) and not GS.IsNewerThan(lowSigner, highSigner),

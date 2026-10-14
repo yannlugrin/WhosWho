@@ -1984,10 +1984,10 @@ end
 
 do
     local Codec, before = ann.ns.Codec, unpackedCount
-    check(Codec.Decode("1 REC " .. ("x"):rep(8193)) == nil and Codec.Decode("1 GSET " .. ("x"):rep(8193)) == nil
+    check(Codec.Decode("1 REC " .. ("x"):rep(34817)) == nil and Codec.Decode("1 GSET " .. ("x"):rep(34817)) == nil
         and Codec.Decode("1 GLIST " .. ("x"):rep(131073)) == nil and unpackedCount == before,
-        "a payload over its limit is refused before unpacking: 8 KB for a REC or a GSET, 128 KB for a GLIST")
-    Codec.Decode("1 REC " .. ("x"):rep(8192))
+        "a payload over its limit is refused before unpacking: 34 KB for a REC or a GSET (32 KB signed, and a margin), 128 KB for a GLIST")
+    Codec.Decode("1 REC " .. ("x"):rep(34816))
     Codec.Decode("1 GLIST " .. ("x"):rep(131072))
     check(unpackedCount == before + 2, "one at its limit is unpacked")
 end

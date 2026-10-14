@@ -64,8 +64,11 @@ Codec.MAX_REQUESTED_IDS = 3
 local MAX_LIST_ENTRIES = 2000
 -- Encoded payload lengths, checked before unpacking: LibDeflate unpacks without limit, about 41 ms per KB received at
 -- worst in game. The largest legitimate payloads: a REC of 50 characters, 2 470 bytes; a GSET, 232 bytes; a GLIST of
--- MAX_LIST_ENTRIES identities, 90 731 bytes. A limit raised later is refused by every older client.
-local MAX_RECORD_PAYLOAD = 8192
+-- MAX_LIST_ENTRIES identities, 90 731 bytes. A record's follows its signed bytes (Record.MAX_SIGNED_LENGTH), so a record
+-- they allow is never refused on the way: serialized, compressed and encoded, it stays within 0.5% of them, more for
+-- incompressible content (measured: 28 905 signed bytes, 29 008 on the wire). A limit raised later is refused by every
+-- older client.
+local MAX_RECORD_PAYLOAD = Record.MAX_SIGNED_LENGTH + Record.MAX_SIGNED_LENGTH / 16
 local MAX_LIST_PAYLOAD = 131072
 
 -- Encoding ---------------------------------------------------------------------------------------

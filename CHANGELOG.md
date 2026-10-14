@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+
+- **Record format**: identities and guild settings are signed in a new format that later versions can add to without breaking this one. Players on 0.2.0 and on this version can't read each other's identities until both have updated. Guild masters and officers: change your guild's settings once after updating, so new members get them.
+
 ### Security
 
 - **Messages from other players**: Who's Who no longer unpacks a record or a guild list from a player it doesn't take them from, and refuses one too long, so another player can't freeze your game for a moment with a crafted message.

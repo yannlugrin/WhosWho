@@ -8,7 +8,9 @@ local Crypto, Identity, People, Record = ns.Crypto, ns.Identity, ns.People, ns.R
 local GuildSettings = {}
 ns.GuildSettings = GuildSettings
 
-GuildSettings.VERSION = 1
+-- Raised only for a field the versions before it must not ignore: they refuse the record. Version 1, up to 0.2.0, was
+-- signed over a fixed list of fields.
+GuildSettings.VERSION = 2
 -- The guild master (rank index 0) and the officers (1) change the settings.
 GuildSettings.LOWEST_RANK_INDEX = 1
 
@@ -111,45 +113,33 @@ end
 
 -- Format -----------------------------------------------------------------------------------------
 
--- The signature covers these fields only, so a record holding any other key has been changed.
-local RECORD_FIELDS = { v = true, guild = true, settings = true, signer = true, signerGuid = true, rev = true, sig = true }
-local SETTINGS_FIELDS = { enable = true, enforceLinking = true }
-
-local function hasOnlyFields(t, fields)
-    for key in pairs(t) do
-        if not fields[key] then return false end
-    end
-    return true
-end
-
 local function isPositiveInteger(n)
     return type(n) == "number" and n >= 1 and n <= Record.MAX_REVISION and n % 1 == 0
 end
 
----Checks the structure only; the signature is checked by GuildSettings.Verify.
+---Checks the structure only: the fields this version knows, and the limits of the signed bytes; fields a later version
+---adds are kept. The signature is checked by GuildSettings.Verify.
 ---@param record any
 ---@return boolean
 function GuildSettings.Validate(record)
-    return type(record) == "table" and hasOnlyFields(record, RECORD_FIELDS)
+    return type(record) == "table"
         and record.v == GuildSettings.VERSION
         and isPositiveInteger(record.guild)
-        and type(record.settings) == "table" and hasOnlyFields(record.settings, SETTINGS_FIELDS)
+        and type(record.settings) == "table"
         and type(record.settings.enable) == "boolean"
         and type(record.settings.enforceLinking) == "boolean"
         and Record.IsId(record.signer)
         and Record.IsGuid(record.signerGuid)
         and isPositiveInteger(record.rev)
         and Record.IsSignature(record.sig)
+        and GuildSettings.Canonical(record) ~= nil
 end
 
----The signed bytes: every field but the signature.
+---The signed bytes: every field but the signature, whatever its name (Record.SignedBytes).
 ---@param record WhosWho.GuildSettingsRecord
----@return string
+---@return string? bytes nil past a limit
 function GuildSettings.Canonical(record)
-    return table.concat({
-        "WWG" .. record.v, tostring(record.guild), record.settings.enable and "1" or "0",
-        record.settings.enforceLinking and "1" or "0", record.signer, record.signerGuid, tostring(record.rev),
-    }, "\31")
+    return Record.SignedBytes("WWG", record)
 end
 
 ---Slow (about 250 ms in game); call it from a coroutine with Ed25519 slicing on.

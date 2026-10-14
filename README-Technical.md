@@ -183,21 +183,25 @@ Any identity can carry **my nickname** (`People.Rename`), shared ones included. 
 
 ```
 Identity record (shared)
-  v         format version
+  v         format version (Record.VERSION, 2)
   id        identity ID: the public key, hex
   rev       revision, +1 on every change, at most 2^31 - 1
   nickname  optional override; the main character's name is shown otherwise
   main      GUID of the main character, one of chars; absent when chars is empty
-  chars     { [guid] = { name, ruleset, classID } }   characters the owner declares, signed in GUID order;
+  chars     { [guid] = { name, ruleset, classID } }   characters the owner declares;
             ruleset one of Record.RULESET, classID a class the game knows; guild = { forced, main },
             only in the record sent to that guild's members (see Guild Sharing, Enforced linking)
   guild     { consent }   consent: the record may be passed on to the members of the guilds of the owner's
             characters; it is the owner's Guild scope, so changing that scope makes a new revision
-  sig       signature over the other fields; a record holding any other key, or a character or guild any other
-            field, is refused
+  sig       signature over every other field (see Signed bytes)
 ```
 
-A field added to the identity record or the guild settings record is refused by every older client: its signed bytes are a fixed list of fields, so any other field would be unsigned. Guild records (planned) are signed in a form that leaves room for later fields:
+Every signed record (identity records, guild settings, and the planned guild records) is signed the same way, so a field a later version adds is verified, kept and passed on whole by the versions before it, which show only the fields they know:
+
+- **Signed bytes** (`Record.SignedBytes(prefix, record)`): a prefix naming the kind of record (`WWI` identity, `WWG` guild settings, `WWGR` guild record), then every field but `sig`, whatever its name: each value with its type (`s<length>:<bytes>`, `i<integer>;`, `t` or `f`, and `{…}` for a table, its entries sorted by their key's bytes); strings, integers up to 2^31 - 1, booleans and tables only, keyed by strings or integers. `Record.CanonicalWithoutRevision` leaves `rev` out too, to compare what two revisions say.
+- **Limits**, checked while the signed bytes are built, by each format's `Validate`, before the record enters the verification queue: 1 024 keys in all, a depth of 6 tables, 4 KB per string, and 32 KB of signed bytes (`Record.MAX_SIGNED_LENGTH`: hashing them takes about 150 ms in game, in one frame; measured: 4.6 ms per KB). The payload of a `REC` or a `GSET` follows this limit with a margin (see Protocol), so a record they allow is never refused on the way. Each limit is at least twice what the largest legitimate record needs, built by a test from the field limits (`Record.MAX_CHARACTERS`, `Record.MAX_NAME_LENGTH` in two-byte letters, guild markers): today 6 930 bytes. A limit raised later is refused by every older client.
+- **Known fields** are checked as strictly as before; unknown ones only against the limits. `v` is raised only for a field the versions before it must not ignore: they refuse a record of another version.
+- **Version 1**, up to 0.2.0, was signed over a fixed list of fields, so a record holding any other field was refused. It is refused now. What I hold from it stays shown until a newer revision arrives. My own record gets a new revision once (migration step 4, see Saved Variables), so the others fetch it: one they hold at the same revision would not be asked for again. Guild settings held in version 1 stay in use by the members who hold them; a member who never held them refuses them, until the guild master or an officer changes the settings once.
 
 ```
 Guild record (planned, see Guild Sharing, Guild records)
@@ -213,10 +217,6 @@ Guild record (planned, see Guild Sharing, Guild records)
   sig         signature over every other field
   (later: the guild's info about the person, such as a role, a note or a join date, and about each character)
 ```
-
-- **Signed bytes**: every field but `sig`, whatever its name: keys sorted, strings with their length before them, each value with its type; strings, integers, booleans and tables only. A client verifies a record holding fields it doesn't know, keeps and passes it on whole, and shows only the fields it knows. Known fields are checked as strictly as in the identity record.
-- **Limits**, checked by `Validate` before the record enters the verification queue: the number of keys per table and in all, each string's length, the nesting depth, and the length of the signed bytes, at most 16 KB (hashing them takes about 75 ms in game, in one frame; measured: 4.6 ms per KB). Each limit is set from the largest legitimate record, built by a test from the field limits (`Record.MAX_CHARACTERS`, `Record.MAX_NAME_LENGTH` in multi-byte characters, the later fields' own limits), which must stay under half of it: a limit raised later is refused by every older client.
-- The identity record and the guild settings move to this form at the protocol review before 1.0.0, when a raised `v` no longer leaves clients behind.
 
 ### Character Confirmations
 
@@ -249,7 +249,7 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 - One prefix, `WhosWho`. AceComm handles splitting messages over 255 characters; ChatThrottleLib is the single throttled outgoing queue. Each client may send about 10 messages per prefix, then about 1 per second (whispers outside instances are exempt); sending too much data at once, even over several prefixes, can disconnect the client.
 - Battle.net is not built yet: AceComm cannot send over `BNSendGameData`, and no Battle.net friend has been seen in Forever yet. Every Battle.net path below (friends audience, sender lookup, `GET` and `REC`) waits for an in-game round trip.
 - Payloads: LibSerialize then LibDeflate, encoded for the add-on channel. Announcements and `GET`s stay short plain text so they fit in one message.
-- Unpacking a payload costs about 41 ms per KB received at worst in game (LibDeflate unpacks without limit: 2.6 KB became 1 MB in 106 ms, 10.4 KB 4 MB in 423 ms). So `Protocol` reads the type first (`Codec.Type`) and unpacks only a `REC`, `GSET` or `GLIST` from a sender it takes that type from (`PAYLOAD_SENDERS`: a `REC` from a channel I share on, settings from a member of my guild, a list from a member while I exchange lists); the diagnostic mode prints the others. `Codec` then refuses, before unpacking, a payload longer than its limit: 8 KB for a `REC` or a `GSET`, 128 KB for a `GLIST`. The largest legitimate ones, measured with the libraries: a `REC` of 50 characters with long multi-byte names and guild markers, 2 470 bytes; a `GSET`, 232; a `GLIST` of 2 000 identities, 90 731. A limit raised later is refused by every older client. AceComm still puts together a message of any length before it reaches `Protocol`.
+- Unpacking a payload costs about 41 ms per KB received at worst in game (LibDeflate unpacks without limit: 2.6 KB became 1 MB in 106 ms, 10.4 KB 4 MB in 423 ms). So `Protocol` reads the type first (`Codec.Type`) and unpacks only a `REC`, `GSET` or `GLIST` from a sender it takes that type from (`PAYLOAD_SENDERS`: a `REC` from a channel I share on, settings from a member of my guild, a list from a member while I exchange lists); the diagnostic mode prints the others. `Codec` then refuses, before unpacking, a payload longer than its limit: 34 KB for a `REC` or a `GSET`: the limit of their signed bytes (see Records) and 6% more, since a payload may be slightly larger than its signed bytes (0.4% for incompressible content); 128 KB for a `GLIST`. The largest legitimate ones, measured with the libraries: a `REC` of 50 characters with long multi-byte names and guild markers, 2 470 bytes; a `GSET`, 232; a `GLIST` of 2 000 identities, 90 731. A limit raised later is refused by every older client. AceComm still puts together a message of any length before it reaches `Protocol`.
 - Every message starts with a protocol version. Unknown versions and types are ignored, never errors.
 
 | Type | Content | Sent |
@@ -437,8 +437,9 @@ Built: the consent, the guild settings, enforced linking with its opt-in, the gu
 A guild's settings (`GuildSettings`: `enable`, and `enforceLinking`, which needs it; see Enforced linking) are one record per guild, signed with the identity key of its guild master or one of its officers (rank index 0 or 1: `GuildSettings.LOWEST_RANK_INDEX`), and changed only from the guild panel's Who's Who tab, which those ranks alone see (`Protocol.ChangeGuildSettings`).
 
 ```
-v, guild (club ID), settings = { enable, enforceLinking }, signer (identity ID), signerGuid (the character it was signed from),
-rev (server time when signed, or one more than the record held when that is not later), sig
+v (GuildSettings.VERSION, 2), guild (club ID), settings = { enable, enforceLinking }, signer (identity ID),
+signerGuid (the character it was signed from), rev (server time when signed, or one more than the record held when that
+is not later), sig (see Records, Signed bytes)
 ```
 
 - **Sent**: a change goes to the guild once `GUILD_SETTINGS_WAIT_SECONDS` (5) have passed, gathering the changes that follow, as one `GSET` on `GUILD` (to each online member while my messages on `GUILD` reach no one, see Workarounds). Nothing goes out with the Guild scope off, and the tab's checkbox needs a linked character and the Guild scope: the members check the signer through its confirmed character.
@@ -541,7 +542,7 @@ launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the mini
 migrationVersion (the last migration step run on the settings, see Migrations below)
 ```
 
-**Migrations** (`Migrations`), at load only, from `Store.Init`: numbered steps, one per older version, run once each and in order, for the data (`Migrations.Data`) and for the settings (`Migrations.Settings`); the number of the last step run is saved as `migrationVersion` in each (a later release's number is kept, so its steps don't run again after going back to it). A step only reads and changes the saved tables: what needs the game, the roster or sending is not a migration. Data: 0.1.0-beta.1's removal revision on an unlinked character (`removedInRevision`) becomes `removedAt`, and each `forgotten` revision `{ rev, at }`, both set to the migration's time (the real one is unknown); the club ID 0.1.0 saved as my character's `guild` becomes `{ id }`, without a join time; 0.1.1's single signature is dropped and its guild settings record moves into its entry. Settings: 0.1.0-beta.1's `chatNicknames`, `tooltipNickname` and `tooltipOtherCharacters` (a boolean then, a table in development builds) move to these keys, and `debugMessages`, saved up to 0.1.1, to `diagnostic.enable`; the old keys are removed. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
+**Migrations** (`Migrations`), at load only, from `Store.Init`: numbered steps, one per older version, run once each and in order, for the data (`Migrations.Data`) and for the settings (`Migrations.Settings`); the number of the last step run is saved as `migrationVersion` in each (a later release's number is kept, so its steps don't run again after going back to it). A step only reads and changes the saved tables: what needs the game, the roster or sending is not a migration. Data: 0.1.0-beta.1's removal revision on an unlinked character (`removedInRevision`) becomes `removedAt`, and each `forgotten` revision `{ rev, at }`, both set to the migration's time (the real one is unknown); the club ID 0.1.0 saved as my character's `guild` becomes `{ id }`, without a join time; 0.1.1's single signature is dropped and its guild settings record moves into its entry; my identity, signed by 0.2.0 over a fixed list of fields, gets a new revision (see Records, Version 1). Settings: 0.1.0-beta.1's `chatNicknames`, `tooltipNickname` and `tooltipOtherCharacters` (a boolean then, a table in development builds) move to these keys, and `debugMessages`, saved up to 0.1.1, to `diagnostic.enable`; the old keys are removed. In the settings, "Hidden" in the nickname and other characters dropdowns turns `enable` off and keeps the position or colour for when it is shown again.
 
 Planned: `scopes.selected` and the list of selected players.
 

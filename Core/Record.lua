@@ -8,7 +8,9 @@ ns.Record = Record
 
 -- Format -----------------------------------------------------------------------------------------
 
-Record.VERSION = 1
+-- Raised only for a field the versions before it must not ignore: they refuse the record. Version 1, up to 0.2.0, was
+-- signed over a fixed list of fields.
+Record.VERSION = 2
 Record.MAX_CHARACTERS = 50
 -- Larger numbers would lose digits once written into the signed bytes.
 Record.MAX_REVISION = 2 ^ 31 - 1
@@ -127,50 +129,35 @@ local function isClassID(n)
     return isPositiveInteger(n) and C_CreatureInfo.GetClassInfo(n) ~= nil
 end
 
--- The signature covers these fields only, so a record holding any other key has been changed.
-local RECORD_FIELDS = { v = true, id = true, rev = true, nickname = true, main = true, chars = true, guild = true, sig = true }
-local CHARACTER_FIELDS = { name = true, ruleset = true, classID = true, guild = true }
-local CHARACTER_GUILD_FIELDS = { forced = true, main = true }
-local GUILD_FIELDS = { consent = true }
-
-local function hasOnlyFields(t, fields)
-    for key in pairs(t) do
-        if not fields[key] then return false end
-    end
-    return true
-end
-
--- Absent, or at least one marker, each true.
+-- Absent, or a table of markers, each one this version knows true.
 local function isCharacterGuild(guild)
     if guild == nil then return true end
-    return type(guild) == "table" and next(guild) ~= nil and hasOnlyFields(guild, CHARACTER_GUILD_FIELDS)
+    return type(guild) == "table" and next(guild) ~= nil
         and (guild.forced == nil or guild.forced == true) and (guild.main == nil or guild.main == true)
 end
 
 local function isCharacter(character)
     return type(character) == "table"
-        and hasOnlyFields(character, CHARACTER_FIELDS)
         and isName(character.name)
         and isRuleset(character.ruleset)
         and isClassID(character.classID)
         and isCharacterGuild(character.guild)
 end
 
----Checks the structure only; the signature is checked by Record.Verify.
+---Checks the structure only: the fields this version knows, and the limits of the signed bytes; fields a later version
+---adds are kept. The signature is checked by Record.Verify.
 ---@param record any
 ---@return boolean ok
 ---@return string? err the first check that failed
 function Record.Validate(record)
     if type(record) ~= "table" then return false, "not a table" end
-    if not hasOnlyFields(record, RECORD_FIELDS) then return false, "field" end
     if record.v ~= Record.VERSION then return false, "version" end
     if not Record.IsId(record.id) then return false, "id" end
     if not isRevision(record.rev) then return false, "rev" end
     if record.nickname ~= nil and not isName(record.nickname) then return false, "nickname" end
     if record.sig ~= nil and not Record.IsSignature(record.sig) then return false, "sig" end
     if type(record.chars) ~= "table" then return false, "chars" end
-    if type(record.guild) ~= "table" or not hasOnlyFields(record.guild, GUILD_FIELDS)
-        or type(record.guild.consent) ~= "boolean" then
+    if type(record.guild) ~= "table" or type(record.guild.consent) ~= "boolean" then
         return false, "guild"
     end
 
@@ -193,6 +180,7 @@ function Record.Validate(record)
         return false, "main"
     end
 
+    if not Record.Canonical(record) then return false, "limits" end
     return true
 end
 
@@ -218,43 +206,93 @@ end
 
 -- Signature --------------------------------------------------------------------------------------
 
--- Control characters, which Record.FORBIDDEN keeps out of every field.
-local SEP_FIELD, SEP_CHAR, SEP_PART = "\31", "\30", "\29"
+-- Limits of the signed bytes, checked while they are built, so that hashing them stays short (about 4.6 ms per KB in
+-- game): each one at least twice what the largest legitimate record needs (Tests/Model-Test.lua builds it). A limit
+-- raised later is refused by every older client.
+Record.MAX_SIGNED_LENGTH = 32768
+local MAX_KEYS = 1024
+local MAX_DEPTH = 6
+local MAX_STRING_LENGTH = 4096
 
--- Every field but the signature, the revision as given, characters sorted by GUID; a character's guild markers only when
--- it has some, so a record without them keeps the bytes it always had.
-local function canonical(record, revision)
-    local guids = {}
-    for guid in pairs(record.chars) do guids[#guids + 1] = guid end
-    table.sort(guids)
-
-    local chars = {}
-    for i, guid in ipairs(guids) do
-        local character = record.chars[guid]
-        local parts = { guid, character.name, character.ruleset, character.classID }
-        local guild = character.guild
-        if guild then parts[5] = (guild.forced and "f" or "") .. (guild.main and "m" or "") end
-        chars[i] = table.concat(parts, SEP_PART)
+-- Appends the value's bytes: strings with their length, integers, booleans, and tables with their entries sorted by
+-- key bytes. False once a limit is passed or another kind of value is met.
+---@param value any
+---@param out { parts: string[], length: integer, keys: integer }
+---@param depth integer
+---@return boolean
+local function encode(value, out, depth)
+    local bytes
+    local kind = type(value)
+    if kind == "string" then
+        if #value > MAX_STRING_LENGTH then return false end
+        bytes = "s" .. #value .. ":" .. value
+    elseif kind == "number" then
+        if value % 1 ~= 0 or math.abs(value) > Record.MAX_REVISION then return false end
+        bytes = ("i%d;"):format(value)
+    elseif kind == "boolean" then
+        bytes = value and "t" or "f"
+    elseif kind == "table" then
+        if depth > MAX_DEPTH then return false end
+        local entries = {}
+        for key, item in pairs(value) do
+            out.keys = out.keys + 1
+            local keyOut = { parts = {}, length = 0, keys = 0 }
+            if out.keys > MAX_KEYS or type(key) == "table" or type(key) == "boolean"
+                or not encode(key, keyOut, depth) then
+                return false
+            end
+            entries[#entries + 1] = { key = table.concat(keyOut.parts), item = item }
+        end
+        table.sort(entries, function(a, b) return a.key < b.key end)
+        out.parts[#out.parts + 1] = "{"
+        out.length = out.length + 1
+        for _, entry in ipairs(entries) do
+            out.parts[#out.parts + 1] = entry.key
+            out.length = out.length + #entry.key
+            if out.length > Record.MAX_SIGNED_LENGTH or not encode(entry.item, out, depth + 1) then
+                return false
+            end
+        end
+        bytes = "}"
+    else
+        return false
     end
-
-    return table.concat({
-        "WW" .. record.v, record.id, revision, record.nickname or "", record.main or "",
-        table.concat(chars, SEP_CHAR), record.guild.consent and "1" or "0",
-    }, SEP_FIELD)
+    out.parts[#out.parts + 1] = bytes
+    out.length = out.length + #bytes
+    return out.length <= Record.MAX_SIGNED_LENGTH
 end
 
----The signed bytes.
+---The signed bytes of a record, whatever its kind: the prefix naming the kind, then every field but the signature and
+---the ones left out, whatever their names. Nil when the record passes a limit or holds another kind of value than
+---strings, integers, booleans and tables.
+---@param prefix string
+---@param record table
+---@param leftOut table<string, true>? top-level fields left out besides the signature
+---@return string?
+function Record.SignedBytes(prefix, record, leftOut)
+    local signed = {}
+    for key, value in pairs(record) do
+        if key ~= "sig" and not (leftOut and leftOut[key]) then signed[key] = value end
+    end
+    local out = { parts = { prefix }, length = #prefix, keys = 0 }
+    if not encode(signed, out, 1) then return nil end
+    return table.concat(out.parts)
+end
+
+local WITHOUT_REVISION = { rev = true }
+
+---The signed bytes of an identity record.
 ---@param record WhosWho.IdentityRecord
----@return string
+---@return string? bytes nil past a limit
 function Record.Canonical(record)
-    return canonical(record, tostring(record.rev))
+    return Record.SignedBytes("WWI", record)
 end
 
 ---The signed bytes without the revision: equal for two records that say the same at different revisions.
 ---@param record WhosWho.IdentityRecord
----@return string
+---@return string? bytes nil past a limit
 function Record.CanonicalWithoutRevision(record)
-    return canonical(record, "")
+    return Record.SignedBytes("WWI", record, WITHOUT_REVISION)
 end
 
 ---Sets record.sig.
