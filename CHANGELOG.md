@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+
+- **Guild links**: the guild master and officers can link members' characters for the whole guild, from the Guild tab's right-click menu: to a member's identity, or to a new person for someone who doesn't use Who's Who, with its own nickname and main. Every member who uses Who's Who sees them, even for players they never met; what a player shares about themselves always comes first.
+
 ## [0.3.0] - 2026-10-14
 
 ### Changed

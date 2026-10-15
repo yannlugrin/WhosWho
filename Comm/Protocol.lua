@@ -15,17 +15,63 @@ ns.Protocol = Protocol
 LibStub("AceComm-3.0"):Embed(Protocol)
 
 local PREFIX = "WhosWho"
-local REQUEST_WAIT_SECONDS = 5 -- wait before answering GETs, gathering the GETs that follow
-local MAX_WAIT_SECONDS = 300 -- longest wait from its start, however often it is pushed back
-local LOCK_WAIT_SECONDS = 5 -- between two tries while sending is locked
+-- Waits gathering what follows before sending (newGathering): after the last call, and at most after the first one.
+local REQUEST_WAIT = { seconds = 5, maxSeconds = 30 } -- answering GETs of identities I relay, GIGETs, GLGETs
+local ANNOUNCEMENT_WAIT = { seconds = 5, maxSeconds = 30 } -- answering announcements; comparing the lists they carry
+local GUILD_CHANGES_WAIT = { seconds = 5, maxSeconds = 30 } -- my changes to my guild's settings and records
+local RECORD_WAIT = { seconds = 5, maxSeconds = 300 } -- my change of revision (revisionWaitSeconds), my RECs to GETs
 local REACHED_DELAY_SECONDS = 30 -- after a REC was sent, GETs from the players it reached are ignored
 local REQUEST_DELAY_SECONDS = 60 -- between two GETs for the same identity, and before a GET is sent again if no REC was answered it
 local RETRY_LIMIT = 1 -- GETs sent again when no REC answers
-local ANNOUNCEMENT_WAIT_SECONDS = 5 -- before answering announcements, gathering the ones that follow
-local GUILD_SETTINGS_WAIT_SECONDS = 5 -- before a change of the guild settings goes out, gathering the ones that follow
 -- The delays a player may change are advanced settings (Store.Advanced).
 
 local issecretvalue = issecretvalue or function() return false end
+
+-- Gathering --------------------------------------------------------------------------------------
+
+---How long a gathering waits: after the last call, and at most after the first one.
+---@class WhosWho.GatheringWait
+---@field seconds number after each call, before sending; a call never brings the send forward
+---@field maxSeconds number from the first call of a batch: the send happens by then, however many calls follow
+
+-- Runs `send` once the calls have stopped for `wait.seconds` (each call pushes the send back), and at the latest
+-- `wait.maxSeconds` after the first call of the batch, so a steady flow of calls never holds it forever. While `held`
+-- says so, the send waits, checking again every `wait.seconds`. A call made during `send` starts the next batch.
+-- Returns the function to call, which may give its own wait, and whether a batch is waiting.
+---@param wait WhosWho.GatheringWait
+---@param send fun()
+---@param held (fun(): boolean)?
+---@return fun(seconds: number?) gather
+---@return fun(): boolean waiting
+local function newGathering(wait, send, held)
+    local sendAt, startedAt, timerRunning = nil, nil, false
+
+    local function fire()
+        timerRunning = false
+        if not sendAt then return end
+        local now = GetTime()
+        local due = math.min(sendAt, startedAt + wait.maxSeconds)
+        if now >= due and held and held() then due = now + wait.seconds end
+        if now < due then
+            timerRunning = true
+            C_Timer.After(due - now, fire)
+            return
+        end
+        sendAt, startedAt = nil, nil
+        send()
+    end
+
+    local function gather(seconds)
+        local now = GetTime()
+        startedAt = startedAt or now
+        sendAt = math.max(sendAt or 0, now + (seconds or wait.seconds))
+        if timerRunning then return end
+        timerRunning = true
+        C_Timer.After(sendAt - now, fire)
+    end
+
+    return gather, function() return sendAt ~= nil end
+end
 
 -- Debug -----------------------------------------------------------------------------------------
 
@@ -132,10 +178,6 @@ local requesters = {}
 local deliveries = {}
 -- How many holders keep sending locked (Protocol.LockSending).
 local lockCount = 0
----@type number? when the pending RECs go out (GetTime), nil while none is pending
-local sendAt
----@type number? when the pending wait started (GetTime)
-local waitStartedAt
 
 -- Whether a REC of my current revision that reaches that player, with the record it gets, is still queued, or was sent
 -- less than REACHED_DELAY_SECONDS ago: a GET from that player is then answered by that REC.
@@ -253,18 +295,6 @@ local function announceRevision(guildOnly)
 end
 
 local function sendRecords()
-    -- Pushed back by a later change or GET.
-    if GetTime() < sendAt then
-        C_Timer.After(sendAt - GetTime(), sendRecords)
-        return
-    end
-    -- Held while I edit my identity, and once my logout announcement went out (a logout makes the next login announce).
-    if lockCount > 0 or loggingOut then
-        C_Timer.After(LOCK_WAIT_SECONDS, sendRecords)
-        return
-    end
-    sendAt, waitStartedAt = nil, nil
-
     if Identity.Revision() ~= publishedRevision then
         -- Everyone's record unchanged: the change is only in what my guild's members get.
         local bytes = Identity.RecordBytesWithoutRevision()
@@ -282,18 +312,10 @@ local function sendRecords()
     end)
 end
 
--- One wait for every pending REC: a call never brings the send forward, and pushes it back to waitSeconds from now, up
--- to MAX_WAIT_SECONDS after the wait started.
----@param waitSeconds number
-local function scheduleRecordSending(waitSeconds)
-    local now = GetTime()
-    if not sendAt then
-        sendAt, waitStartedAt = now + waitSeconds, now
-        C_Timer.After(waitSeconds, sendRecords)
-        return
-    end
-    sendAt = math.min(math.max(sendAt, now + waitSeconds), waitStartedAt + MAX_WAIT_SECONDS)
-end
+-- One wait for my change of revision and every pending REC. Held while I edit my identity, and once my logout
+-- announcement went out (a logout makes the next login announce).
+local scheduleRecordSending, recordSendingWaiting = newGathering(RECORD_WAIT, sendRecords,
+    function() return lockCount > 0 or loggingOut end)
 
 -- Answering announcements ---------------------------------------------------------------------------
 
@@ -306,14 +328,12 @@ local announcementRecipients = {}
 
 ---@type table<string, WhosWho.AnnouncementSent> by name
 local announcements = {}
-local announcementWaiting = false
 
 local function rememberAnnouncement(name, revision)
     announcements[name] = { revision = revision, sentAt = GetTime() }
 end
 
 local function sendAnnouncements()
-    announcementWaiting = false
     local names = {}
     for name in pairs(announcementRecipients) do
         if Scopes.AnnouncementReaches(name) then names[#names + 1] = name end
@@ -332,12 +352,12 @@ local function sendAnnouncements()
     for _, name in ipairs(names) do rememberAnnouncement(name, revision) end
 end
 
--- One wait for every player waiting for my answer, from the first one.
+-- One wait for every player waiting for my answer.
+local answerAnnouncements = newGathering(ANNOUNCEMENT_WAIT, sendAnnouncements)
+
 local function queueAnnouncement(name)
     announcementRecipients[name] = true
-    if announcementWaiting then return end
-    announcementWaiting = true
-    C_Timer.After(ANNOUNCEMENT_WAIT_SECONDS, sendAnnouncements)
+    answerAnnouncements()
 end
 
 -- Players new to my audience ----------------------------------------------------------------------
@@ -496,14 +516,14 @@ local function retryPendingGuildSettings()
     acceptGuildSettings(signedRecord, pendingSentByTrusted)
 end
 
-local guildSettingsWaiting = false
+-- Whether my guild's settings changed since they last went out.
+local guildSettingsChanged = false
 -- Whether the settings waiting to go out enabled Who's Who for the guild: my announcement follows them, so that the
 -- members compare their lists with mine, and not each with every other.
 local guildListsEnabledByMe = false
 
 -- My current guild's settings, to its members.
 local function sendGuildSettings()
-    guildSettingsWaiting = false
     local announceList = guildListsEnabledByMe
     guildListsEnabledByMe = false
     local signedRecord = GuildSettings.Record(Identity.GuildId(UnitGUID("player")))
@@ -511,6 +531,58 @@ local function sendGuildSettings()
     sendToGuild(Codec.GuildSettingsUpdate(signedRecord))
     local announcement = announceList and signedRecord.settings.enable and announcementText(UnitLevel("player"), true, false)
     if announcement then sendToGuild(announcement) end
+end
+
+---Whether the character I play may change my guild's records (GuildRecord): while I exchange guild lists, at a rank
+---index up to GuildList.TRUSTED_RANK_INDEX in my roster, the rank the members check.
+---@return boolean
+function Protocol.CanChangeGuildRecords()
+    local rankIndex = Scopes.GuildRankIndex(UnitGUID("player"))
+    return guildListsActive() and rankIndex ~= nil and rankIndex <= GuildList.TRUSTED_RANK_INDEX
+end
+
+---@type table<string, true> by identity ID: my guild's records I changed, sent once the changes that follow gathered
+local changedGuildRecords = {}
+
+-- Each record of my guild I changed, once, at its latest revision.
+local function sendChangedGuildRecords()
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    for id in pairs(changedGuildRecords) do
+        local signedRecord = GuildRecord.Held(clubId, id)
+        if signedRecord then sendToGuild(Codec.GuildRecordUpdate(signedRecord)) end
+    end
+    changedGuildRecords = {}
+end
+
+-- My changes to my guild, gathered: its settings when they changed, then each record I changed.
+local gatherGuildChanges = newGathering(GUILD_CHANGES_WAIT, function()
+    if guildSettingsChanged then
+        guildSettingsChanged = false
+        sendGuildSettings()
+    end
+    sendChangedGuildRecords()
+end)
+
+local function queueGuildRecord(signedRecord)
+    changedGuildRecords[signedRecord.id] = true
+    gatherGuildChanges()
+end
+
+-- A character two records of my guild link stays with the most recent one: the guild master or an officer unlinks it
+-- from the older ones for every member (GuildRecord.LinkedByNewer), which keep their other characters, or go without
+-- any. After a record of the guild changed, the only time that happens.
+local function unlinkFromOlderGuildRecords()
+    if not Protocol.CanChangeGuildRecords() then return end
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    for id, guids in pairs(GuildRecord.LinkedByNewer(clubId)) do queueGuildRecord(GuildRecord.Unlink(clubId, id, guids)) end
+end
+
+---Sends a record of my guild I just signed (GuildRecord.Link, Unlink, SetMain, Rename, Remove) to its members, once
+---the changes that follow have gathered.
+---@param signedRecord WhosWho.SignedGuildRecord
+function Protocol.SendGuildRecord(signedRecord)
+    queueGuildRecord(signedRecord)
+    unlinkFromOlderGuildRecords()
 end
 
 ---Signs new settings for my current guild, from the character I play, and sends them to its members once the changes
@@ -526,9 +598,8 @@ function Protocol.ChangeGuildSettings(settings)
         guildListsEnabledByMe = true
         GuildList.Renew(clubId, Identity.Ruleset(UnitGUID("player")), GetServerTime())
     end
-    if guildSettingsWaiting then return end
-    guildSettingsWaiting = true
-    C_Timer.After(GUILD_SETTINGS_WAIT_SECONDS, sendGuildSettings)
+    guildSettingsChanged = true
+    gatherGuildChanges()
 end
 
 -- Guild lists ------------------------------------------------------------------------------------
@@ -539,16 +610,12 @@ local listOffers = {}
 local takenListHashes = {}
 ---@type { name: string, sentAt: number }? my GLGET in flight
 local listRequest
-local listEvaluationWaiting = false
 ---@type table<string, true> members waiting for my list
 local listRequesters = {}
-local listAnswerWaiting = false
 ---@type table<string, table<string, true>> by identity ID, then name: members asking me for an identity I hold
 local relayRequesters = {}
-local relayAnswerWaiting = false
 ---@type table<string, table<string, true>> by identity ID, then name: members asking me for a guild's record I hold
 local guildRecordRequesters = {}
-local guildRecordAnswerWaiting = false
 
 -- Whether that member's rank in my roster lets it pass on identities I don't hold yet.
 local function trustedMember(name)
@@ -599,7 +666,6 @@ end
 
 -- After the announcements that came together: the most recent list announced, when it is later than mine.
 local function evaluateGuildLists()
-    listEvaluationWaiting = false
     if not guildListsActive() or listRequestInFlight() then return end
     local _, at, hash = ownGuildList()
     takenListHashes[hash] = true
@@ -607,11 +673,7 @@ local function evaluateGuildLists()
     if newest and GuildList.IsLater(newest.at, newest.hash, at, hash) then requestGuildList(newest.hash) end
 end
 
-local function scheduleGuildListEvaluation()
-    if listEvaluationWaiting then return end
-    listEvaluationWaiting = true
-    C_Timer.After(ANNOUNCEMENT_WAIT_SECONDS, evaluateGuildLists)
-end
+local scheduleGuildListEvaluation = newGathering(ANNOUNCEMENT_WAIT, evaluateGuildLists)
 
 -- A member's list: the identities I hold at an older revision, and the guild's records I lack or hold older, from the
 -- members holding that list; the identities I don't hold, from its trusted holders only, otherwise from the most recent
@@ -635,7 +697,6 @@ end
 
 -- My list, to the members who asked for it: one GLIST on GUILD for several, a whisper for one.
 local function sendGuildList()
-    listAnswerWaiting = false
     local names = {}
     for name in pairs(listRequesters) do
         if Scopes.GuildReaches(name) then names[#names + 1] = name end
@@ -673,7 +734,6 @@ end
 
 -- The identities members asked me for, from my list (REC).
 local function sendRelayedRecords()
-    relayAnswerWaiting = false
     local asked = relayRequesters
     relayRequesters = {}
     if not guildListsActive() then return end
@@ -688,7 +748,6 @@ end
 
 -- My guild's records members asked me for (GIREC).
 local function sendGuildRecords()
-    guildRecordAnswerWaiting = false
     local asked = guildRecordRequesters
     guildRecordRequesters = {}
     if not guildListsActive() then return end
@@ -699,6 +758,10 @@ local function sendGuildRecords()
         return signedRecord and Codec.GuildRecordUpdate(signedRecord)
     end)
 end
+
+local answerListRequests = newGathering(REQUEST_WAIT, sendGuildList)
+local answerRelayRequests = newGathering(REQUEST_WAIT, sendRelayedRecords)
+local answerGuildRecordRequests = newGathering(REQUEST_WAIT, sendGuildRecords)
 
 -- Receiving --------------------------------------------------------------------------------------
 
@@ -752,15 +815,12 @@ local function receiveRecordRequest(request, sender)
         if id == Identity.Id() then
             if Scopes.RecordReaches(sender) and not reachedRecently(sender) then
                 requesters[sender] = true
-                scheduleRecordSending(REQUEST_WAIT_SECONDS)
+                scheduleRecordSending()
             end
         elseif guildListsActive() and Scopes.GuildReaches(sender) then
             relayRequesters[id] = relayRequesters[id] or {}
             relayRequesters[id][sender] = true
-            if not relayAnswerWaiting then
-                relayAnswerWaiting = true
-                C_Timer.After(REQUEST_WAIT_SECONDS, sendRelayedRecords)
-            end
+            answerRelayRequests()
         end
     end
 end
@@ -847,9 +907,7 @@ end
 local function receiveGuildListRequest(sender)
     if not (guildListsActive() and Scopes.GuildReaches(sender)) then return end
     listRequesters[sender] = true
-    if listAnswerWaiting then return end
-    listAnswerWaiting = true
-    C_Timer.After(REQUEST_WAIT_SECONDS, sendGuildList)
+    answerListRequests()
 end
 
 -- A member's list of my current guild, asked for by me or by another member: taken unless taken already or the same
@@ -872,9 +930,7 @@ local function receiveGuildRecordRequest(request, sender)
         guildRecordRequesters[id] = guildRecordRequesters[id] or {}
         guildRecordRequesters[id][sender] = true
     end
-    if guildRecordAnswerWaiting then return end
-    guildRecordAnswerWaiting = true
-    C_Timer.After(REQUEST_WAIT_SECONDS, sendGuildRecords)
+    answerGuildRecordRequests()
 end
 
 -- A record of my current guild, from any of its members (PAYLOAD_SENDERS): the signature and the signer's rank decide.
@@ -884,7 +940,9 @@ local function receiveGuildRecordUpdate(update)
     if signedRecord.guild ~= Identity.GuildId(UnitGUID("player")) or not GuildRecord.IsNewer(signedRecord) then return end
     RecordVerification.Queue(signedRecord, GuildRecord, function(verified)
         guildRecordRequests[verified.id] = nil
-        GuildRecord.Accept(verified, Scopes.GuildRankIndex(verified.signerGuid))
+        if GuildRecord.Accept(verified, Scopes.GuildRankIndex(verified.signerGuid)) == "accepted" then
+            unlinkFromOlderGuildRecords()
+        end
     end)
 end
 
@@ -1007,7 +1065,7 @@ function Protocol.Start()
     Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
     People.OnChanged(retryPendingGuildSettings)
-    GuildSettings.OnChanged(scheduleGuildListEvaluation)
+    GuildSettings.OnChanged(function() scheduleGuildListEvaluation() end)
     anonymousAtLogin = not Identity.IsLinked(UnitGUID("player"))
     -- The login announcement already reaches a group or guild I am in, and my friends online.
     wasInGroup, wasInGuild = IsInGroup(), IsInGuild()
@@ -1047,7 +1105,7 @@ end
 ---left yet), the next login announces again, even on a quick relog: the requesters dropped their GET at my logout
 ---announcement.
 function Protocol.SessionEnding()
-    local recordOwed = next(requesters) ~= nil or sendAt ~= nil
+    local recordOwed = next(requesters) ~= nil or recordSendingWaiting()
     for _, delivery in pairs(deliveries) do
         if not delivery.leftAt then recordOwed = true end
     end

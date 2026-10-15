@@ -45,6 +45,8 @@ Glyphs.Character = {
         text = L["Not listed by the player: you added it yourself."] },
     relayed = { texture = PATH .. "Banner", color = GREEN_FONT_COLOR, label = L["Guild"],
         text = L["Listed by your guild."] },
+    guild = { texture = PATH .. "Banner", color = GREEN_FONT_COLOR, label = L["Guild"],
+        text = L["Linked by your guild."] },
 }
 
 Glyphs.Main = { texture = Glyphs.CROWN_TEXTURE, label = L["Main"] }

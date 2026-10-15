@@ -64,7 +64,7 @@ sharing.Text:SetWordWrap(false)
 
 -- List and detail panel --------------------------------------------------------------------------
 
-local browser = PersonBrowser.Create(panel, LIST_TOP, Lists.FOOTER_SPACE)
+local browser = PersonBrowser.Create(panel, LIST_TOP, Lists.FOOTER_SPACE, "guild")
 panel.Browser = browser
 
 -- Data -------------------------------------------------------------------------------------------
@@ -74,13 +74,21 @@ local Identity, People = ns.Identity, ns.People
 -- Class IDs by the class file name the roster gives, filled at first use.
 ---@type table<string, integer>?
 local classIdByFile
+-- Past it, no class ID is looked for: the scan below always ends.
+local HIGHEST_CLASS_ID = 100
 
+-- Class IDs have gaps (checked in game: 9 classes, Druid's ID 11), so they are scanned until every class is found.
 local function classIdOf(classFile)
     if not classIdByFile then
         classIdByFile = {}
-        for classID = 1, GetNumClasses() do
+        local found, classCount = 0, GetNumClasses()
+        for classID = 1, HIGHEST_CLASS_ID do
+            if found == classCount then break end
             local _, file = GetClassInfo(classID)
-            if file then classIdByFile[file] = classID end
+            if file then
+                classIdByFile[file] = classID
+                found = found + 1
+            end
         end
     end
     return classIdByFile[classFile]
@@ -165,7 +173,7 @@ local function ownDetail(record)
     end
     PersonBrowser.SortCharacters(characters)
     return {
-        nickname = ownNickname(record), source = "confirmed", characters = characters, id = Identity.Id(), own = true,
+        nickname = ownNickname(record), source = "confirmed", characters = characters, id = Identity.Id(),
     }
 end
 
@@ -226,7 +234,12 @@ function panel:Select(id)
     end
     local person = id and People.Get(id)
     browser:SetSelected(person and id or nil)
-    browser:SetPerson(person and PersonBrowser.PersonDetail(person, ns.Scopes.OnlineGuids()) or nil)
+    if not person then return browser:SetPerson(nil) end
+    -- The guild's view: the guild's nickname and Remove, for an officer on one of my guild's identities; nothing of mine.
+    local detail = PersonBrowser.PersonDetail(person, ns.Scopes.OnlineGuids())
+    local guildIdentity = person.madeByGuild ~= nil and person.madeByGuild == Identity.GuildId(UnitGUID("player"))
+    detail.changes = guildIdentity and ns.Protocol.CanChangeGuildRecords() and "guild" or nil
+    browser:SetPerson(detail)
 end
 
 ---Fills the header from my guild, and the list from its roster: a row for each identity whose main is in it,

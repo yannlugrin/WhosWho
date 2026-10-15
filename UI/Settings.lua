@@ -321,7 +321,7 @@ local function identityStats()
 end
 
 local function peopleStats()
-    local personCount, characterCounts = 0, { confirmed = 0, listed = 0, relayed = 0, added = 0 }
+    local personCount, characterCounts = 0, { confirmed = 0, listed = 0, relayed = 0, added = 0, guild = 0 }
     for _, person in pairs(ns.People.All()) do
         personCount = personCount + 1
         for _, character in pairs(person.chars) do
@@ -333,6 +333,7 @@ local function peopleStats()
         L["Confirmed characters: %d"]:format(characterCounts.confirmed),
         L["Listed characters: %d"]:format(characterCounts.listed),
         L["Characters listed by the guild: %d"]:format(characterCounts.relayed),
+        L["Characters linked by the guild: %d"]:format(characterCounts.guild),
         L["Characters added by you: %d"]:format(characterCounts.added),
         L["Automatic changes: %d, %d unread"]:format(#ns.AutomaticChanges.List(), ns.AutomaticChanges.UnreadCount()),
     }, "\n")

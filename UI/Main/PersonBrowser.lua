@@ -101,7 +101,7 @@ end
 ---@field battleTag string? BattleTag of my Battle.net friend seen playing one of the person's characters
 ---@field id string
 ---@field note string? my note about the person
----@field own boolean my own identity: no nickname, note or Forget of mine
+---@field changes "mine"|"guild"|nil what the panel changes: my nickname, note and Forget (People tab), the guild's nickname and Remove (Guild tab, an officer on my guild's identity), or nothing
 ---@field characters WhosWho.PersonDetailCharacter[] in the order shown
 
 ---The list and detail panel of a tab.
@@ -138,6 +138,13 @@ function Browser:SetPerson(person)
     if not person then return end
 
     setGlyph(detail.Glyph, Glyphs.Nickname[person.source])
+    self.changes = person.changes
+    local guild = person.changes == "guild"
+    detail.EditNicknameButton:SetShown(person.changes ~= nil)
+    detail.EditNicknameButton.tooltipText = guild and L["Edit the guild's nickname"] or L["Edit nickname"]
+    detail.ForgetButton:SetShown(person.changes ~= nil)
+    detail.ForgetButton:SetText(guild and L["Remove"] or L["Forget"])
+    detail.ForgetButton:SetWidth(detail.ForgetButton:GetTextWidth() + 40)
     detail.Nickname:SetText(person.nickname)
     -- The nickname keeps its width; the edit button follows it.
     local nicknameSpace = detail:GetWidth() - 2 * DETAIL_PADDING - GLYPH_SIZE * 2 - 12 - detail.ForgetButton:GetWidth()
@@ -152,12 +159,13 @@ function Browser:SetPerson(person)
     end
     detail.BattleTag:SetText(person.battleTag and L["Battle.net: %s"]:format(person.battleTag) or "")
 
-    for _, region in ipairs(detail.personalRegions) do region:SetShown(not person.own) end
+    local mine = person.changes == "mine"
+    for _, region in ipairs(detail.noteRegions) do region:SetShown(mine) end
     detail.Note:SetFontObject(person.note and "GameFontHighlight" or "GameFontDisable")
     detail.Note:SetText(person.note or L["No note."])
     -- Without the note, the characters take the panel down to its bottom.
-    self.charactersBox:SetPoint("BOTTOM", person.own and detail or detail.NoteHeading,
-        person.own and "BOTTOM" or "TOP", 0, person.own and DETAIL_PADDING or 16)
+    self.charactersBox:SetPoint("BOTTOM", mine and detail.NoteHeading or detail, mine and "TOP" or "BOTTOM", 0,
+        mine and 16 or DETAIL_PADDING)
     self.charactersBox:SetDataProvider(CreateDataProvider(person.characters))
 end
 
@@ -173,8 +181,9 @@ end
 ---@param panel Frame the tab, with a Select method
 ---@param listTop number offset of the list's top from the panel's top
 ---@param listBottom number space the tab keeps under the key
+---@param tab WhosWho.PersonTab the tab, for its characters' right-click menu
 ---@return WhosWho.PersonBrowserFrames
-function PersonBrowser.Create(panel, listTop, listBottom)
+function PersonBrowser.Create(panel, listTop, listBottom, tab)
     local browser = Mixin({}, Browser)
 
     -- List -------------------------------------------------------------------------------------------
@@ -230,8 +239,8 @@ function PersonBrowser.Create(panel, listTop, listBottom)
             if button ~= "RightButton" then
                 if entry.id then panel:Select(entry.id) end
             elseif menuCharacter then
-                ns.UnitMenu.OpenCharacterMenu(self, menuCharacter.name, menuCharacter.guid,
-                    entry.unknownCharacter and entry.unknownCharacter.newCharacter)
+                local character = entry.unknownCharacter and entry.unknownCharacter.newCharacter
+                ns.UnitMenu.OpenCharacterMenu(self, menuCharacter.name, menuCharacter.guid, character, tab)
             end
         end)
     end
@@ -300,9 +309,10 @@ function PersonBrowser.Create(panel, listTop, listBottom)
         local button = CreateFrame("Button", nil, detail)
         button:SetSize(GLYPH_SIZE, GLYPH_SIZE)
         button:SetNormalTexture(Glyphs.EDIT_TEXTURE)
+        button.tooltipText = tooltipText
         button:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(tooltipText, HIGHLIGHT_FONT_COLOR:GetRGB())
+            GameTooltip:SetText(self.tooltipText, HIGHLIGHT_FONT_COLOR:GetRGB())
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", GameTooltip_Hide)
@@ -343,9 +353,8 @@ function PersonBrowser.Create(panel, listTop, listBottom)
     detail.EditNoteButton:SetPoint("LEFT", detail.NoteHeading, "RIGHT", 6, 0)
 
     -- What I set on another player's person, hidden on my own identity.
-    detail.personalRegions = {
-        detail.EditNicknameButton, detail.ForgetButton, detail.Note, detail.NoteHeading, detail.EditNoteButton,
-    }
+    -- My note, shown with my own changes only.
+    detail.noteRegions = { detail.Note, detail.NoteHeading, detail.EditNoteButton }
 
     local charactersBox = CreateFrame("Frame", nil, detail, "WowScrollBoxList")
     charactersBox:SetPoint("TOPLEFT", detail.CharactersHeading, "BOTTOMLEFT", 0, -4)
@@ -385,8 +394,11 @@ function PersonBrowser.Create(panel, listTop, listBottom)
         row:EnableMouse(true)
         row:SetScript("OnMouseUp", function(self, button)
             if button ~= "RightButton" then return end
-            local character = self:GetElementData()
-            ns.UnitMenu.OpenCharacterMenu(self, character.name, character.guid)
+            local shown = self:GetElementData()
+            local character = {
+                name = shown.name, ruleset = shown.ruleset, classID = shown.classID, level = shown.level,
+            }
+            ns.UnitMenu.OpenCharacterMenu(self, shown.name, shown.guid, character, tab)
         end)
 
         if skin then skin.SquareIcon(row.ClassIcon, iconFrame) end
@@ -418,8 +430,22 @@ function PersonBrowser.Create(panel, listTop, listBottom)
     charactersView:SetElementInitializer("Frame", initCharacterRow)
     ScrollUtil.InitScrollBoxListWithScrollBar(charactersBox, charactersBar, charactersView)
 
-    detail.ForgetButton:SetScript("OnClick", function() ns.PeopleDialogs.ConfirmForget(browser.selectedId) end)
-    detail.EditNicknameButton:SetScript("OnClick", function() ns.PeopleDialogs.EditNickname(browser.selectedId) end)
+    -- My own changes, or the guild's.
+    local function guildId() return ns.Identity.GuildId(UnitGUID("player")) end
+    detail.ForgetButton:SetScript("OnClick", function()
+        if browser.changes == "guild" then
+            ns.PeopleDialogs.ConfirmGuildRemove(guildId(), browser.selectedId)
+        else
+            ns.PeopleDialogs.ConfirmForget(browser.selectedId)
+        end
+    end)
+    detail.EditNicknameButton:SetScript("OnClick", function()
+        if browser.changes == "guild" then
+            ns.PeopleDialogs.EditGuildNickname(guildId(), browser.selectedId)
+        else
+            ns.PeopleDialogs.EditNickname(browser.selectedId)
+        end
+    end)
     detail.EditNoteButton:SetScript("OnClick", function() ns.PeopleDialogs.NoteEditor:Open(browser.selectedId) end)
 
     -- Key --------------------------------------------------------------------------------------------
@@ -539,6 +565,6 @@ function PersonBrowser.PersonDetail(person, onlineGuids)
     return {
         nickname = People.Nickname(person.id), source = Lists.NicknameSource(person), characters = characters,
         baseNickname = PersonBrowser.BaseNickname(person), battleTag = battleTag, id = person.id, note = person.note,
-        own = false,
+        changes = "mine",
     }
 end

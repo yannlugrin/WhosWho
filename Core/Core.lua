@@ -119,6 +119,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Store.Init()
     elseif event == "PLAYER_LOGIN" then
         ns.Identity.EnsureKeys()
+        ns.GuildRecord.ApplyHeld()
         local _, _, classID = UnitClass("player")
         ns.Identity.Refresh(UnitGUID("player"), ns.UnitWholeName("player"), ruleset(), classID, UnitLevel("player"))
         ns.Protocol.Start()
@@ -243,6 +244,7 @@ end
 local PEOPLE_LISTED = 10
 local STATE_NAMES = {
     confirmed = L["confirmed"], listed = L["listed"], relayed = L["listed by the guild"], added = L["added by you"],
+    guild = L["linked by the guild"],
 }
 
 local function printPerson(person)

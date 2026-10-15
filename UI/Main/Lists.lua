@@ -56,11 +56,12 @@ end
 
 -- People ---------------------------------------------------------------------------------------
 
----Where the name a person is shown under comes from: until a character is confirmed, a record my guild passed on
----shows as the guild's.
+---Where the name a person is shown under comes from: a guild identity is the guild's, and until a character is
+---confirmed, so is a record my guild passed on.
 ---@param person WhosWho.Person
 ---@return "confirmed"|"renamed"|"guild"|"unconfirmed"
 function Lists.NicknameSource(person)
+    if person.madeByGuild then return "guild" end
     if not person.signedRecord then return "unconfirmed" end
     local listedByGuild = false
     for _, character in pairs(person.chars) do

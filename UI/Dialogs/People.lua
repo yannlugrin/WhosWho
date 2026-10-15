@@ -4,10 +4,11 @@ local _, ns = ...
 local L = ns.L
 local Lists = ns.Lists
 local Glyphs = ns.Glyphs
+local GuildRecord = ns.GuildRecord
 local People = ns.People
 
 ---@class WhosWho.PeopleDialogs
----@field LinkCharacter Frame links a character to a person I know, or starts a new person with it
+---@field LinkCharacter Frame links a character to a person I know, or starts a new one; also for my guild
 local PeopleDialogs = {}
 ns.PeopleDialogs = PeopleDialogs
 
@@ -163,12 +164,23 @@ function dialog:Select(id)
     listBox:ForEachFrame(function(row, person) row.Selected:SetShown(person.id == id) end)
 end
 
----Fills the list from the people I hold, with the search and sort applied.
+-- Whether my guild can link a character to that person: one of its guild identities, or a shared identity with a
+-- character in it.
+local function linkableForGuild(person, clubId)
+    if person.madeByGuild then return person.madeByGuild == clubId end
+    if not person.signedRecord then return false end
+    for _, character in pairs(person.chars) do
+        if character.guild == clubId then return true end
+    end
+    return false
+end
+
+---Fills the list from the people I hold, for the guild the ones my guild can link to, with the search and sort applied.
 function dialog:Refresh()
     local text = self.SearchBox:GetText():lower()
     local entries, selectedShown = {}, false
     for _, person in pairs(People.All()) do
-        if Lists.MatchesSearch(person, text) then
+        if Lists.MatchesSearch(person, text) and (not self.clubId or linkableForGuild(person, self.clubId)) then
             local characterCount = 0
             for _ in pairs(person.chars) do characterCount = characterCount + 1 end
             local main = person.chars[person.main]
@@ -192,11 +204,21 @@ function dialog:Refresh()
     self:Select(selectedShown and self.selectedId or nil)
 end
 
----Opens the dialog for a character that belongs to no person yet.
+-- A button's text, its width following it.
+local function setButtonText(button, text)
+    button:SetText(text)
+    button:SetWidth(button:GetTextWidth() + BUTTON_TEXT_PADDING)
+end
+
+---Opens the dialog for a character that belongs to no person yet; with a club ID, for that guild: my guild's record
+---links the character, and its members get it.
 ---@param guid string
 ---@param character WhosWho.NewCharacter
-function dialog:Open(guid, character)
-    self.guid, self.character = guid, character
+---@param clubId integer? my guild, for the guild master and the officers
+function dialog:Open(guid, character, clubId)
+    self.guid, self.character, self.clubId = guid, character, clubId
+    self:SetTitle(clubId and L["Link for the guild"] or L["Link character"])
+    setButtonText(self.NewPersonButton, clubId and L["New guild person"] or L["New person"])
     self.Question:SetText(L["Which person does %s belong to?"]:format(
         Lists.ClassColoredName(character.name, character.classID)))
     self.SearchBox:SetText("")
@@ -213,18 +235,38 @@ dialog.ListHeader.Labels.Name:SetScript("OnClick", function()
 end)
 dialog.SearchBox:HookScript("OnTextChanged", function() dialog:Refresh() end)
 
--- Both end on the person in the People tab, where the character now is.
-dialog.LinkButton:SetScript("OnClick", function()
-    People.AddCharacter(dialog.selectedId, dialog.guid, dialog.character)
+-- For the guild: signs my guild's record linking the character to that identity, and sends it to its members.
+local function linkForGuild(id)
+    ns.Protocol.SendGuildRecord(GuildRecord.Link(dialog.clubId, id, dialog.guid, dialog.character))
+end
+
+-- Both end on the person where the character now is: selected in the Guild tab when the link started there, in the
+-- People tab otherwise.
+local function showLinkedPerson()
     local person = People.Find(dialog.guid)
     dialog:Hide()
-    if person then ns.Main.People:ShowPerson(person.id) end
+    if not person then return end
+    if ns.Main.Guild:IsVisible() then
+        ns.Main.Guild:Select(person.id)
+    else
+        ns.Main.People:ShowPerson(person.id)
+    end
+end
+dialog.LinkButton:SetScript("OnClick", function()
+    if dialog.clubId then
+        linkForGuild(dialog.selectedId)
+    else
+        People.AddCharacter(dialog.selectedId, dialog.guid, dialog.character)
+    end
+    showLinkedPerson()
 end)
 dialog.NewPersonButton:SetScript("OnClick", function()
-    People.Create(dialog.guid, dialog.character)
-    local person = People.Find(dialog.guid)
-    dialog:Hide()
-    if person then ns.Main.People:ShowPerson(person.id) end
+    if dialog.clubId then
+        linkForGuild(GuildRecord.NewGuildIdentityId(dialog.guid))
+    else
+        People.Create(dialog.guid, dialog.character)
+    end
+    showLinkedPerson()
 end)
 dialog.CancelButton:SetScript("OnClick", function() dialog:Hide() end)
 
@@ -434,6 +476,135 @@ function PeopleDialogs.ConfirmForget(id)
     StaticPopup_Show("WHOSWHO_FORGET_PERSON", nickname,
         L["%s and their %d |4character:characters; are removed from your list. This can't be undone."]:format(
             nickname, characterCount), id)
+end
+
+-- For the guild ----------------------------------------------------------------------------------
+
+-- Each change for the guild is signed by me and sent to its members, who all apply it.
+
+StaticPopupDialogs.WHOSWHO_GUILD_UNLINK = {
+    text = L["Unlink %s from %s for the guild?"] .. "\n\n" .. L["Every member of the guild who uses Who's Who sees the change."],
+    button1 = L["Unlink"],
+    button2 = CANCEL,
+    OnAccept = function(_, data) ns.Protocol.SendGuildRecord(GuildRecord.Unlink(data.clubId, data.id, { data.guid })) end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+StaticPopupDialogs.WHOSWHO_GUILD_MAKE_MAIN = {
+    text = L["Make %s the main character of %s for the guild?"] .. "\n\n"
+        .. L["Every member of the guild who uses Who's Who sees the change."],
+    button1 = L["Make main"],
+    button2 = CANCEL,
+    OnAccept = function(_, data) ns.Protocol.SendGuildRecord(GuildRecord.SetMain(data.clubId, data.id, data.guid)) end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+StaticPopupDialogs.WHOSWHO_GUILD_REMOVE = {
+    text = L["Remove %s for the guild?"] .. "\n\n"
+        .. L["Every member of the guild who uses Who's Who forgets this person and the characters the guild linked to it."],
+    button1 = L["Remove"],
+    button2 = CANCEL,
+    OnAccept = function(_, data) ns.Protocol.SendGuildRecord(GuildRecord.Remove(data.clubId, data.id)) end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+-- The popup's data is { clubId, id }.
+-- Saves the typed nickname for the guild; a refused one keeps the popup open with the reason under its text.
+local function saveGuildNickname(popup)
+    local typed = popup:GetEditBox():GetText()
+    local clean, err = ns.Record.CleanName(typed ~= "" and typed or nil)
+    if err then
+        popup:SetText(popup.baseText .. "\n\n" .. RED_FONT_COLOR:WrapTextInColorCode(ns.NameErrorMessages[err] or err))
+        popup:Resize()
+        return false
+    end
+    ns.Protocol.SendGuildRecord(GuildRecord.Rename(popup.data.clubId, popup.data.id, clean))
+    return true
+end
+
+StaticPopupDialogs.WHOSWHO_GUILD_NICKNAME = {
+    text = L["The guild's nickname for %s"] .. "\n\n"
+        .. L["Every member of the guild who uses Who's Who sees it, unless they gave this person their own nickname."],
+    hasEditBox = true,
+    maxLetters = ns.Record.MAX_NAME_LENGTH,
+    button1 = L["Save"],
+    button2 = CANCEL,
+    button3 = L["Remove the nickname"],
+    DisplayButton3 = function(_, data) return People.Get(data.id).nickname ~= nil end,
+    OnShow = function(popup, data)
+        popup.baseText = popup:GetText()
+        local editBox = popup:GetEditBox()
+        editBox:SetText(People.Get(data.id).nickname or "")
+        editBox:SetFocus()
+    end,
+    OnAccept = function(popup) return not saveGuildNickname(popup) end,
+    OnAlt = function(_, data) ns.Protocol.SendGuildRecord(GuildRecord.Rename(data.clubId, data.id, nil)) end,
+    EditBoxOnEnterPressed = function(editBox)
+        local popup = editBox:GetParent()
+        if saveGuildNickname(popup) then popup:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(editBox) editBox:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+-- The person's name as the popups show it, in its glyph's colour.
+local function coloredNickname(id)
+    local person = People.Get(id)
+    return Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
+end
+
+-- A character of the person, in its class colour.
+local function coloredCharacter(id, guid)
+    local character = People.Get(id).chars[guid]
+    return Lists.ClassColoredName(character.name, character.classID)
+end
+
+---Asks to unlink, for my guild, a character its record links; GuildRecord.CanUnlink tells which ones.
+---@param clubId integer
+---@param id string
+---@param guid string
+function PeopleDialogs.ConfirmGuildUnlink(clubId, id, guid)
+    StaticPopup_Show("WHOSWHO_GUILD_UNLINK", coloredCharacter(id, guid), coloredNickname(id),
+        { clubId = clubId, id = id, guid = guid })
+end
+
+---Asks to make a character the main of one of my guild's identities, for the guild.
+---@param clubId integer
+---@param id string
+---@param guid string
+function PeopleDialogs.ConfirmGuildMakeMain(clubId, id, guid)
+    StaticPopup_Show("WHOSWHO_GUILD_MAKE_MAIN", coloredCharacter(id, guid), coloredNickname(id),
+        { clubId = clubId, id = id, guid = guid })
+end
+
+---Asks to remove one of my guild's identities, for the guild.
+---@param clubId integer
+---@param id string
+function PeopleDialogs.ConfirmGuildRemove(clubId, id)
+    StaticPopup_Show("WHOSWHO_GUILD_REMOVE", coloredNickname(id), nil, { clubId = clubId, id = id })
+end
+
+---Asks for the nickname of one of my guild's identities, for the guild.
+---@param clubId integer
+---@param id string
+function PeopleDialogs.EditGuildNickname(clubId, id)
+    StaticPopup_Show("WHOSWHO_GUILD_NICKNAME", coloredNickname(id), nil, { clubId = clubId, id = id })
 end
 
 -- A record can change the people while the dialog is open: it closes once the character belongs to a person,

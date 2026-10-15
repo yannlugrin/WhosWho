@@ -34,6 +34,8 @@ end
 -- World ------------------------------------------------------------------------------------------
 
 local world = { clock = 1000, timers = {}, messages = {}, log = {}, characters = {}, group = {} }
+-- The server time when the world's clock started: GetServerTime follows the world's clock from it.
+local SERVER_TIME_START = os.time()
 
 local function character(name, guid, classID, guild)
     local c = { name = name, guid = guid, classID = classID, level = 10, guild = guild, friends = {} }
@@ -208,7 +210,7 @@ local function newEnvironment(session)
     env.print = function() end
     env.time = function() return world.clock end
     env.GetTime = function() return world.clock end
-    env.GetServerTime = os.time
+    env.GetServerTime = function() return SERVER_TIME_START + world.clock end
     env.debugprofilestop = os.clock
     env.fastrandom = math.random
     env.GetCursorPosition = function() return 0.5, 0.25 end
@@ -1655,7 +1657,7 @@ run(10)
 check(sent({ from = "Ivy Main", type = "GSET" }) == 0 and ivy.ns.GuildSettings.Get(GUILD2).enable,
     "a member below the officers signs no settings")
 -- A modified client signs them anyway.
-local ivyRecord = ivy.ns.GuildSettings.Change(GUILD2, { enable = false, enforceLinking = false }, ivyMain.guid, os.time())
+local ivyRecord = ivy.ns.GuildSettings.Change(GUILD2, { enable = false, enforceLinking = false }, ivyMain.guid, SERVER_TIME_START + world.clock)
 ivy.ns.Protocol:SendCommMessage("WhosWho", ivy.ns.Codec.GuildSettingsUpdate(ivyRecord), "GUILD")
 run(10)
 check(hal.ns.GuildSettings.Get(GUILD2).enable and joe.ns.GuildSettings.Get(GUILD2).enable,
@@ -1726,7 +1728,7 @@ check(sent({ type = "ANNOUNCE", target = "Hal Main" }) == 0 and sent({ type = "G
 local maxMain = character("Max Main", "Player-1-0000F601", WARRIOR, GUILD2)
 maxMain.rankIndex = 3
 local MAX = "G000000000000f601"
-local guildRecordRev = os.time()
+local guildRecordRev = SERVER_TIME_START + world.clock
 local function guildRecordBy(session, characters, clubId)
     local ruleset = session.ns.Identity.Ruleset(session.character.guid)
     local chars = {}
@@ -1758,6 +1760,58 @@ check(kim.ns.GuildRecord.Held(GUILD2, MAX).signer == hal.ns.Identity.Id() and ho
 hal.ns.Protocol:SendCommMessage("WhosWho", hal.ns.Codec.GuildRecordUpdate(guildRecordBy(hal, { maxMain }, 31000099)), "GUILD")
 run(10)
 check(kim.ns.GuildRecord.Held(31000099, MAX) == nil, "and one about another guild is dropped")
+
+-- An officer's changes, sent at once to the guild.
+local roxMain = character("Rox Main", "Player-1-0000F701", MAGE, GUILD2)
+roxMain.rankIndex = 3
+local GR, halRuleset = hal.ns.GuildRecord, hal.ns.Identity.Ruleset(halMain.guid)
+local function sendForGuild(signedRecord)
+    clearLog()
+    hal.ns.Protocol.SendGuildRecord(signedRecord)
+    run(10)
+end
+check(hal.ns.Protocol.CanChangeGuildRecords() and not joe.ns.Protocol.CanChangeGuildRecords(),
+    "the guild master and the officers change the guild's records, not the other members")
+sendForGuild(GR.Link(GUILD2, MAX, roxMain.guid, { name = roxMain.name, ruleset = halRuleset, classID = roxMain.classID }))
+check(sent({ from = "Hal Main", type = "GIREC", distribution = "GUILD" }) == 1 and holderId(kim, roxMain.guid) == MAX
+    and state(kim, roxMain.guid) == "guild", "a character the officer links reaches the members in one GIREC on GUILD")
+check(not GR.CanUnlink(GUILD2, MAX, maxMain.guid) and GR.CanUnlink(GUILD2, MAX, roxMain.guid),
+    "a guild identity's main can't be unlinked while it has other characters")
+sendForGuild(GR.SetMain(GUILD2, MAX, roxMain.guid))
+check(kim.ns.People.Get(MAX).main == roxMain.guid, "its main changed for the guild")
+sendForGuild(GR.Rename(GUILD2, MAX, "Maxou"))
+check(kim.ns.People.Nickname(MAX) == "Maxou", "its nickname for the guild")
+sendForGuild(GR.Unlink(GUILD2, MAX, { maxMain.guid }))
+check(holderId(kim, maxMain.guid) == nil and holderId(kim, roxMain.guid) == MAX, "a character unlinked for the guild")
+local newId = GR.NewGuildIdentityId(maxMain.guid)
+sendForGuild(GR.Link(GUILD2, newId, maxMain.guid, { name = maxMain.name, ruleset = halRuleset, classID = maxMain.classID }))
+check(holderId(kim, maxMain.guid) == newId and kim.ns.People.Get(newId).main == maxMain.guid,
+    "a new guild identity, its first character its main")
+sendForGuild(GR.Remove(GUILD2, MAX))
+check(kim.ns.People.Get(MAX) == nil and holderId(kim, roxMain.guid) == nil and holderId(kim, maxMain.guid) == newId,
+    "a guild identity removed for the guild, the others stay")
+local newerId = "G0000000000000d01"
+sendForGuild(GR.Link(GUILD2, newerId, maxMain.guid, { name = maxMain.name, ruleset = halRuleset, classID = maxMain.classID }))
+check(holderId(kim, maxMain.guid) == newerId and sent({ from = "Hal Main", type = "GIREC", distribution = "GUILD" }) == 2
+    and kim.ns.People.Get(newId) == nil and next(kim.ns.GuildRecord.Held(GUILD2, newId).chars) == nil
+    and next(hal.ns.GuildRecord.LinkedByNewer(GUILD2)) == nil,
+    "a newer guild identity takes the character; the officer removes the older one, left with nothing, for everyone")
+local pipMain = character("Pip Main", "Player-1-0000F801", ROGUE, GUILD2)
+pipMain.rankIndex = 3
+local keptId, takingId = "G0000000000000d02", "G0000000000000d03"
+local function linkFor(id, c) return GR.Link(GUILD2, id, c.guid, { name = c.name, ruleset = halRuleset, classID = c.classID }) end
+clearLog()
+hal.ns.Protocol.SendGuildRecord(linkFor(keptId, roxMain))
+hal.ns.Protocol.SendGuildRecord(linkFor(keptId, pipMain))
+run(1)
+check(sent({ from = "Hal Main", type = "GIREC" }) == 0, "an officer's changes wait for the ones that follow")
+run(9)
+check(sent({ from = "Hal Main", type = "GIREC" }) == 1 and holderId(kim, pipMain.guid) == keptId,
+    "then the record changed goes out once, at its latest revision")
+sendForGuild(linkFor(takingId, roxMain))
+check(holderId(kim, roxMain.guid) == takingId and holderId(kim, pipMain.guid) == keptId
+    and kim.ns.People.Get(keptId).main == pipMain.guid and not kim.ns.GuildRecord.Held(GUILD2, keptId).chars[roxMain.guid],
+    "an older guild identity loses only the character a newer one takes, its main then its other character")
 
 logout(hal)
 logout(kim)
@@ -2036,6 +2090,22 @@ do
     for i = 1, 501 do guildEntries[("G%016x"):format(i)] = 1 end
     check(Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", entries, guildEntries)) == nil,
         "a GLIST holds at most 2 000 identities and guild records together")
+
+    -- Every message with a binary payload is logged with its version and type only.
+    local Diagnostic = ann.ns.Diagnostic
+    ann.ns.settings.diagnostic.enable = true
+    local payloadMessages = {
+        Codec.RecordUpdate({}), Codec.GuildSettingsUpdate({}), Codec.GuildListUpdate(7, 100, "9f2c41ab", {}, {}),
+        Codec.GuildRecordUpdate({}),
+    }
+    for _, text in ipairs(payloadMessages) do Diagnostic.MessageReceived(text, "GUILD", "Bob Main") end
+    local shortened = true
+    for i = 1, #payloadMessages do
+        local entry = Diagnostic.Messages()[i]
+        shortened = shortened and entry.text:match("^1 %u+$") ~= nil and entry.size > #entry.text
+    end
+    ann.ns.settings.diagnostic.enable = false
+    check(shortened, "the diagnostic log leaves out the payload of a REC, GSET, GLIST and GIREC")
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

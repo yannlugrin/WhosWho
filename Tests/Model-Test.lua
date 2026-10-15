@@ -1364,6 +1364,22 @@ do
         and ns.AutomaticChanges.List()[1].kind == "merged",
         "my manual identity holding a character merges into the guild identity")
 
+    -- Two records of the guild linking the same character: the most recent one gets it, in any order.
+    local OLD, NEW = "G00000000000000a1", "G00000000000000a2"
+    local G9 = "Player-70-00000019"
+    local oldRecord = guildRecord(OLD, { G9 }, G9, "Old")
+    local newRecord = guildRecord(NEW, { G9 }, G9, "New")
+    GR.Accept(newRecord, 1)
+    GR.Accept(oldRecord, 1)
+    check(holderId(G9) == NEW and P.Get(OLD) == nil, "an older record arriving later doesn't take the character")
+    P.Forget(NEW)
+    GR.ApplyHeld()
+    check(holderId(G9) == NEW and state(G9) == "guild", "a guild identity forgotten comes back from its record at login")
+    GR.Accept(guildRecord(NEW, {}), 1)
+    check(P.Get(NEW) == nil and holderId(G9) == OLD and P.Nickname(OLD) == "Old",
+        "removed, the older record gets the character back")
+    GR.Accept(guildRecord(OLD, {}), 1)
+
     -- Changes, the roster and leaving.
     GR.Accept(guildRecord(A, { G6 }), 1)
     check(not P.Exists(G4), "a character the guild's newer record no longer links leaves")

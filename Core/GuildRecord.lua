@@ -115,9 +115,49 @@ end
 ---@return boolean
 function GuildRecord.IsNewer(signedRecord)
     local held = GuildRecord.Held(signedRecord.guild, signedRecord.id)
-    if not held then return true end
-    if signedRecord.rev ~= held.rev then return signedRecord.rev > held.rev end
-    return signedRecord.signer > held.signer
+    return not held or GuildRecord.IsNewerThan(signedRecord, held)
+end
+
+---Whether a record of a guild is more recent than another: a later revision, or the same one from a greater signer ID.
+---@param signedRecord WhosWho.SignedGuildRecord
+---@param other WhosWho.SignedGuildRecord
+---@return boolean
+function GuildRecord.IsNewerThan(signedRecord, other)
+    if signedRecord.rev ~= other.rev then return signedRecord.rev > other.rev end
+    return signedRecord.signer > other.signer
+end
+
+-- Holds a record, and applies its guild's records again to the people I hold.
+local function hold(signedRecord)
+    local held = heldByGuild()
+    held[signedRecord.guild] = held[signedRecord.guild] or {}
+    held[signedRecord.guild][signedRecord.id] = signedRecord
+    People.ApplyGuild(signedRecord.guild)
+end
+
+---The characters each record of a guild lists that a newer record of the guild lists too: the newer one has them.
+---@param clubId integer
+---@return table<string, string[]> guids by identity ID, only for the records listing some
+function GuildRecord.LinkedByNewer(clubId)
+    local records, linked = heldByGuild()[clubId] or {}, {}
+    for id, signedRecord in pairs(records) do
+        for guid in pairs(signedRecord.chars) do
+            for otherId, other in pairs(records) do
+                if otherId ~= id and other.chars[guid] and GuildRecord.IsNewerThan(other, signedRecord) then
+                    linked[id] = linked[id] or {}
+                    table.insert(linked[id], guid)
+                    break
+                end
+            end
+        end
+    end
+    return linked
+end
+
+---At login: applies every guild's records again, so a person that disappeared since (forgotten, its characters taken
+---by another record) comes back from its record.
+function GuildRecord.ApplyHeld()
+    for clubId in pairs(heldByGuild()) do People.ApplyGuild(clubId) end
 end
 
 ---Holds a verified record that is newer, when its signer may write it: its signing character confirmed under its
@@ -132,10 +172,7 @@ function GuildRecord.Accept(signedRecord, signerRankIndex)
         and People.IsConfirmedCharacter(signedRecord.signer, signedRecord.signerGuid)) then
         return "refused"
     end
-    local held = heldByGuild()
-    held[signedRecord.guild] = held[signedRecord.guild] or {}
-    held[signedRecord.guild][signedRecord.id] = signedRecord
-    People.ApplyGuildRecord(signedRecord)
+    hold(signedRecord)
     return "accepted"
 end
 
@@ -143,4 +180,110 @@ end
 ---@param clubId integer
 function GuildRecord.ForgetGuild(clubId)
     heldByGuild()[clubId] = nil
+end
+
+-- Changes ----------------------------------------------------------------------------------------
+
+-- A copy of a table and the tables it holds.
+local function copy(t)
+    local out = {}
+    for key, value in pairs(t) do out[key] = type(value) == "table" and copy(value) or value end
+    return out
+end
+
+-- Signs my change to what my guild says about one identity, from the character I play, holds it and applies it: the
+-- record I hold, fields a later version added included, or a new one, changed by `change`. Its revision is the server
+-- time, or one more than the record held when that is not later.
+---@param clubId integer
+---@param id string
+---@param change fun(record: WhosWho.SignedGuildRecord)
+---@return WhosWho.SignedGuildRecord
+local function sign(clubId, id, change)
+    local held = GuildRecord.Held(clubId, id)
+    local record = held and copy(held) or { v = GuildRecord.VERSION, guild = clubId, id = id, chars = {} }
+    change(record)
+    record.signer, record.signerGuid = ns.Identity.Id(), UnitGUID("player")
+    record.rev = math.max(GetServerTime(), held and held.rev + 1 or 0)
+    record.sig = ns.Identity.Sign(GuildRecord.Canonical(record))
+    hold(record)
+    return record
+end
+
+---A new guild identity's ID, for the character it starts from.
+---@param guid string
+---@return string
+function GuildRecord.NewGuildIdentityId(guid)
+    local bytes = guid .. ns.Identity.Id() .. GetServerTime()
+    return "G" .. Crypto.ToHex(Crypto.SHA512(bytes)):sub(1, 16)
+end
+
+---Links a character in my guild to an identity: a guild identity, its main when it has none (a new one), or a shared
+---one. Signed by me, held and applied; Protocol.SendGuildRecord passes it on.
+---@param clubId integer
+---@param id string
+---@param guid string
+---@param character WhosWho.Character
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.Link(clubId, id, guid, character)
+    return sign(clubId, id, function(record)
+        record.chars[guid] = { name = character.name, ruleset = character.ruleset, classID = character.classID }
+        if GuildRecord.IsGuildIdentityId(id) and not record.main then record.main = guid end
+    end)
+end
+
+---Whether GuildRecord.Unlink accepts that character: one the guild links, and not a guild identity's main while it
+---has other characters.
+---@param clubId integer
+---@param id string
+---@param guid string
+---@return boolean
+function GuildRecord.CanUnlink(clubId, id, guid)
+    local held = GuildRecord.Held(clubId, id)
+    if not (held and held.chars[guid]) then return false end
+    return guid ~= held.main or next(held.chars, next(held.chars)) == nil
+end
+
+---Unlinks characters the guild links. A guild identity whose main leaves gets the first of its other characters by name;
+---one without characters left is removed.
+---@param clubId integer
+---@param id string
+---@param guids string[]
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.Unlink(clubId, id, guids)
+    return sign(clubId, id, function(record)
+        for _, guid in ipairs(guids) do record.chars[guid] = nil end
+        if not (record.main and record.chars[record.main]) then
+            local main
+            for guid, character in pairs(record.chars) do
+                if not main or character.name < record.chars[main].name then main = guid end
+            end
+            record.main = GuildRecord.IsGuildIdentityId(id) and main or nil
+        end
+    end)
+end
+
+---Makes a character of a guild identity its main.
+---@param clubId integer
+---@param id string
+---@param guid string
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.SetMain(clubId, id, guid)
+    return sign(clubId, id, function(record) record.main = guid end)
+end
+
+---Sets or removes a guild identity's nickname.
+---@param clubId integer
+---@param id string
+---@param nickname string? already clean (Record.CleanName); nil removes it
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.Rename(clubId, id, nickname)
+    return sign(clubId, id, function(record) record.nickname = nickname end)
+end
+
+---Removes a guild identity: a record without characters, which every member applies by forgetting it.
+---@param clubId integer
+---@param id string
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.Remove(clubId, id)
+    return sign(clubId, id, function(record) record.chars, record.main, record.nickname = {}, nil, nil end)
 end

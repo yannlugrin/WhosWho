@@ -372,18 +372,20 @@ end
 ---@return boolean
 function People.CanSetMain(id, guid)
     local person = ns.data.people[id]
-    return person ~= nil and not person.signedRecord and person.chars[guid] ~= nil and guid ~= person.main
+    return person ~= nil and not person.signedRecord and not person.madeByGuild and person.chars[guid] ~= nil
+        and guid ~= person.main
 end
 
----Sets a manual person's main character. A shared identity's main is the player's own.
+---Sets a manual person's main character. A shared identity's main is the player's own, a guild identity's its guild's.
 ---@param id string
 ---@param guid string one of the person's characters
 ---@return boolean ok
----@return "missing"|"shared"|"character"? err
+---@return "missing"|"shared"|"guild"|"character"? err
 function People.SetMain(id, guid)
     local person = ns.data.people[id]
     if not person then return false, "missing" end
     if person.signedRecord then return false, "shared" end
+    if person.madeByGuild then return false, "guild" end
     if not person.chars[guid] then return false, "character" end
 
     person.main, person.updatedAt = guid, time()
@@ -437,12 +439,13 @@ local CLAIMS = { added = 1, guild = 2, relayed = 3, listed = 3, confirmed = 3 }
 local CONFIRMATION_CLAIM = 4
 
 -- Puts a character a record declares in `toPerson` with that state ("listed" or "relayed" from a player's record,
--- "guild" from my guild's), and removes it from the person it no longer belongs to. A stronger claim takes it from
+-- "guild" from my guild's), and removes it from the person it no longer belongs to. `takesGuildLink`: a more recent
+-- record of my guild takes the character from an older one that links it. A stronger claim takes it from
 -- another person, an equal one updates it on its own person: a player keeps a character they declared, my guild's
 -- link gives way to the player's record, mine to both. `confirmedLevel` is given when a message from the character
 -- proved it (its level then). My manual identity holding the character merges into `toPerson`; a guild identity left
 -- without characters goes. Whether the character is in `toPerson`.
-local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedLevel)
+local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedLevel, takesGuildLink)
     local claim = confirmedLevel and CONFIRMATION_CLAIM or CLAIMS[state]
     local fromPersonId = index()[guid]
     local fromPerson = fromPersonId and ns.data.people[fromPersonId]
@@ -450,7 +453,8 @@ local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedL
     if fromPerson == toPerson then
         if claim < CLAIMS[fromCharacter.state] then return false end
     elseif fromPerson and (fromPerson.signedRecord or fromPerson.madeByGuild) then
-        if claim <= CLAIMS[fromCharacter.state] then return false end
+        local takesIt = claim > CLAIMS[fromCharacter.state] or (takesGuildLink and fromCharacter.state == "guild")
+        if not takesIt then return false end
         -- My link moved, or a player's character taken by a confirmation; my guild's link is not mine.
         if fromCharacter.state ~= "guild" then
             AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPerson, toPerson, { [guid] = true })
@@ -518,16 +522,30 @@ local function applyGuildRecord(signedRecord)
 
     AutomaticChanges.BeginOperation(person)
     for guid, recordCharacter in pairs(signedRecord.chars) do
-        if storeCharacter(person, guid, recordCharacter, "guild") then person.chars[guid].guild = clubId end
+        local holder, held = People.Find(guid)
+        local takesGuildLink = holder ~= nil and held.state == "guild" and held.guild == clubId
+            and ns.GuildRecord.IsNewerThan(signedRecord, ns.data.guildRecords[clubId][holder.id])
+        if storeCharacter(person, guid, recordCharacter, "guild", nil, takesGuildLink) then
+            person.chars[guid].guild = clubId
+        end
     end
     AutomaticChanges.EndOperation()
     if guildIdentity and not next(person.chars) then forget(id) end
 end
 
----Applies a guild's record I accepted (GuildRecord.Accept) to the people I hold.
----@param signedRecord WhosWho.SignedGuildRecord signature and signer checked
-function People.ApplyGuildRecord(signedRecord)
-    applyGuildRecord(signedRecord)
+-- Applies every record of a guild I hold, the most recent first: what a newer record releases is free before an older
+-- one is applied, and a character goes to the most recent record listing it, whatever order they came in.
+local function applyGuild(clubId)
+    local records = {}
+    for _, signedRecord in pairs(ns.data.guildRecords[clubId] or {}) do records[#records + 1] = signedRecord end
+    table.sort(records, ns.GuildRecord.IsNewerThan)
+    for _, signedRecord in ipairs(records) do applyGuildRecord(signedRecord) end
+end
+
+---Applies every record of a guild I hold (GuildRecord), after one of them changed or at login.
+---@param clubId integer
+function People.ApplyGuild(clubId)
+    applyGuild(clubId)
     changed()
 end
 
@@ -587,8 +605,8 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
     AutomaticChanges.EndOperation()
     -- What my guilds link to this identity, held until it arrived.
     if created then
-        for _, records in pairs(ns.data.guildRecords) do
-            if records[signedRecord.id] then applyGuildRecord(records[signedRecord.id]) end
+        for clubId, records in pairs(ns.data.guildRecords) do
+            if records[signedRecord.id] then applyGuild(clubId) end
         end
     end
     changed()
