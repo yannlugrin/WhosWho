@@ -199,10 +199,8 @@ function People.IdentityNickname(id)
     local person = ns.data.people[id]
     if not person then return nil end
 
-    -- Another identity can hold the main (a confirmation moved it there); its name is still in the record, the player's
-    -- or the guild's.
-    local record = person.signedRecord or (person.madeByGuild and ns.data.guildRecords[person.madeByGuild][id])
-    local main = person.chars[person.main] or (record and record.chars[person.main])
+    -- Another identity can hold the main (a confirmation moved it there); its name is still in the record.
+    local main = person.chars[person.main] or (person.signedRecord and person.signedRecord.chars[person.main])
     return person.nickname or (main and main.name)
 end
 
@@ -418,6 +416,17 @@ end
 
 -- Received from players --------------------------------------------------------------------------
 
+-- A guild identity is shown under one of its characters: when its main left it (a player's record took it, the roster
+-- dropped it), the first of the others by name.
+local function keepGuildIdentityMain(person)
+    if person.chars[person.main] then return end
+    local main
+    for guid, character in pairs(person.chars) do
+        if not main or character.name < person.chars[main].name then main = guid end
+    end
+    person.main = main
+end
+
 -- One of my manual identities merges into the identity a player's record or my guild's links one of its characters
 -- to: its characters, my nickname unless I already named that identity, and my note below the one I had.
 local function mergeManualPerson(fromPerson, toPerson)
@@ -460,7 +469,11 @@ local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedL
             AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPerson, toPerson, { [guid] = true })
         end
         fromPerson.chars[guid] = nil
-        if fromPerson.madeByGuild and not next(fromPerson.chars) then forget(fromPerson.id) end
+        if fromPerson.madeByGuild and not next(fromPerson.chars) then
+            forget(fromPerson.id)
+        elseif fromPerson.madeByGuild then
+            keepGuildIdentityMain(fromPerson)
+        end
     elseif fromPerson then
         mergeManualPerson(fromPerson, toPerson)
     end
@@ -530,7 +543,11 @@ local function applyGuildRecord(signedRecord)
         end
     end
     AutomaticChanges.EndOperation()
-    if guildIdentity and not next(person.chars) then forget(id) end
+    if guildIdentity and not next(person.chars) then
+        forget(id)
+    elseif guildIdentity then
+        keepGuildIdentityMain(person)
+    end
 end
 
 -- Applies every record of a guild I hold, the most recent first: what a newer record releases is free before an older
@@ -748,6 +765,7 @@ local function forgetFormerMember(person, clubId, memberGuids)
             forget(person.id)
             return true
         end
+        keepGuildIdentityMain(person)
         return next(removedFromPerson) ~= nil
     end
     if (inThatGuild or next(removedFromPerson)) and not holdsPlayersCharacter(person, memberGuids) then

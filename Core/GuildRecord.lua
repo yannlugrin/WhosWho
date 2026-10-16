@@ -154,6 +154,26 @@ function GuildRecord.LinkedByNewer(clubId)
     return linked
 end
 
+---The characters each guild identity of a guild lists that a player's own record holds (the player's word wins):
+---their GUIDs, with that player's identity ID.
+---@param clubId integer
+---@return table<string, table<string, string>> player identity ID by GUID, by guild identity ID; only the ones with some
+function GuildRecord.ClaimedByPlayers(clubId)
+    local claimed = {}
+    for id, signedRecord in pairs(heldByGuild()[clubId] or {}) do
+        if GuildRecord.IsGuildIdentityId(id) then
+            for guid in pairs(signedRecord.chars) do
+                local person, character = People.Find(guid)
+                if person and person.signedRecord and character.state ~= "added" and character.state ~= "guild" then
+                    claimed[id] = claimed[id] or {}
+                    claimed[id][guid] = person.id
+                end
+            end
+        end
+    end
+    return claimed
+end
+
 ---At login: applies every guild's records again, so a person that disappeared since (forgotten, its characters taken
 ---by another record) comes back from its record.
 function GuildRecord.ApplyHeld()
@@ -278,6 +298,25 @@ end
 ---@return WhosWho.SignedGuildRecord
 function GuildRecord.Rename(clubId, id, nickname)
     return sign(clubId, id, function(record) record.nickname = nickname end)
+end
+
+---Moves a guild identity's characters to a player's identity, for the guild: the guild's record about the player links
+---them, and the guild identity is removed. Its characters the player's own record holds are left out: the player has
+---them.
+---@param clubId integer
+---@param fromId string the guild identity
+---@param toId string the player's identity ID
+---@return WhosWho.SignedGuildRecord moved the guild's record about the player
+---@return WhosWho.SignedGuildRecord removed the guild identity's
+function GuildRecord.MoveTo(clubId, fromId, toId)
+    local claimed = GuildRecord.ClaimedByPlayers(clubId)[fromId] or {}
+    local fromChars = GuildRecord.Held(clubId, fromId).chars
+    local moved = sign(clubId, toId, function(record)
+        for guid, character in pairs(fromChars) do
+            if not claimed[guid] then record.chars[guid] = copy(character) end
+        end
+    end)
+    return moved, GuildRecord.Remove(clubId, fromId)
 end
 
 ---Removes a guild identity: a record without characters, which every member applies by forgetting it.

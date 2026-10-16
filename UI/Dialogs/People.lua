@@ -520,6 +520,36 @@ StaticPopupDialogs.WHOSWHO_GUILD_REMOVE = {
     AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
 }
 
+StaticPopupDialogs.WHOSWHO_GUILD_MOVE = {
+    text = L["Move every character of %s to %s, for the guild?"] .. "\n\n"
+        .. L["Every member of the guild who uses Who's Who sees the change."],
+    button1 = L["Move"],
+    button2 = CANCEL,
+    OnAccept = function(_, data)
+        local moved, removed = GuildRecord.MoveTo(data.clubId, data.id, data.playerId)
+        ns.Protocol.SendGuildRecord(moved)
+        ns.Protocol.SendGuildRecord(removed)
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+StaticPopupDialogs.WHOSWHO_GUILD_KEEP_APART = {
+    text = L["Unlink %s from %s for the guild?"] .. "\n\n"
+        .. L["The player declares them as theirs. Every member of the guild who uses Who's Who sees the change."],
+    button1 = L["Unlink"],
+    button2 = CANCEL,
+    OnAccept = function(_, data) ns.Protocol.SendGuildRecord(GuildRecord.Unlink(data.clubId, data.id, data.guids)) end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
 -- The popup's data is { clubId, id }.
 -- Saves the typed nickname for the guild; a refused one keeps the popup open with the reason under its text.
 local function saveGuildNickname(popup)
@@ -591,6 +621,28 @@ end
 function PeopleDialogs.ConfirmGuildMakeMain(clubId, id, guid)
     StaticPopup_Show("WHOSWHO_GUILD_MAKE_MAIN", coloredCharacter(id, guid), coloredNickname(id),
         { clubId = clubId, id = id, guid = guid })
+end
+
+---Asks to move every character of one of my guild's identities to a player's identity, for the guild.
+---@param clubId integer
+---@param id string
+---@param playerId string
+function PeopleDialogs.ConfirmGuildMove(clubId, id, playerId)
+    StaticPopup_Show("WHOSWHO_GUILD_MOVE", coloredNickname(id), coloredNickname(playerId),
+        { clubId = clubId, id = id, playerId = playerId })
+end
+
+---Asks to unlink, for my guild, the characters of one of its identities that players' own records hold.
+---@param clubId integer
+---@param id string
+---@param guids string[]
+function PeopleDialogs.ConfirmGuildKeepApart(clubId, id, guids)
+    local recordChars, names = GuildRecord.Held(clubId, id).chars, {}
+    for i, guid in ipairs(guids) do
+        names[i] = Lists.ClassColoredName(recordChars[guid].name, recordChars[guid].classID)
+    end
+    StaticPopup_Show("WHOSWHO_GUILD_KEEP_APART", table.concat(names, ", "), coloredNickname(id),
+        { clubId = clubId, id = id, guids = guids })
 end
 
 ---Asks to remove one of my guild's identities, for the guild.

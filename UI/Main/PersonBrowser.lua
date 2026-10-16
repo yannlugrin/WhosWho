@@ -93,6 +93,13 @@ end
 ---@field level integer?
 ---@field ruleset WhosWho.Ruleset
 
+---A player whose own record holds characters one of my guild's identities lists.
+---@class WhosWho.PlayerClaim
+---@field playerId string
+---@field nickname string the player's, as shown
+---@field characters string their names, comma-separated
+---@field guids string[]
+
 ---A person in the detail panel.
 ---@class WhosWho.PersonDetail
 ---@field nickname string the name the person is shown under
@@ -101,6 +108,7 @@ end
 ---@field battleTag string? BattleTag of my Battle.net friend seen playing one of the person's characters
 ---@field id string
 ---@field note string? my note about the person
+---@field claims WhosWho.PlayerClaim[]? players declaring characters of my guild's identity, for an officer to answer (Guild tab)
 ---@field changes "mine"|"guild"|nil what the panel changes: my nickname, note and Forget (People tab), the guild's nickname and Remove (Guild tab, an officer on my guild's identity), or nothing
 ---@field characters WhosWho.PersonDetailCharacter[] in the order shown
 
@@ -163,9 +171,28 @@ function Browser:SetPerson(person)
     for _, region in ipairs(detail.noteRegions) do region:SetShown(mine) end
     detail.Note:SetFontObject(person.note and "GameFontHighlight" or "GameFontDisable")
     detail.Note:SetText(person.note or L["No note."])
-    -- Without the note, the characters take the panel down to its bottom.
-    self.charactersBox:SetPoint("BOTTOM", mine and detail.NoteHeading or detail, mine and "TOP" or "BOTTOM", 0,
-        mine and 16 or DETAIL_PADDING)
+
+    self.claims = person.claims
+    local claims = person.claims
+    for _, region in ipairs(detail.claimRegions) do region:SetShown(claims ~= nil) end
+    if claims then
+        local lines = {}
+        for i, claim in ipairs(claims) do lines[i] = L["%s declares %s as theirs."]:format(claim.nickname, claim.characters) end
+        detail.Claims:SetText(table.concat(lines, "\n"))
+        -- Everything goes to one player only.
+        detail.MoveButton:SetShown(#claims == 1)
+        detail.MoveButton:SetText(L["Move all to %s"]:format(claims[1].nickname))
+        detail.MoveButton:SetWidth(detail.MoveButton:GetTextWidth() + 40)
+    end
+
+    -- Without the note or the answer, the characters take the panel down to its bottom.
+    if mine then
+        self.charactersBox:SetPoint("BOTTOM", detail.NoteHeading, "TOP", 0, 16)
+    elseif claims then
+        self.charactersBox:SetPoint("BOTTOM", detail.Claims, "TOP", 0, 16)
+    else
+        self.charactersBox:SetPoint("BOTTOM", detail, "BOTTOM", 0, DETAIL_PADDING)
+    end
     self.charactersBox:SetDataProvider(CreateDataProvider(person.characters))
 end
 
@@ -356,6 +383,20 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
     -- My note, shown with my own changes only.
     detail.noteRegions = { detail.Note, detail.NoteHeading, detail.EditNoteButton }
 
+    -- Players declaring characters of my guild's identity, where the note is in the People tab: an officer's answer.
+    detail.KeepApartButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
+    detail.KeepApartButton:SetText(L["Keep apart"])
+    detail.KeepApartButton:SetSize(detail.KeepApartButton:GetTextWidth() + 40, 22)
+    detail.KeepApartButton:SetPoint("BOTTOMRIGHT", -8, DETAIL_PADDING)
+    detail.MoveButton = CreateFrame("Button", nil, detail, "UIPanelButtonTemplate")
+    detail.MoveButton:SetHeight(22)
+    detail.MoveButton:SetPoint("RIGHT", detail.KeepApartButton, "LEFT", -6, 0)
+    detail.Claims = detail:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    detail.Claims:SetPoint("BOTTOMLEFT", DETAIL_PADDING, DETAIL_PADDING + 30)
+    detail.Claims:SetPoint("BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING + 30)
+    detail.Claims:SetJustifyH("LEFT")
+    detail.claimRegions = { detail.Claims, detail.MoveButton, detail.KeepApartButton }
+
     local charactersBox = CreateFrame("Frame", nil, detail, "WowScrollBoxList")
     charactersBox:SetPoint("TOPLEFT", detail.CharactersHeading, "BOTTOMLEFT", 0, -4)
     charactersBox:SetPoint("RIGHT", -8 - SCROLL_BAR_WIDTH, 0)
@@ -432,6 +473,16 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
 
     -- My own changes, or the guild's.
     local function guildId() return ns.Identity.GuildId(UnitGUID("player")) end
+    detail.MoveButton:SetScript("OnClick", function()
+        ns.PeopleDialogs.ConfirmGuildMove(guildId(), browser.selectedId, browser.claims[1].playerId)
+    end)
+    detail.KeepApartButton:SetScript("OnClick", function()
+        local guids = {}
+        for _, claim in ipairs(browser.claims) do
+            for _, guid in ipairs(claim.guids) do guids[#guids + 1] = guid end
+        end
+        ns.PeopleDialogs.ConfirmGuildKeepApart(guildId(), browser.selectedId, guids)
+    end)
     detail.ForgetButton:SetScript("OnClick", function()
         if browser.changes == "guild" then
             ns.PeopleDialogs.ConfirmGuildRemove(guildId(), browser.selectedId)
@@ -474,6 +525,8 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
         S.ScrollBar(listBar)
         S.ScrollBar(charactersBar)
         S.Button(detail.ForgetButton)
+        S.Button(detail.MoveButton)
+        S.Button(detail.KeepApartButton)
     end)
 
     return browser

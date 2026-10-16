@@ -1813,6 +1813,39 @@ check(holderId(kim, roxMain.guid) == takingId and holderId(kim, pipMain.guid) ==
     and kim.ns.People.Get(keptId).main == pipMain.guid and not kim.ns.GuildRecord.Held(GUILD2, keptId).chars[roxMain.guid],
     "an older guild identity loses only the character a newer one takes, its main then its other character")
 
+-- A player's own record declares characters of guild identities.
+local pixAccount = account("Pix")
+local pixMain = character("Pix Main", "Player-1-0000F901", MAGE, GUILD2)
+local pixAlt = character("Pix Alt", "Player-1-0000F902", PRIEST, GUILD2)
+local nooMain = character("Noo Main", "Player-1-0000FA01", WARRIOR, GUILD2)
+pixMain.rankIndex, pixAlt.rankIndex, nooMain.rankIndex = 3, 3, 3
+local wholeId, partId = "G0000000000000e01", "G0000000000000e02"
+sendForGuild(linkFor(wholeId, pixMain))
+sendForGuild(linkFor(partId, nooMain))
+sendForGuild(linkFor(partId, pixAlt))
+local pix = login(pixAccount, pixMain)
+slash(pix, "link")
+run(60)
+logout(pix)
+pix = login(pixAccount, pixAlt, "relog")
+slash(pix, "link")
+run(60)
+local pixId = pix.ns.Identity.Id()
+check(holderId(kim, pixMain.guid) == pixId and holderId(kim, pixAlt.guid) == pixId and kim.ns.People.Get(wholeId) == nil
+    and next(kim.ns.GuildRecord.Held(GUILD2, wholeId).chars) == nil,
+    "a guild identity whose characters a player's own record all declares is removed by the officer, for everyone")
+check(holderId(kim, nooMain.guid) == partId and hal.ns.GuildRecord.ClaimedByPlayers(GUILD2)[partId][pixAlt.guid] == pixId,
+    "one with only some of them waits for an officer's answer")
+local moved, removed = GR.MoveTo(GUILD2, partId, pixId)
+clearLog()
+hal.ns.Protocol.SendGuildRecord(moved)
+hal.ns.Protocol.SendGuildRecord(removed)
+run(10)
+check(holderId(kim, nooMain.guid) == pixId and state(kim, nooMain.guid) == "guild" and kim.ns.People.Get(partId) == nil
+    and hal.ns.GuildRecord.ClaimedByPlayers(GUILD2)[partId] == nil,
+    "Move all: the guild links its other characters to the player's identity, and the guild identity goes")
+logout(pix)
+
 logout(hal)
 logout(kim)
 logout(lea)

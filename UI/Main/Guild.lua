@@ -223,6 +223,31 @@ local function refreshSharing()
 end
 sharing.Button:SetScript("OnClick", function() if sharingAction then sharingAction() end end)
 
+-- The players whose own record holds characters of my guild's identity, each with them, by nickname; nil for none.
+---@return WhosWho.PlayerClaim[]?
+local function playerClaims(clubId, id)
+    local claimed = ns.GuildRecord.ClaimedByPlayers(clubId)[id]
+    if not claimed then return nil end
+    local recordChars = ns.GuildRecord.Held(clubId, id).chars
+    local byPlayer, claims = {}, {}
+    for guid, playerId in pairs(claimed) do
+        local claim = byPlayer[playerId]
+        if not claim then
+            claim = { playerId = playerId, nickname = People.Nickname(playerId), names = {}, guids = {} }
+            byPlayer[playerId] = claim
+            claims[#claims + 1] = claim
+        end
+        claim.guids[#claim.guids + 1] = guid
+        claim.names[#claim.names + 1] = recordChars[guid].name
+    end
+    for _, claim in ipairs(claims) do
+        table.sort(claim.names)
+        claim.characters, claim.names = table.concat(claim.names, ", "), nil
+    end
+    table.sort(claims, function(a, b) return a.nickname < b.nickname end)
+    return claims
+end
+
 ---Selects a person, or my own identity: their row is marked and the detail panel shows them; nil clears the
 ---selection.
 ---@param id string?
@@ -237,8 +262,10 @@ function panel:Select(id)
     if not person then return browser:SetPerson(nil) end
     -- The guild's view: the guild's nickname and Remove, for an officer on one of my guild's identities; nothing of mine.
     local detail = PersonBrowser.PersonDetail(person, ns.Scopes.OnlineGuids())
-    local guildIdentity = person.madeByGuild ~= nil and person.madeByGuild == Identity.GuildId(UnitGUID("player"))
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    local guildIdentity = person.madeByGuild ~= nil and person.madeByGuild == clubId
     detail.changes = guildIdentity and ns.Protocol.CanChangeGuildRecords() and "guild" or nil
+    if detail.changes == "guild" then detail.claims = playerClaims(clubId, id) end
     browser:SetPerson(detail)
 end
 

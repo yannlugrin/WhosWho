@@ -568,13 +568,19 @@ local function queueGuildRecord(signedRecord)
     gatherGuildChanges()
 end
 
--- A character two records of my guild link stays with the most recent one: the guild master or an officer unlinks it
--- from the older ones for every member (GuildRecord.LinkedByNewer), which keep their other characters, or go without
--- any. After a record of the guild changed, the only time that happens.
-local function unlinkFromOlderGuildRecords()
+-- My guild's records catching up, by the guild master or an officer for every member, after a record of the guild or a
+-- player's record changed: a character two records link is unlinked from the older one (GuildRecord.LinkedByNewer),
+-- which keeps its other characters; a guild identity whose characters players' own records all hold goes
+-- (GuildRecord.ClaimedByPlayers). One with only some of them held waits for an officer's answer, in the Guild tab.
+local function tidyGuildRecords()
     if not Protocol.CanChangeGuildRecords() then return end
     local clubId = Identity.GuildId(UnitGUID("player"))
     for id, guids in pairs(GuildRecord.LinkedByNewer(clubId)) do queueGuildRecord(GuildRecord.Unlink(clubId, id, guids)) end
+    for id, claimed in pairs(GuildRecord.ClaimedByPlayers(clubId)) do
+        local allClaimed = true
+        for guid in pairs(GuildRecord.Held(clubId, id).chars) do allClaimed = allClaimed and claimed[guid] ~= nil end
+        if allClaimed then queueGuildRecord(GuildRecord.Remove(clubId, id)) end
+    end
 end
 
 ---Sends a record of my guild I just signed (GuildRecord.Link, Unlink, SetMain, Rename, Remove) to its members, once
@@ -582,7 +588,7 @@ end
 ---@param signedRecord WhosWho.SignedGuildRecord
 function Protocol.SendGuildRecord(signedRecord)
     queueGuildRecord(signedRecord)
-    unlinkFromOlderGuildRecords()
+    tidyGuildRecords()
 end
 
 ---Signs new settings for my current guild, from the character I play, and sends them to its members once the changes
@@ -872,6 +878,7 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
             recordRequests[verified.id] = nil
             Scopes.KeepSentWhispers()
             Scopes.KeepGuildMembers(verified)
+            tidyGuildRecords()
         end
     end)
 end
@@ -941,7 +948,7 @@ local function receiveGuildRecordUpdate(update)
     RecordVerification.Queue(signedRecord, GuildRecord, function(verified)
         guildRecordRequests[verified.id] = nil
         if GuildRecord.Accept(verified, Scopes.GuildRankIndex(verified.signerGuid)) == "accepted" then
-            unlinkFromOlderGuildRecords()
+            tidyGuildRecords()
         end
     end)
 end

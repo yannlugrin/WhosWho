@@ -1380,6 +1380,17 @@ do
         "removed, the older record gets the character back")
     GR.Accept(guildRecord(OLD, {}), 1)
 
+    -- A player's record takes a guild identity's main.
+    local MAINLESS, D = "G00000000000000a3", string.rep("d", 64)
+    local G10, G11 = "Player-70-0000001A", "Player-70-0000001B"
+    GR.Accept(guildRecord(MAINLESS, { G10, G11 }, G10), 1)
+    P.Accept(makeRecord(D, 1, { G10 }))
+    check(holderId(G10) == D and holderId(G11) == MAINLESS and P.Get(MAINLESS).main == G11,
+        "a guild identity whose main a player's record takes is shown under its other character")
+    GR.ApplyHeld()
+    check(P.Get(MAINLESS).main == G11, "and stays so when its record is applied again")
+    GR.Accept(guildRecord(MAINLESS, {}), 1)
+
     -- Changes, the roster and leaving.
     GR.Accept(guildRecord(A, { G6 }), 1)
     check(not P.Exists(G4), "a character the guild's newer record no longer links leaves")
