@@ -59,6 +59,7 @@ WhosWho/
 │   │   ├── PersonBrowser.lua      Shared by the People and Guild tabs: person list, detail panel, glyph key
 │   │   ├── MyIdentity.lua         My identity tab
 │   │   ├── People.lua             People tab
+│   │   ├── GuildRoster.lua        Shared by the Guild tab and the guild window's tab: my guild's rows, detail, sharing line
 │   │   └── Guild.lua              Guild tab: my guild's status, and its roster's identities and unknown characters
 │   ├── Dialogs/
 │   │   ├── Identity.lua           Dialogs on my identity: first-login prompts, a guild's rule, change main, unlink, forget me
@@ -67,7 +68,8 @@ WhosWho/
 │       ├── Chat.lua               Sender names in chat lines
 │       ├── Tooltip.lua            Nickname and "Also:" line in player tooltips
 │       ├── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People and Guild tabs' own menu
-│       └── GuildTab.lua           Who's Who tab in the guild panel, for the guild master and officers: the guild's settings
+│       ├── GuildTab.xml           Who's Who tab templates, built like the game's roster: list with column headers, row, member panel, character line and open character
+│       └── GuildTab.lua           Who's Who tab in the game's guild window: my guild's identities, member detail, and the guild's settings for the guild master and officers
 ├── Media/                         Textures shipped with the add-on
 │   ├── Icon.tga                   Add-on icon, 128×128
 │   ├── Glyphs/                    Person, Pencil, Banner, Question, Hourglass: white 32×32, tinted in code
@@ -436,7 +438,7 @@ Built: the consent, the guild settings, enforced linking with its opt-in, the gu
 
 ### Guild Settings
 
-A guild's settings (`GuildSettings`: `enable`, and `enforceLinking`, which needs it; see Enforced linking) are one record per guild, signed with the identity key of its guild master or one of its officers (rank index 0 or 1: `GuildSettings.LOWEST_RANK_INDEX`), and changed only from the guild panel's Who's Who tab, which those ranks alone see (`Protocol.ChangeGuildSettings`).
+A guild's settings (`GuildSettings`: `enable`, and `enforceLinking`, which needs it; see Enforced linking) are one record per guild, signed with the identity key of its guild master or one of its officers (rank index 0 or 1: `GuildSettings.LOWEST_RANK_INDEX`), and changed only from the settings view of the guild panel's Who's Who tab, whose **Who's Who settings** button those ranks alone see (`Protocol.ChangeGuildSettings`).
 
 ```
 v (GuildSettings.VERSION, 2), guild (club ID), settings = { enable, enforceLinking }, signer (identity ID),

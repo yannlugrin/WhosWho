@@ -99,6 +99,7 @@ Same list and detail panel as the People tab, with a status strip on top, but no
 - Status strip: sharing on/off, the trusted ranks as a rank name ("Officer and above", set in the Guild settings) and my rank; sync status (last update; then, among the guild's characters, the number of identities, of alts, and of characters with an unknown identity, e.g. "24 identities · 31 alts · 6 unknown").
 - List of the guild's members, one row per person: source glyph, nickname (mine first with the guild's one small and grey after it when mine replaces it; characters not linked to any identity show their name in italics with the Unconfirmed glyph), number of characters, last seen ("Online" in green).
 - Selecting a row shows the same detail panel as the People tab (frame 3).
+- For the guild master and officers, on one of the guild's identities, the panel changes the guild's, not mine: the edit glyph button after the nickname sets the guild's nickname, and **Unlink** in place of **Forget** unlinks every character the guild linked to it, which removes the identity (with confirmation); no note. When players' own records declare some of its characters, a line under the characters says so ("<player> declares <characters> as theirs."), with **Move all to <player>** (one player only) and **Keep apart**.
 
 ### 5. Person Editor (Dialog)
 
@@ -128,11 +129,7 @@ The game's own settings list: its section headers and controls. Each setting is 
 - **Minimap**: show the minimap button, show Who's Who in the add-on compartment next to the minimap (both on by default; clicking either opens or closes the main window, right-click opens a menu with **My identity** and **Settings**).
 - **Data**: **Forget me** (my characters and my nickname; players who know me forget me too once Who's Who reaches them, which some never are) and **Forget everyone else** (every person I know about), each with a **Forget** button and a confirmation whose button is **Forget**.
 
-**Guild** subcategory (Options → AddOns → Who's Who → Guild), shown only in a guild and only to officers and above, who are the only ones who can change it:
-
-- **Enable Who's Who for the guild**.
-- **Trusted ranks**: rank dropdown ("Officer and above" by default). Identities set by these ranks are used by the whole guild. Ranks below officer can be trusted, but never change these settings.
-- **Data**: forget the identities set by the guild (with a confirmation).
+The guild's own settings are not here: they are in the game's guild window (frame 12).
 
 ### 8. In-World Touches (Not Windows)
 
@@ -180,6 +177,28 @@ What Who's Who changed in my links without me doing it. Lets me check each chang
 - Selecting a row shows a detail panel (same place as the People tab's): the change in one sentence; the person before → after on one line (glyph and nickname on each side, the player's own nickname small and grey); each character involved with what happened to it (already there, moved and declared, moved and still added) and its state glyph; and **Show person** (opens it in the People tab, where I can rename it or remove an added alt) and, later, **Undo**.
 - Only the most recent changes are kept (about 100); a line under the list says so.
 - Empty state: "Nothing has changed on its own yet. When a player you linked installs Who's Who, you'll see it here."
+
+### 12. Game's Guild Window — Tab "Who's Who"
+
+A tab on the right edge of the game's Guild & Communities window, with my guild selected, next to the game's own tabs (Chat, Roster, Benefits, Info), with the add-on's icon. It shows the guild like the game's roster does, one row per identity.
+
+- Top bar: the search box (as in the People tab), the game's **Show offline members** checkbox (off: only identities with a character online now), and on the right the counts as in the Guild tab ("6 main characters · 8 alts · 108 unknown").
+- List, same rules as the Guild tab (frame 4): one row per identity with a character in the guild; a member whose character belongs to no identity gets a row of their own, with the Unconfirmed glyph and the character's name as nickname. Columns, all sortable, placed as in the game's roster: source glyph and **Nickname**, **Class** (icon), **Lvl** and **Character** (the character being played, in class colour, with its class and level), **Zone / Last seen** (the zone while online, the time since last seen in grey otherwise), and **Rank** at the right.
+- Right-click on a row: the Guild tab's menu (frame 4) on the character the row shows; on a character's line in the detail panel, the same menu on that character.
+- Under the list: the sharing line as in the Guild tab ("Your identity is shared with this guild's members."), then the glyph key.
+- Bottom bar: **Who's Who settings**, the only button there (the game's **Guild Settings** belongs to its roster). It shows the settings in place of the list.
+- Selecting a row shows a detail panel next to the window, as the game does for a member, with a close button:
+  - source glyph and nickname; for officers on one of the guild's identities, the edit glyph button after the nickname, as in the Guild tab (frame 4);
+  - **Characters**: first those in the guild, each on one line: state glyph, class icon, name (class colour, crown on the main) and level. One of them is open, as the game's member panel shows a member: zone (or last online) and rank. The character the list's row shows opens first; clicking another line opens it instead, and it stays open while the panel shows the same row. The guild's notes stay in the game's roster: the game doesn't let an add-on edit them, and notes of our own would leave members unsure where to write one.
+  - then a "Not in the guild" separator and the person's other characters, one line each, with when they were last seen;
+  - for officers, when players' own records declare characters of the guild's identity: under the characters, the same line as in the Guild tab, then **Move all to <player>** (one player only) and **Keep apart**, one under the other;
+  - for officers on one of the guild's identities, **Unlink** last, at the bottom where the game's panel has its buttons, as in the Guild tab. **Unlink**, not **Remove**: the game's own member panel has a **Remove** that removes the member from the guild.
+- Settings view: the title **Who's Who**, a **Close** button on the right, and the guild's settings, changed only by the guild master and officers:
+  - **Enable Who's Who for the guild**;
+  - **Require members' characters in the guild to be linked**;
+  - later: **Trusted ranks** (rank dropdown, "Officer and above" by default; identities set by these ranks are used by the whole guild; ranks below officer can be trusted, but never change these settings) and **Data** (forget the identities set by the guild, with a confirmation).
+
+  **Close**, or clicking the tab again, goes back to the list.
 
 ## Open Questions
 

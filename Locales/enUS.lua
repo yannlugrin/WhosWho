@@ -224,10 +224,9 @@ L["Move every character of %s to %s, for the guild?"] = true
 L["The player declares them as theirs. Every member of the guild who uses Who's Who sees the change."] = true
 L["Link for the guild"] = true
 L["New guild person"] = true
-L["Remove"] = true
 L["Unlink %s from %s for the guild?"] = true
 L["Make %s the main character of %s for the guild?"] = true
-L["Remove %s for the guild?"] = true
+L["Unlink every character of %s for the guild?"] = true
 L["The guild's nickname for %s"] = true
 L["Edit the guild's nickname"] = true
 L["Remove the nickname"] = true
@@ -306,3 +305,10 @@ L["Message"] = true
 L["Sent"] = true
 L["Received"] = true
 L["No message kept yet."] = true
+
+-- Guild window tab
+L["Nickname"] = true
+L["Character"] = true
+L["Zone / Last seen"] = true
+L["Who's Who settings"] = true
+L["Not in the guild"] = true

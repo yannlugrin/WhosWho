@@ -61,7 +61,16 @@
         "INVITE",
         "CreateSettingsCheckboxWithButtonInitializer",
         "EventUtil",
-        "CommunitiesFrame"
+        "CommunitiesFrame",
+        "CLOSE",
+        "COMMUNITIES_MEMBER_LIST_SHOW_OFFLINE",
+        "DISABLED_FONT_COLOR",
+        "LEVEL_ABBR",
+        "ZONE_COLON",
+        "LAST_ONLINE_COLON",
+        "GUILD_ONLINE_LABEL",
+        "COMMUNITIES_ROSTER_COLUMN_TITLE_RANK",
+        "COMMUNITIES_ROSTER_COLUMN_TITLE_CLASS"
     ],
     "Lua.type.weakUnionCheck": true
 }

@@ -14,7 +14,9 @@ globals = {
 read_globals = {
     "bit", "date", "geterrorhandler", "time", "debugprofilestop", "fastrandom", "issecretvalue", "strlenutf8",
     "LibStub", "CreateFrame", "UIParent", "hooksecurefunc", "Enum", "Menu", "EventUtil", "CommunitiesFrame", "PlaySound",
-    "SOUNDKIT", "GameFontHighlight",
+    "SOUNDKIT", "GameFontHighlight", "CLOSE", "COMMUNITIES_MEMBER_LIST_SHOW_OFFLINE",
+    "LEVEL_ABBR", "ZONE_COLON", "LAST_ONLINE_COLON", "GUILD_ONLINE_LABEL",
+    "DISABLED_FONT_COLOR", "COMMUNITIES_ROSTER_COLUMN_TITLE_CLASS", "COMMUNITIES_ROSTER_COLUMN_TITLE_RANK",
     "C_AddOns", "C_BattleNet", "C_ChatInfo", "C_Club", "C_CreatureInfo", "C_FriendList", "C_GameRules", "C_GuildInfo", "C_Timer",
     "ChatFrame_AddMessageEventFilter", "ChatFrameUtil", "LIGHTGRAY_FONT_COLOR", "ChatFontNormal", "NUM_CHAT_WINDOWS",
     "TooltipDataProcessor", "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer",

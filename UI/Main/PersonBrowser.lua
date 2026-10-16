@@ -109,7 +109,7 @@ end
 ---@field id string
 ---@field note string? my note about the person
 ---@field claims WhosWho.PlayerClaim[]? players declaring characters of my guild's identity, for an officer to answer (Guild tab)
----@field changes "mine"|"guild"|nil what the panel changes: my nickname, note and Forget (People tab), the guild's nickname and Remove (Guild tab, an officer on my guild's identity), or nothing
+---@field changes "mine"|"guild"|nil what the panel changes: my nickname, note and Forget (People tab), the guild's nickname and Unlink (Guild tab, an officer on my guild's identity), or nothing
 ---@field characters WhosWho.PersonDetailCharacter[] in the order shown
 
 ---The list and detail panel of a tab.
@@ -151,7 +151,7 @@ function Browser:SetPerson(person)
     detail.EditNicknameButton:SetShown(person.changes ~= nil)
     detail.EditNicknameButton.tooltipText = guild and L["Edit the guild's nickname"] or L["Edit nickname"]
     detail.ForgetButton:SetShown(person.changes ~= nil)
-    detail.ForgetButton:SetText(guild and L["Remove"] or L["Forget"])
+    detail.ForgetButton:SetText(guild and L["Unlink"] or L["Forget"])
     detail.ForgetButton:SetWidth(detail.ForgetButton:GetTextWidth() + 40)
     detail.Nickname:SetText(person.nickname)
     -- The nickname keeps its width; the edit button follows it.
@@ -477,11 +477,7 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
         ns.PeopleDialogs.ConfirmGuildMove(guildId(), browser.selectedId, browser.claims[1].playerId)
     end)
     detail.KeepApartButton:SetScript("OnClick", function()
-        local guids = {}
-        for _, claim in ipairs(browser.claims) do
-            for _, guid in ipairs(claim.guids) do guids[#guids + 1] = guid end
-        end
-        ns.PeopleDialogs.ConfirmGuildKeepApart(guildId(), browser.selectedId, guids)
+        ns.PeopleDialogs.ConfirmGuildKeepApart(guildId(), browser.selectedId, browser.claims)
     end)
     detail.ForgetButton:SetScript("OnClick", function()
         if browser.changes == "guild" then
@@ -501,21 +497,7 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
 
     -- Key --------------------------------------------------------------------------------------------
 
-    local previous
-    for _, glyph in ipairs(Glyphs.Key) do
-        local texture = panel:CreateTexture(nil, "OVERLAY")
-        texture:SetSize(SMALL_GLYPH_SIZE, SMALL_GLYPH_SIZE)
-        Glyphs.Set(texture, glyph)
-        if previous then
-            texture:SetPoint("LEFT", previous, "RIGHT", 14, 0)
-        else
-            texture:SetPoint("BOTTOMLEFT", 14, listBottom + 10)
-        end
-        local label = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        label:SetPoint("LEFT", texture, "RIGHT", 3, 0)
-        label:SetText(glyph.label)
-        previous = label
-    end
+    Glyphs.AddKey(panel, 14, listBottom + 10)
 
     browser:SetPerson(nil)
 

@@ -188,7 +188,7 @@ In the People tab, a person's last seen moves to now when one of their character
 
 Needs a guild where A is the guild master or an officer and B a member below; both linked, Guild scope on, B holding A's identity with A's character confirmed.
 
-- B opens the guild panel: no Who's Who tab. A opens it: the tab under the game's own, its checkbox off.
+- B opens the guild panel: the Who's Who tab under the game's own shows the guild's list, without a **Who's Who settings** button. A opens it: the button under the list; it shows the settings, the checkbox off.
 - A ticks **Enable Who's Who for the guild**; after 5 s: `Sent, GUILD: 1 GSET …`. B: `Received, GUILD <A's name>: 1 GSET …`, then `/dump WhosWhoDB.global.guildSettings` on B shows the record with `enable = true`.
 - A unticks and ticks again within 5 s: one `GSET`, with the last state.
 - B logs out; A changes the setting; B logs back in: A's answer to B's login announcement ends with A's revision, B sends `Sent, WHISPER <A's name>: 1 GSGET`, A answers `1 GSET …` by whisper, and B holds the new record.
@@ -206,7 +206,7 @@ Needs a guild with Who's Who enabled (see Guild Settings): A an officer, B and C
 
 Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a member whose main is outside the guild, with two characters in it, B1 linked and B2 never linked (B logged in on B2 once, answering **Not this character**); C, B's friend, outside the guild; D a player not in the guild who knows B. All linked, Guild scope on.
 
-- A's guild panel, Who's Who tab: **Require members' characters in the guild to be linked** under **Enable Who's Who for the guild**, greyed out while Who's Who is off for the guild (its tooltip says to enable it first). A ticks it: `Sent, GUILD: 1 GSET …`.
+- A's guild panel, Who's Who tab, **Who's Who settings**: **Require members' characters in the guild to be linked** under **Enable Who's Who for the guild**, greyed out while Who's Who is off for the guild (its tooltip says to enable it first). A ticks it: `Sent, GUILD: 1 GSET …`.
 - B's side: one new revision, announced on `GUILD` only (no whisper to C). A's People tab: B shown under B1's name (the guild main), B2 among B's characters. C's People tab after B's next level-up: B under B's main, without B2.
 - B plays B2: `Sent, GUILD: 1 ANNOUNCE <B's ID> …`, nothing to C or a group; A's People tab shows B2 confirmed.
 - B turns the Guild scope off: A still gets B's record, with B1 and B2 only; C keeps B's record without them.

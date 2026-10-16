@@ -10,6 +10,7 @@ ns.Glyphs = Glyphs
 
 local PATH = "Interface\\AddOns\\" .. addonName .. "\\Media\\Glyphs\\"
 local RENAMED_COLOR = CreateColor(0.44, 0.74, 1)
+local KEY_GLYPH_SIZE = 12
 
 Glyphs.CROWN_TEXTURE = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
 -- The button that edits a nickname or a note.
@@ -80,6 +81,28 @@ function Glyphs.Markup(glyph)
     if not glyph.color then return "|T" .. glyph.texture .. ":0|t" end
     local r, g, b = glyph.color:GetRGBAsBytes()
     return ("|T%s:0:0:0:0:32:32:0:32:0:32:%d:%d:%d|t"):format(glyph.texture, r, g, b)
+end
+
+---Adds the key of every glyph on one line, its first glyph's bottom-left corner at that offset from the parent's.
+---@param parent Frame
+---@param x number
+---@param y number
+function Glyphs.AddKey(parent, x, y)
+    local previous
+    for _, glyph in ipairs(Glyphs.Key) do
+        local texture = parent:CreateTexture(nil, "OVERLAY")
+        texture:SetSize(KEY_GLYPH_SIZE, KEY_GLYPH_SIZE)
+        Glyphs.Set(texture, glyph)
+        if previous then
+            texture:SetPoint("LEFT", previous, "RIGHT", 14, 0)
+        else
+            texture:SetPoint("BOTTOMLEFT", x, y)
+        end
+        local label = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        label:SetPoint("LEFT", texture, "RIGHT", 3, 0)
+        label:SetText(glyph.label)
+        previous = label
+    end
 end
 
 ---Shows a glyph's label and line in the game tooltip.

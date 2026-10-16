@@ -5,10 +5,11 @@ local L = ns.L
 local issecretvalue = issecretvalue or function() return false end
 
 -- The Who's Who section of a player's right-click menu: in the game's menus, and in the People and Guild tabs' own menu;
--- in the Guild tab, the guild's section after it.
+-- in the Guild tabs, the guild's section after it.
 
----The window's tab a menu on a character comes from.
----@alias WhosWho.PersonTab "people"|"guild"
+---The tab a menu on a character comes from: the window's People or Guild tab, or the Who's Who tab of the game's guild
+---window (guildWindow).
+---@alias WhosWho.PersonTab "people"|"guild"|"guildWindow"
 
 ---@class WhosWho.UnitMenu
 local UnitMenu = {}
@@ -115,14 +116,17 @@ function UnitMenu.AddSection(root, contextData)
     if not character then return end
     root:CreateDivider()
     root:CreateTitle(L["Who's Who"])
-    root:CreateButton(L["Link character"], function() ns.PeopleDialogs.LinkCharacter:Open(guid, character) end)
+    root:CreateButton(L["Link character"], function()
+        ns.PeopleDialogs.LinkCharacter:Open(guid, character, nil, contextData.tab)
+    end)
 end
 
--- The guild's section of the menu on a character in my guild, after Who's Who's, in the Guild tab, for the guild master
--- and the officers: link it for the guild, or change what the guild links. Every member gets the change.
+-- The guild's section of the menu on a character in my guild, after Who's Who's, in the Guild tabs, for the guild
+-- master and the officers: link it for the guild, or change what the guild links. Every member gets the change.
 ---@param guid string
 ---@param character WhosWho.NewCharacter? the character as the list knows it
-local function addGuildSection(root, guid, character)
+---@param tab WhosWho.PersonTab
+local function addGuildSection(root, guid, character, tab)
     local Identity, People = ns.Identity, ns.People
     if Identity.Characters()[guid] or not (ns.Protocol.CanChangeGuildRecords() and ns.Scopes.GuildRankIndex(guid)) then
         return
@@ -133,7 +137,9 @@ local function addGuildSection(root, guid, character)
     local entries = {}
     character = character or held
     if (not held or held.state == "added") and character then
-        entries[#entries + 1] = { L["Link for the guild"], function() dialogs.LinkCharacter:Open(guid, character, clubId) end }
+        entries[#entries + 1] = {
+            L["Link for the guild"], function() dialogs.LinkCharacter:Open(guid, character, clubId, tab) end,
+        }
     elseif person and held and held.state == "guild" and held.guild == clubId then
         local id = person.id
         if person.madeByGuild == clubId and guid ~= person.main then
@@ -159,7 +165,7 @@ local sendTell = ChatFrameUtil and ChatFrameUtil.SendTell or ChatFrame_SendTell
 ---@param name string
 ---@param guid string
 ---@param character WhosWho.NewCharacter? the character as the caller knows it, for Link character
----@param tab WhosWho.PersonTab the tab it comes from: in the Guild tab, the guild's section follows Who's Who's
+---@param tab WhosWho.PersonTab the tab it comes from: in the Guild tabs, the guild's section follows Who's Who's
 function UnitMenu.OpenCharacterMenu(owner, name, guid, character, tab)
     MenuUtil.CreateContextMenu(owner, function(_, root)
         root:CreateTitle(name)
@@ -168,7 +174,7 @@ function UnitMenu.OpenCharacterMenu(owner, name, guid, character, tab)
             root:CreateButton(INVITE, function() C_PartyInfo.InviteUnit(name) end)
         end
         UnitMenu.AddSection(root, { name = name, guid = guid, character = character, tab = tab })
-        if tab == "guild" then addGuildSection(root, guid, character) end
+        if tab == "guild" or tab == "guildWindow" then addGuildSection(root, guid, character, tab) end
     end)
 end
 

@@ -34,6 +34,7 @@ local addonName, ns = ...
 ---@field Lists WhosWho.Lists
 ---@field Glyphs WhosWho.Glyphs
 ---@field PeopleDialogs WhosWho.PeopleDialogs
+---@field GuildRoster WhosWho.GuildRoster
 ---@field Launcher WhosWho.Launcher
 ---@field Tooltip WhosWho.Tooltip
 ---@field UnitMenu WhosWho.UnitMenu

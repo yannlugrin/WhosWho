@@ -215,8 +215,9 @@ end
 ---@param guid string
 ---@param character WhosWho.NewCharacter
 ---@param clubId integer? my guild, for the guild master and the officers
-function dialog:Open(guid, character, clubId)
-    self.guid, self.character, self.clubId = guid, character, clubId
+---@param tab WhosWho.PersonTab? the tab of the menu it comes from
+function dialog:Open(guid, character, clubId, tab)
+    self.guid, self.character, self.clubId, self.tab = guid, character, clubId, tab
     self:SetTitle(clubId and L["Link for the guild"] or L["Link character"])
     setButtonText(self.NewPersonButton, clubId and L["New guild person"] or L["New person"])
     self.Question:SetText(L["Which person does %s belong to?"]:format(
@@ -241,12 +242,12 @@ local function linkForGuild(id)
 end
 
 -- Both end on the person where the character now is: selected in the Guild tab when the link started there, in the
--- People tab otherwise.
+-- People tab otherwise; in the game's guild window, its list stays shown.
 local function showLinkedPerson()
     local person = People.Find(dialog.guid)
     dialog:Hide()
-    if not person then return end
-    if ns.Main.Guild:IsVisible() then
+    if not person or dialog.tab == "guildWindow" then return end
+    if dialog.tab == "guild" then
         ns.Main.Guild:Select(person.id)
     else
         ns.Main.People:ShowPerson(person.id)
@@ -508,9 +509,9 @@ StaticPopupDialogs.WHOSWHO_GUILD_MAKE_MAIN = {
 }
 
 StaticPopupDialogs.WHOSWHO_GUILD_REMOVE = {
-    text = L["Remove %s for the guild?"] .. "\n\n"
+    text = L["Unlink every character of %s for the guild?"] .. "\n\n"
         .. L["Every member of the guild who uses Who's Who forgets this person and the characters the guild linked to it."],
-    button1 = L["Remove"],
+    button1 = L["Unlink"],
     button2 = CANCEL,
     OnAccept = function(_, data) ns.Protocol.SendGuildRecord(GuildRecord.Remove(data.clubId, data.id)) end,
     timeout = 0,
@@ -635,17 +636,20 @@ end
 ---Asks to unlink, for my guild, the characters of one of its identities that players' own records hold.
 ---@param clubId integer
 ---@param id string
----@param guids string[]
-function PeopleDialogs.ConfirmGuildKeepApart(clubId, id, guids)
-    local recordChars, names = GuildRecord.Held(clubId, id).chars, {}
-    for i, guid in ipairs(guids) do
-        names[i] = Lists.ClassColoredName(recordChars[guid].name, recordChars[guid].classID)
+---@param claims WhosWho.PlayerClaim[]
+function PeopleDialogs.ConfirmGuildKeepApart(clubId, id, claims)
+    local recordChars, guids, names = GuildRecord.Held(clubId, id).chars, {}, {}
+    for _, claim in ipairs(claims) do
+        for _, guid in ipairs(claim.guids) do
+            guids[#guids + 1] = guid
+            names[#names + 1] = Lists.ClassColoredName(recordChars[guid].name, recordChars[guid].classID)
+        end
     end
     StaticPopup_Show("WHOSWHO_GUILD_KEEP_APART", table.concat(names, ", "), coloredNickname(id),
         { clubId = clubId, id = id, guids = guids })
 end
 
----Asks to remove one of my guild's identities, for the guild.
+---Asks to unlink every character of one of my guild's identities, for the guild, which removes it.
 ---@param clubId integer
 ---@param id string
 function PeopleDialogs.ConfirmGuildRemove(clubId, id)

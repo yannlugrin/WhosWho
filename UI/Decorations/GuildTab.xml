@@ -1,0 +1,309 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <!-- The list of the Who's Who tab, built like the game's guild roster (CommunitiesMemberListFrameTemplate): the
+         column headers above it, the scroll bar on its right, an inner border over the rows. -->
+    <Frame name="WhosWhoGuildTabListTemplate" virtual="true">
+        <Frames>
+            <Frame parentKey="ColumnDisplay" useParentLevel="true" inherits="ColumnDisplayTemplate">
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativePoint="TOPLEFT" x="-3" y="60"/>
+                    <Anchor point="TOPRIGHT" relativePoint="TOPRIGHT" x="22" y="60"/>
+                </Anchors>
+                <Layers>
+                    <Layer level="BORDER">
+                        <Texture parentKey="InsetBorderTopLeft" inherits="UI-Frame-InnerTopLeft">
+                            <Anchors>
+                                <Anchor point="TOPLEFT" relativeKey="$parent.Background" relativePoint="BOTTOMLEFT" x="0" y="3"/>
+                            </Anchors>
+                        </Texture>
+                        <Texture parentKey="InsetBorderTopRight" inherits="UI-Frame-InnerTopRight">
+                            <Anchors>
+                                <Anchor point="TOPRIGHT" relativeKey="$parent.Background" relativePoint="BOTTOMRIGHT" x="0" y="3"/>
+                            </Anchors>
+                        </Texture>
+                        <Texture parentKey="InsetBorderBottomLeft" inherits="UI-Frame-InnerBotLeftCorner">
+                            <Anchors>
+                                <Anchor point="BOTTOMLEFT" relativeKey="$parent.$parent" x="-3" y="-3"/>
+                            </Anchors>
+                        </Texture>
+                        <Texture parentKey="InsetBorderTop" inherits="_UI-Frame-InnerTopTile">
+                            <Anchors>
+                                <Anchor point="TOPLEFT" relativeKey="$parent.InsetBorderTopLeft" relativePoint="TOPRIGHT"/>
+                                <Anchor point="TOPRIGHT" relativeKey="$parent.InsetBorderTopRight" relativePoint="TOPLEFT"/>
+                            </Anchors>
+                        </Texture>
+                        <Texture parentKey="InsetBorderLeft" inherits="!UI-Frame-InnerLeftTile">
+                            <Anchors>
+                                <Anchor point="TOPLEFT" relativeKey="$parent.InsetBorderTopLeft" relativePoint="BOTTOMLEFT" x="0" y="0"/>
+                                <Anchor point="BOTTOMLEFT" relativeKey="$parent.InsetBorderBottomLeft" relativePoint="TOPLEFT"/>
+                            </Anchors>
+                        </Texture>
+                    </Layer>
+                </Layers>
+            </Frame>
+            <Frame parentKey="ScrollBox" inherits="WowScrollBoxList">
+                <Anchors>
+                    <Anchor point="TOPLEFT"/>
+                    <Anchor point="BOTTOMRIGHT"/>
+                </Anchors>
+            </Frame>
+            <EventFrame parentKey="ScrollBar" inherits="MinimalScrollBar">
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativePoint="TOPRIGHT" x="4" y="-3"/>
+                    <Anchor point="BOTTOMLEFT" relativePoint="BOTTOMRIGHT" x="4" y="2"/>
+                </Anchors>
+                <Layers>
+                    <Layer level="BACKGROUND">
+                        <Texture parentKey="Background" file="Interface\FrameGeneral\UI-Background-Marble" horizTile="true" vertTile="true" setAllPoints="true"/>
+                    </Layer>
+                </Layers>
+            </EventFrame>
+            <Frame parentKey="InsetFrame" inherits="InsetFrameTemplate">
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="-3" y="3"/>
+                    <Anchor point="BOTTOMRIGHT" y="-2"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        self.Bg:Hide();
+                        self:SetFrameLevel(self:GetParent():GetFrameLevel() + 20);
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+        </Frames>
+    </Frame>
+
+    <!-- A row of the list, with the game's roster row background and highlight
+         (CommunitiesMemberListEntryTemplate). Its cells start 5 to the right of their column header, as the game's do,
+         for the columns Nickname 140, Class 45 (icon centred), Lvl 40, Character 120, Zone / Last seen to Rank, and
+         Rank 85 at the right. -->
+    <Button name="WhosWhoGuildTabRowTemplate" registerForClicks="LeftButtonUp, RightButtonUp" virtual="true">
+        <Size y="20"/>
+        <Frames>
+            <Frame parentKey="Glyph">
+                <Size x="12" y="12"/>
+                <Anchors>
+                    <Anchor point="LEFT" x="4" y="0"/>
+                </Anchors>
+                <Layers>
+                    <Layer level="ARTWORK">
+                        <Texture parentKey="Texture" setAllPoints="true"/>
+                    </Layer>
+                </Layers>
+            </Frame>
+        </Frames>
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="Nickname" inherits="GameFontHighlightSmall" justifyH="LEFT" wordwrap="false">
+                    <Size x="112" y="0"/>
+                    <Anchors>
+                        <Anchor point="LEFT" x="20" y="0"/>
+                    </Anchors>
+                </FontString>
+                <Texture parentKey="Class">
+                    <Size x="16" y="16"/>
+                    <Anchors>
+                        <Anchor point="LEFT" x="152" y="0"/>
+                    </Anchors>
+                </Texture>
+                <FontString parentKey="Level" inherits="GameFontHighlightSmall" justifyH="LEFT" wordwrap="false">
+                    <Size x="30" y="0"/>
+                    <Anchors>
+                        <Anchor point="LEFT" x="185" y="0"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="Character" inherits="GameFontHighlightSmall" justifyH="LEFT" wordwrap="false">
+                    <Size x="108" y="0"/>
+                    <Anchors>
+                        <Anchor point="LEFT" x="223" y="0"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="Zone" inherits="GameFontHighlightSmall" justifyH="LEFT" wordwrap="false">
+                    <Anchors>
+                        <Anchor point="LEFT" x="341" y="0"/>
+                        <Anchor point="RIGHT" x="-94" y="0"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="Rank" inherits="GameFontHighlightSmall" justifyH="LEFT" wordwrap="false">
+                    <Anchors>
+                        <Anchor point="LEFT" relativePoint="RIGHT" x="-86" y="0"/>
+                        <Anchor point="RIGHT" x="-4" y="0"/>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <NormalTexture setAllPoints="true" file="Interface\GuildFrame\GuildFrame">
+            <TexCoords left="0.36230469" right="0.38183594" top="0.95898438" bottom="0.99804688"/>
+        </NormalTexture>
+        <HighlightTexture file="Interface\FriendsFrame\UI-FriendsFrame-HighlightBar" alphaMode="ADD" setAllPoints="true"/>
+    </Button>
+
+    <!-- The panel next to the window for the selected row, built like the game's member panel
+         (CommunitiesGuildMemberDetailFrameTemplate): the person, then their characters in a list that scrolls; for an
+         officer on one of the guild's identities, the guild's changes: its nickname at the top; under the characters,
+         the players' claims, then Unlink. -->
+    <Frame name="WhosWhoGuildMemberPanelTemplate" toplevel="true" enableMouse="true" virtual="true">
+        <Size x="212" y="100"/>
+        <Frames>
+            <Frame parentKey="Border" inherits="DialogBorderDarkTemplate">
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="4" y="0"/>
+                    <Anchor point="BOTTOMRIGHT" x="6" y="1"/>
+                </Anchors>
+            </Frame>
+            <Button parentKey="CloseButton" inherits="UIPanelCloseButtonNoScripts">
+                <Anchors>
+                    <Anchor point="TOPRIGHT" x="3" y="-4"/>
+                </Anchors>
+            </Button>
+            <Frame parentKey="Glyph">
+                <Size x="12" y="12"/>
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="17" y="-18"/>
+                </Anchors>
+                <Layers>
+                    <Layer level="ARTWORK">
+                        <Texture parentKey="Texture" setAllPoints="true"/>
+                    </Layer>
+                </Layers>
+            </Frame>
+            <Button parentKey="EditNicknameButton">
+                <Size x="12" y="12"/>
+            </Button>
+            <Frame parentKey="ScrollBox" inherits="WowScrollBoxList">
+                <Size x="183" y="0"/>
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="15" y="-40"/>
+                </Anchors>
+            </Frame>
+            <Button parentKey="MoveButton" inherits="UIPanelButtonTemplate">
+                <Size x="183" y="22"/>
+            </Button>
+            <Button parentKey="KeepApartButton" inherits="UIPanelButtonTemplate">
+                <Size x="183" y="22"/>
+            </Button>
+            <Button parentKey="UnlinkButton" inherits="UIPanelButtonTemplate">
+                <Size x="183" y="22"/>
+            </Button>
+            <EventFrame parentKey="ScrollBar" inherits="MinimalScrollBar">
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativeKey="$parent.ScrollBox" relativePoint="TOPRIGHT" x="4" y="0"/>
+                    <Anchor point="BOTTOMLEFT" relativeKey="$parent.ScrollBox" relativePoint="BOTTOMRIGHT" x="4" y="0"/>
+                </Anchors>
+            </EventFrame>
+        </Frames>
+        <Layers>
+            <Layer level="ARTWORK">
+                <FontString parentKey="Nickname" inherits="GameFontNormal" justifyH="LEFT" wordwrap="false">
+                    <Size x="150" y="12"/>
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="33" y="-18"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="Claims" inherits="GameFontHighlightSmall" justifyH="LEFT">
+                    <Size x="183"/>
+                </FontString>
+            </Layer>
+        </Layers>
+    </Frame>
+
+    <!-- A character on one line in the member panel: class icon, name, crown on the main, and on the right its level
+         (in the guild) or when it was last seen (outside). The highlight covers the line only. -->
+    <Button name="WhosWhoGuildCharacterLineTemplate" registerForClicks="LeftButtonUp, RightButtonUp" virtual="true">
+        <Frames>
+            <!-- The character's state glyph, before its class icon. -->
+            <Frame parentKey="StateGlyph">
+                <Size x="12" y="12"/>
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="3" y="-4"/>
+                </Anchors>
+                <Layers>
+                    <Layer level="ARTWORK">
+                        <Texture parentKey="Texture" setAllPoints="true"/>
+                    </Layer>
+                </Layers>
+            </Frame>
+        </Frames>
+        <Layers>
+            <Layer level="ARTWORK">
+                <Texture parentKey="Class">
+                    <Size x="14" y="14"/>
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="19" y="-3"/>
+                    </Anchors>
+                </Texture>
+                <FontString parentKey="Name" inherits="GameFontHighlightSmall" justifyH="LEFT" wordwrap="false">
+                    <Size y="20"/>
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="37" y="0"/>
+                    </Anchors>
+                </FontString>
+                <Texture parentKey="Crown" file="Interface\GroupFrame\UI-Group-LeaderIcon">
+                    <Size x="12" y="12"/>
+                    <Anchors>
+                        <Anchor point="LEFT" relativeKey="$parent.Name" relativePoint="RIGHT" x="3" y="0"/>
+                    </Anchors>
+                </Texture>
+                <FontString parentKey="Aside" inherits="GameFontDisableSmall" justifyH="RIGHT" wordwrap="false">
+                    <Size y="20"/>
+                    <Anchors>
+                        <Anchor point="TOPRIGHT" x="-3" y="0"/>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <HighlightTexture file="Interface\FriendsFrame\UI-FriendsFrame-HighlightBar" alphaMode="ADD">
+            <Size y="20"/>
+            <Anchors>
+                <Anchor point="TOPLEFT"/>
+                <Anchor point="TOPRIGHT"/>
+            </Anchors>
+        </HighlightTexture>
+    </Button>
+
+    <!-- The open character in the member panel: its line, then the game's member panel labels: zone or last online,
+         rank. Lines 14 high, 4 apart, starting 4 under the line. -->
+    <Button name="WhosWhoGuildOpenCharacterTemplate" inherits="WhosWhoGuildCharacterLineTemplate" virtual="true">
+        <Layers>
+            <Layer level="ARTWORK">
+                <FontString parentKey="SeenLabel" inherits="GameFontNormalSmall">
+                    <Size y="14"/>
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="3" y="-24"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="SeenText" inherits="GameFontHighlight" justifyH="LEFT" wordwrap="false">
+                    <Anchors>
+                        <Anchor point="LEFT" relativeKey="$parent.SeenLabel" relativePoint="RIGHT" x="2" y="0"/>
+                        <Anchor point="RIGHT"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="RankLabel" inherits="GameFontNormalSmall" text="RANK_COLON">
+                    <Size y="14"/>
+                    <Anchors>
+                        <Anchor point="TOPLEFT" relativeKey="$parent.SeenLabel" relativePoint="BOTTOMLEFT" x="0" y="-4"/>
+                    </Anchors>
+                </FontString>
+                <FontString parentKey="RankText" inherits="GameFontHighlight" justifyH="LEFT" wordwrap="false">
+                    <Anchors>
+                        <Anchor point="LEFT" relativeKey="$parent.RankLabel" relativePoint="RIGHT" x="2" y="0"/>
+                        <Anchor point="RIGHT"/>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+    </Button>
+
+    <!-- The line in the member panel before the characters not in the guild, with space above it: its text sits where
+         a 20 high line centres it. -->
+    <Frame name="WhosWhoGuildSeparatorTemplate" virtual="true">
+        <Layers>
+            <Layer level="ARTWORK">
+                <FontString parentKey="Text" inherits="GameFontDisableSmall" justifyH="LEFT">
+                    <Anchors>
+                        <Anchor point="BOTTOMLEFT" x="0" y="5"/>
+                    </Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+    </Frame>
+</Ui>
