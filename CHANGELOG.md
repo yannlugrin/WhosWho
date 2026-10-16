@@ -8,6 +8,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 - **Guild links**: the guild master and officers can link members' characters for the whole guild, from the Guild tab's right-click menu: to a member's identity, or to a new person for someone who doesn't use Who's Who, with its own nickname and main. Every member who uses Who's Who sees them, even for players they never met; what a player shares about themselves always comes first. When a player links characters the guild had linked for them, the guild's link gives way: the guild master or an officer chooses to move the rest to that player or keep it apart.
 - **Who's Who in the guild window**: the Who's Who tab of the game's guild window now lists your guild by identity, like the game's roster: search, offline members, columns to sort by, and a panel next to the window with the person's characters, the one in the guild open with its zone and rank. The guild master and officers reach the guild's settings from a button there, and can link characters for the guild from its right-click menus.
+- **Key bindings**: in the game's Key Bindings, a Who's Who section lets you set a key to show or hide the Who's Who window, and one to open the guild window on its Who's Who tab (also `/ww guild`). None is set by default.
 
 ## [0.3.0] - 2026-10-14
 

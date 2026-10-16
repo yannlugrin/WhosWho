@@ -67,6 +67,10 @@ local function showGlyphTooltip(glyphFrame)
 end
 
 ---@param frame Frame CommunitiesFrame
+-- The Who's Who tab, once the game's guild window is loaded.
+---@type CheckButton?
+local guildTab
+
 local function addTab(frame)
     local blizzardTabs = {
         frame.ChatTab, frame.RosterTab, frame.GuildBenefitsTab, frame.GuildInfoTab, frame.GuildPreferredPlaySettingsTab,
@@ -77,6 +81,7 @@ local function addTab(frame)
     tab.Icon:SetTexture(C_AddOns.GetAddOnMetadata(addonName, "IconTexture"))
     tab.tooltip = L["Who's Who"]
     tab:Hide()
+    guildTab = tab
 
     -- Placed like the game's Preferred Play Settings tab.
     local panel = CreateFrame("Frame", nil, frame)
@@ -739,3 +744,16 @@ local function addTab(frame)
 end
 
 EventUtil.ContinueOnAddOnLoaded("Blizzard_Communities", function() addTab(CommunitiesFrame) end)
+
+-- Slash command ----------------------------------------------------------------------------------
+
+-- The game's guild window, opened if needed (which loads it), on my guild and its Who's Who tab.
+ns.Commands.guild = function()
+    if not IsInGuild() then return end
+    if not (CommunitiesFrame and CommunitiesFrame:IsShown()) then ToggleGuildFrame() end
+    -- The game refuses to open it at times (Battle.net down).
+    if not CommunitiesFrame:IsShown() then return end
+    local guildClubId = C_Club.GetGuildClubId()
+    if CommunitiesFrame:GetSelectedClubId() ~= guildClubId then CommunitiesFrame:SelectClub(guildClubId) end
+    if guildTab:IsShown() then guildTab:Click() end
+end

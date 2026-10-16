@@ -185,7 +185,7 @@ end)
 ns.Commands = {}
 
 local function help()
-    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww open, /ww settings, /ww debug <on|off>"])
+    ns.Print(L["Commands: /ww status, /ww link, /ww unlink, /ww main, /ww nick <name>, /ww nick (back to the main character's name), /ww scope, /ww scope <scope> <on|off>, /ww people, /ww people <character name>, /ww open, /ww guild, /ww settings, /ww debug <on|off>"])
 end
 
 ns.Commands.status = function()
@@ -303,3 +303,8 @@ SlashCmdList.WHOSWHO = function(input)
     local fn = ns.Commands[command:lower()]
     if fn then fn(rest) else help() end
 end
+
+-- The game's Key Bindings show Bindings.xml's section and keys under these names, read from these globals.
+BINDING_HEADER_WHOSWHO = L["Who's Who"]
+BINDING_NAME_WHOSWHO_WINDOW = L["Show or hide the Who's Who window"]
+BINDING_NAME_WHOSWHO_GUILD = L["Open the guild window on its Who's Who tab"]

@@ -62,6 +62,7 @@
         "CreateSettingsCheckboxWithButtonInitializer",
         "EventUtil",
         "CommunitiesFrame",
+        "ToggleGuildFrame",
         "CLOSE",
         "COMMUNITIES_MEMBER_LIST_SHOW_OFFLINE",
         "DISABLED_FONT_COLOR",

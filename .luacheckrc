@@ -9,11 +9,13 @@ ignore = {
 
 globals = {
     "SLASH_WHOSWHO1", "SLASH_WHOSWHO2", "SlashCmdList", "StaticPopupDialogs", "UISpecialFrames",
+    "BINDING_HEADER_WHOSWHO", "BINDING_NAME_WHOSWHO_WINDOW", "BINDING_NAME_WHOSWHO_GUILD",
 }
 
 read_globals = {
     "bit", "date", "geterrorhandler", "time", "debugprofilestop", "fastrandom", "issecretvalue", "strlenutf8",
     "LibStub", "CreateFrame", "UIParent", "hooksecurefunc", "Enum", "Menu", "EventUtil", "CommunitiesFrame", "PlaySound",
+    "ToggleGuildFrame",
     "SOUNDKIT", "GameFontHighlight", "CLOSE", "COMMUNITIES_MEMBER_LIST_SHOW_OFFLINE",
     "LEVEL_ABBR", "ZONE_COLON", "LAST_ONLINE_COLON", "GUILD_ONLINE_LABEL",
     "DISABLED_FONT_COLOR", "COMMUNITIES_ROSTER_COLUMN_TITLE_CLASS", "COMMUNITIES_ROSTER_COLUMN_TITLE_RANK",

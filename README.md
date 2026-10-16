@@ -20,7 +20,7 @@ For **World of Warcraft: Forever**. Source code, issues and releases: [github.co
 - **Guild links.** The guild master and officers can link members' characters for the whole guild, from the Guild tab's right-click menu: to a member's identity, or to a new person for someone who doesn't use Who's Who. Every member sees them; what a player shares about themselves always comes first.
 - *Coming:* **Review** what Who's Who changed on its own, for example when a player you linked yourself starts sharing their own identity.
 
-Open the window with the minimap button, the add-on compartment next to the minimap, or `/ww open`. Right-click the button for a menu.
+Open the window with the minimap button, the add-on compartment next to the minimap, or `/ww open`. Right-click the button for a menu. In the game's Key Bindings, under Who's Who, you can set a key to show or hide the window, and one to open the guild window on its Who's Who tab; none is set by default.
 
 ## Privacy
 
@@ -37,6 +37,7 @@ Open the window with the minimap button, the add-on compartment next to the mini
 | Command | What it does |
 |---|---|
 | `/ww open` | Open the Who's Who window |
+| `/ww guild` | Open the guild window on its Who's Who tab |
 | `/ww status` | The version, your nickname, this character's link and how many characters are linked, and whether Who's Who is on for your guild |
 | `/ww main` | Make the character you are playing your main |
 | `/ww link` / `/ww unlink` | Link or unlink the character you are playing |
