@@ -8,27 +8,19 @@ local LibDBIcon = LibStub("LibDBIcon-1.0")
 local Launcher = {}
 ns.Launcher = Launcher
 
-local function toggleWindow()
-    if ns.Main.Window:IsShown() then
-        ns.Main.Window:Hide()
-    else
-        ns.Commands.open("")
-    end
-end
-
 local dataObject = LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
     type = "launcher",
     label = L["Who's Who"],
     icon = C_AddOns.GetAddOnMetadata(addonName, "IconTexture"),
     OnClick = function(_, button)
         if button ~= "RightButton" then
-            toggleWindow()
+            ns.Commands.open("")
             return
         end
         -- Not owned by the clicked button: a menu closes with its owner, and EllesmereUI's minimap button bar hides
         -- on the press that picks an option, before the option's click lands.
         MenuUtil.CreateContextMenu(nil, function(_, root)
-            root:CreateButton(L["My identity"], function() ns.Commands.open("") end)
+            root:CreateButton(L["My identity"], function() ns.Main.Window:Show() end)
             root:CreateButton(L["Settings"], function() ns.Commands.settings("") end)
         end)
     end,

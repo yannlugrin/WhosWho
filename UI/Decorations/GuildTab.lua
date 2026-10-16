@@ -747,9 +747,14 @@ EventUtil.ContinueOnAddOnLoaded("Blizzard_Communities", function() addTab(Commun
 
 -- Slash command ----------------------------------------------------------------------------------
 
--- The game's guild window, opened if needed (which loads it), on my guild and its Who's Who tab.
+-- The game's guild window, opened if needed (which loads it), on my guild and its Who's Who tab; closed when it shows
+-- that tab already.
 ns.Commands.guild = function()
     if not IsInGuild() then return end
+    if guildTab and guildTab:GetChecked() and CommunitiesFrame:IsShown() then
+        ToggleGuildFrame()
+        return
+    end
     if not (CommunitiesFrame and CommunitiesFrame:IsShown()) then ToggleGuildFrame() end
     -- The game refuses to open it at times (Battle.net down).
     if not CommunitiesFrame:IsShown() then return end

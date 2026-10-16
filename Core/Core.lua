@@ -307,4 +307,4 @@ end
 -- The game's Key Bindings show Bindings.xml's section and keys under these names, read from these globals.
 BINDING_HEADER_WHOSWHO = L["Who's Who"]
 BINDING_NAME_WHOSWHO_WINDOW = L["Show or hide the Who's Who window"]
-BINDING_NAME_WHOSWHO_GUILD = L["Open the guild window on its Who's Who tab"]
+BINDING_NAME_WHOSWHO_GUILD = L["Show or hide the guild window on its Who's Who tab"]

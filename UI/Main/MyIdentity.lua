@@ -412,6 +412,7 @@ end)
 
 -- Slash command ----------------------------------------------------------------------------------
 
+-- Shows the window, or hides it when it is shown.
 ns.Commands.open = function()
-    window:Show()
+    window:SetShown(not window:IsShown())
 end

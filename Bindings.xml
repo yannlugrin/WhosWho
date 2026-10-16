@@ -1,9 +1,9 @@
 <Bindings>
     <!-- Loaded by the game without a TOC entry; no default keys. The category is the name of the global holding the
          section's title; BINDING_HEADER_WHOSWHO and BINDING_NAME_* are set in Core.lua. The code runs outside the
-         add-on's namespace, so it goes through its slash command. -->
+         add-on's namespace, so it goes through its slash command; both commands show or hide their window. -->
     <Binding name="WHOSWHO_WINDOW" category="BINDING_HEADER_WHOSWHO">
-        if WhosWhoMainWindow:IsShown() then WhosWhoMainWindow:Hide() else SlashCmdList.WHOSWHO("open") end
+        SlashCmdList.WHOSWHO("open")
     </Binding>
     <Binding name="WHOSWHO_GUILD" category="BINDING_HEADER_WHOSWHO">
         SlashCmdList.WHOSWHO("guild")
