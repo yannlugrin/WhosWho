@@ -96,7 +96,7 @@ function Identity.Refresh(guid, name, ruleset, classID, level)
     Identity.Seen(guid, level)
     if character.name == name and character.ruleset == ruleset then return end
     character.name, character.ruleset = name, ruleset
-    if character.linked then nextRevision() end
+    if Identity.AnnouncedRevision(guid) then nextRevision() end
 end
 
 ---Refreshes the level and last seen time of one of this account's characters; does not change the record.

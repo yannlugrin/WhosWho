@@ -2121,6 +2121,40 @@ do
     logout(rex)
 end
 
+-- A character the guild's rule adds, renamed: Lux opted in to the rule, her alt in the guild is unlinked.
+do
+    local GUILD6 = 31000006
+    local kaiAccount, luxAccount = account("Kai"), account("Lux")
+    local kaiMain = character("Kai Main", "Player-1-0000FC01", MAGE, GUILD6)
+    local luxMain = character("Lux Main", "Player-1-0000FC02", PRIEST, GUILD6)
+    local luxAlt = character("Lux Alt", "Player-1-0000FC03", ROGUE, GUILD6)
+    kaiMain.rankIndex = 1
+    local luxFirstOnAlt = login(luxAccount, luxAlt)
+    run(5)
+    logout(luxFirstOnAlt)
+    local kai = login(kaiAccount, kaiMain)
+    slash(kai, "link")
+    local lux = login(luxAccount, luxMain)
+    slash(lux, "link")
+    run(60)
+    kai.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = true })
+    run(60)
+    lux.ns.Identity.SetEnforcedLinkingOptIn(GUILD6, true)
+    run(60)
+    local luxId, luxRevision = lux.ns.Identity.Id(), lux.ns.Identity.Revision()
+    logout(lux)
+    world.characters["Lux Alt"] = nil
+    luxAlt.name = "Lux Renamed"
+    world.characters["Lux Renamed"] = luxAlt
+    local luxOnAlt = login(luxAccount, luxAlt)
+    run(120)
+    check(luxOnAlt.ns.Identity.Revision() == luxRevision + 1
+        and kai.ns.People.Get(luxId).signedRecord.chars[luxAlt.guid].name == "Lux Renamed",
+        "renamed, a character the rule adds starts a new revision: the guild gets its new name")
+    logout(luxOnAlt)
+    logout(kai)
+end
+
 -- Announcement format -----------------------------------------------------------------------------------
 
 do

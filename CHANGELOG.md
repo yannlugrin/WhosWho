@@ -14,6 +14,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 - **Guild roster**: removing a member or editing a note in the game's guild roster could be blocked, blaming Who's Who, after using a Who's Who entry in the roster's right-click menu. Who's Who no longer adds its entries to that menu; its own tab in the guild window has them.
 - **Guild lists**: a member whose list hadn't changed yet no longer offers it to the guild; the members who asked for it got nothing.
+- **Linked characters required by the guild**: a character you share with the guild without linking it now shows its new name to the guild after a rename, and its new ruleset after a Hardcore death.
 
 ## [0.3.0] - 2026-10-14
 
