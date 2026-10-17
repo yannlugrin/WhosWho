@@ -380,7 +380,8 @@ local function addTab(frame)
         end
         line.Class:SetShown(character.classID ~= nil)
         if character.classID then Lists.SetClassIcon(line.Class, character.classID) end
-        line.Name:SetText(Lists.ClassColoredName(character.name, character.classID))
+        line.Name:SetText(character.classID and Lists.ClassColoredName(character.name, character.classID)
+            or character.name)
         line.Crown:SetShown(character.main)
         if member then
             line.Aside:SetText(tostring(member.level))
