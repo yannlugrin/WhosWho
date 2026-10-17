@@ -569,12 +569,20 @@ local function queueGuildRecord(signedRecord)
 end
 
 -- My guild's records catching up, by the guild master or an officer for every member, after a record of the guild or a
--- player's record changed: a character two records link is unlinked from the older one (GuildRecord.LinkedByNewer),
--- which keeps its other characters; a guild identity whose characters players' own records all hold goes
--- (GuildRecord.ClaimedByPlayers). One with only some of them held waits for an officer's answer, in the Guild tab.
+-- player's record changed, or the guild's members: a character that left the guild is unlinked
+-- (GuildRecord.LinkedFormerMembers); a character two records link is unlinked from the older one
+-- (GuildRecord.LinkedByNewer), which keeps its other characters; a guild identity whose characters players' own records
+-- all hold goes (GuildRecord.ClaimedByPlayers). One with only some of them held waits for an officer's answer, in the
+-- Guild tab.
 local function tidyGuildRecords()
     if not Protocol.CanChangeGuildRecords() then return end
     local clubId = Identity.GuildId(UnitGUID("player"))
+    local memberGuids = Scopes.GuildMemberGuids(clubId)
+    if memberGuids then
+        for id, guids in pairs(GuildRecord.LinkedFormerMembers(clubId, memberGuids)) do
+            queueGuildRecord(GuildRecord.Unlink(clubId, id, guids))
+        end
+    end
     for id, guids in pairs(GuildRecord.LinkedByNewer(clubId)) do queueGuildRecord(GuildRecord.Unlink(clubId, id, guids)) end
     for id, claimed in pairs(GuildRecord.ClaimedByPlayers(clubId)) do
         local allClaimed = true
@@ -1071,6 +1079,7 @@ function Protocol.Start()
     publishedBytes = Identity.RecordBytesWithoutRevision()
     Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
+    Scopes.OnGuildMembersChanged(tidyGuildRecords)
     People.OnChanged(retryPendingGuildSettings)
     GuildSettings.OnChanged(function() scheduleGuildListEvaluation() end)
     anonymousAtLogin = not Identity.IsLinked(UnitGUID("player"))

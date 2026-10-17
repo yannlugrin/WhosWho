@@ -135,6 +135,23 @@ local function hold(signedRecord)
     People.ApplyGuild(signedRecord.guild)
 end
 
+---The characters each record of a guild lists that its roster no longer lists: they left the guild.
+---@param clubId integer
+---@param memberGuids table<string, true> the guild's roster
+---@return table<string, string[]> guids by identity ID, only for the records listing some
+function GuildRecord.LinkedFormerMembers(clubId, memberGuids)
+    local linked = {}
+    for id, signedRecord in pairs(heldByGuild()[clubId] or {}) do
+        for guid in pairs(signedRecord.chars) do
+            if not memberGuids[guid] then
+                linked[id] = linked[id] or {}
+                table.insert(linked[id], guid)
+            end
+        end
+    end
+    return linked
+end
+
 ---The characters each record of a guild lists that a newer record of the guild lists too: the newer one has them.
 ---@param clubId integer
 ---@return table<string, string[]> guids by identity ID, only for the records listing some

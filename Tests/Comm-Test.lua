@@ -1812,6 +1812,17 @@ sendForGuild(linkFor(takingId, roxMain))
 check(holderId(kim, roxMain.guid) == takingId and holderId(kim, pipMain.guid) == keptId
     and kim.ns.People.Get(keptId).main == pipMain.guid and not kim.ns.GuildRecord.Held(GUILD2, keptId).chars[roxMain.guid],
     "an older guild identity loses only the character a newer one takes, its main then its other character")
+clearLog()
+roxMain.guild = nil
+fire(hal, "GUILD_ROSTER_UPDATE")
+run(10)
+check(sent({ from = "Hal Main", type = "GIREC", distribution = "GUILD" }) == 1
+    and next(kim.ns.GuildRecord.Held(GUILD2, takingId).chars) == nil and holderId(kim, roxMain.guid) == nil,
+    "a character that left the guild is unlinked by the officer, for everyone")
+clearLog()
+fire(hal, "GUILD_ROSTER_UPDATE")
+run(10)
+check(sent({ from = "Hal Main", type = "GIREC" }) == 0, "a roster with the same members changes nothing")
 
 -- A player's own record declares characters of guild identities.
 local pixAccount = account("Pix")

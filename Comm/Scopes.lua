@@ -371,6 +371,18 @@ end
 local CLUB_ID_RETRY_SECONDS = 10
 local clubIdRetryPending = false
 
+---@type table<string, true>? the GUIDs the last roster the game loaded listed, to tell when its members change
+local listedGuids
+---@type fun()[]
+local guildMembersListeners = {}
+
+-- Whether two sets of GUIDs hold the same ones.
+local function sameGuids(a, b)
+    for guid in pairs(a) do if not b[guid] then return false end end
+    for guid in pairs(b) do if not a[guid] then return false end end
+    return true
+end
+
 ---GUILD_ROSTER_UPDATE: my current character's guild, the guild of the characters I hold, and their activity: seen now
 ---while online; offline, its level only.
 function Scopes.GuildRosterChanged()
@@ -414,12 +426,40 @@ function Scopes.GuildRosterChanged()
     end
     if joined and GuildSettings.EnforcesLinking(clubId) then People.MarkOutdated(clubId) end
     People.Activity(activities)
+
+    local membersChanged = not (listedGuids and sameGuids(listedGuids, memberGuids))
+    listedGuids = memberGuids
+    if membersChanged then
+        for _, listener in ipairs(guildMembersListeners) do listener() end
+    end
+end
+
+---My current guild's members, from the roster; nil until the game has loaded it, or for another guild.
+---@param clubId integer
+---@return table<string, true>? by GUID
+function Scopes.GuildMemberGuids(clubId)
+    local count = GetNumGuildMembers()
+    if count == 0 or C_Club.GetGuildClubId() ~= clubId then return nil end
+    local guids = {}
+    for i = 1, count do
+        local guid = select(17, GetGuildRosterInfo(i))
+        if guid and notSecret(guid) then guids[guid] = true end
+    end
+    return guids
+end
+
+---Calls the listener each time the roster the game loads lists other members than the last one: the first one, a
+---member joining or leaving.
+---@param listener fun()
+function Scopes.OnGuildMembersChanged(listener)
+    guildMembersListeners[#guildMembersListeners + 1] = listener
 end
 
 ---PLAYER_GUILD_UPDATE for my character: a guild left, or joined (its roster follows). Also at login, for a guild left
 ---while offline. What I hold of a guild I left goes once none of my characters is in it.
 function Scopes.GuildChanged()
     unlistedGuildSenders = {}
+    listedGuids = nil
     if IsInGuild() then
         C_GuildInfo.GuildRoster()
         return

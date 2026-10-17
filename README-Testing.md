@@ -233,6 +233,7 @@ Needs the guild of Guild Lists: A in it, and a guildmate C whom A only knows thr
 - C leaves the guild: once A's roster updates, C is gone from A's People tab. A guildmate with a character confirmed to A stays when they leave.
 - A leaves the guild while none of A's other characters is in it: C is gone; a guildmate confirmed to A stays. With another of A's characters still in the guild, nothing goes.
 - A's character is removed from the guild while offline (an officer kicks it): at its next login, `/ww status` shows no guild line, and the guild's rule no longer adds that character to A's record.
+- A character the guild linked (to a guild identity or to a member's identity) leaves the guild, with A an officer online: `Sent, GUILD: 1 GIREC …` once A's roster updates, and `/dump WhosWhoDB.global.guildRecords` on A and on another member no longer lists it in that record. With no officer online when it leaves, the first officer to log in sends it.
 
 ## Still to Test
 
