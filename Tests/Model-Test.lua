@@ -1407,6 +1407,24 @@ do
         "leaving the guild forgets its records and what they linked, not the players' own")
 end
 
+-- A shared person without a main in its record, its guild main leaving the guild ---------------------------------
+
+fresh()
+do
+    local P, CLUB, A = ns.People, 1001, string.rep("a", 64)
+    -- The record a player sends the guild's members with the Guild scope off, opted in to the rule, the main elsewhere.
+    local record = { v = ns.Record.VERSION, id = A, rev = 1, guild = { consent = false }, chars = {
+        [G1] = { name = "Ana First", ruleset = NORMAL, classID = WARRIOR, guild = { forced = true, main = true } },
+        [G2] = { name = "Ana Second", ruleset = NORMAL, classID = WARRIOR, guild = { forced = true } },
+    } }
+    P.Accept(record, false, { [G1] = true, [G2] = true })
+    P.UpdateGuildMembers(CLUB, { [G1] = true, [G2] = true })
+    check(P.Get(A).main == G1 and P.Nickname(A) == "Ana First", "a person is shown under its guild main")
+    P.UpdateGuildMembers(CLUB, { [G2] = true })
+    check(P.Get(A).main == G2 and P.Nickname(A) == "Ana Second",
+        "its guild main gone and its record naming no main, under its other character")
+end
+
 -- A character linked by one guild's records, then in another guild's roster -------------------------------------
 
 for _, loginOrder in ipairs({ { 1, 2 }, { 2, 1 } }) do

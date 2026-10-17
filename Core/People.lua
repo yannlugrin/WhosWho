@@ -416,9 +416,9 @@ end
 
 -- Received from players --------------------------------------------------------------------------
 
--- A guild identity is shown under one of its characters: when its main left it (a player's record took it, the roster
--- dropped it), the first of the others by name.
-local function keepGuildIdentityMain(person)
+-- A person is shown under one of its characters: when its main left it (a player's record took it, the roster dropped
+-- it), or a shared person's record names none (its guild main stood for it), the first of the others by name.
+local function keepShownMain(person)
     if person.chars[person.main] then return end
     local main
     for guid, character in pairs(person.chars) do
@@ -472,7 +472,7 @@ local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedL
         if fromPerson.madeByGuild and not next(fromPerson.chars) then
             forget(fromPerson.id)
         elseif fromPerson.madeByGuild then
-            keepGuildIdentityMain(fromPerson)
+            keepShownMain(fromPerson)
         end
     elseif fromPerson then
         mergeManualPerson(fromPerson, toPerson)
@@ -546,7 +546,7 @@ local function applyGuildRecord(signedRecord)
     if guildIdentity and not next(person.chars) then
         forget(id)
     elseif guildIdentity then
-        keepGuildIdentityMain(person)
+        keepShownMain(person)
     end
 end
 
@@ -766,7 +766,7 @@ local function forgetFormerMember(person, clubId, memberGuids)
             forget(person.id)
             return true
         end
-        keepGuildIdentityMain(person)
+        keepShownMain(person)
         return next(removedFromPerson) ~= nil
     end
     if (inThatGuild or next(removedFromPerson)) and not holdsPlayersCharacter(person, memberGuids) then
@@ -775,7 +775,10 @@ local function forgetFormerMember(person, clubId, memberGuids)
     end
     if not next(removedFromPerson) then return false end
     -- Its guild main forgotten, the person is shown under the record's main again.
-    if removedFromPerson[person.main] then person.main = person.signedRecord.main end
+    if removedFromPerson[person.main] then
+        person.main = person.signedRecord.main
+        keepShownMain(person)
+    end
     return true
 end
 
