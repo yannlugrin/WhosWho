@@ -27,11 +27,6 @@ local INPUT_TEXT_LEFT = 10
 -- EllesmereUI draws the checkbox border on the button's edge, where the template's label starts.
 local SKINNED_CHECKBOX_LABEL_GAP = 6
 
-local function classColoredName(name, classID)
-    local _, classFile = GetClassInfo(classID)
-    return classFile and C_ClassColor.GetClassColor(classFile):WrapTextInColorCode(name) or name
-end
-
 -- Layout -----------------------------------------------------------------------------------------
 
 -- Stacks the dialog's shown rows from the top and sizes the dialog to them.
@@ -167,7 +162,8 @@ local function createNewIdentityDialog()
     ---@param name string the character logged in, "First Surname"
     ---@param classID integer
     function dialog:SetCharacter(name, classID)
-        self.Question:SetText(L["Set %s as your identity's main character?"]:format(classColoredName(name, classID)))
+        self.Question:SetText(L["Set %s as your identity's main character?"]:format(
+            ns.Lists.ClassColoredName(name, classID)))
         self.NicknameInput.Instructions:SetText(name)
         layOut(self)
     end
@@ -211,11 +207,12 @@ local function createLinkCharacterDialog()
     ---@param identityName string
     ---@param characters { name: string, classID: integer }[] the characters already linked, in the order shown
     function dialog:SetCharacter(characterGuid, name, classID, identityName, characters)
+        local Lists = ns.Lists
         self.characterGuid = characterGuid
         local names = {}
-        for i, character in ipairs(characters) do names[i] = classColoredName(character.name, character.classID) end
+        for i, character in ipairs(characters) do names[i] = Lists.ClassColoredName(character.name, character.classID) end
         local coloredIdentityName = NORMAL_FONT_COLOR:WrapTextInColorCode(identityName)
-        self.Question:SetText(L["Link %s to %s?"]:format(classColoredName(name, classID), coloredIdentityName))
+        self.Question:SetText(L["Link %s to %s?"]:format(Lists.ClassColoredName(name, classID), coloredIdentityName))
         self.Explanation:SetText(L["%s already groups %s. People who see your identity will recognise this character too."]
             :format(coloredIdentityName, table.concat(names, ", ")))
         layOut(self)
@@ -289,13 +286,14 @@ local function createGuildRuleDialog()
     ---@param clubId integer my current guild
     ---@param ruleset WhosWho.Ruleset the ruleset of the character I play
     function dialog:SetGuild(clubId, ruleset)
+        local Lists = ns.Lists
         self.clubId = clubId
         self.characterGuids = ns.Identity.CharactersInGuild(clubId, ruleset)
         local characters, mainGuid = ns.Identity.Characters(), ns.Identity.Main()
         local names, mainInGuild = {}, false
         for i, guid in ipairs(self.characterGuids) do
             local character = characters[guid]
-            local name = classColoredName(character.name, character.classID)
+            local name = Lists.ClassColoredName(character.name, character.classID)
             names[i] = character.linked and name or L["%s (not linked)"]:format(name)
             if guid == mainGuid then mainInGuild = true end
         end
@@ -310,7 +308,7 @@ local function createGuildRuleDialog()
         self.GuildMain.Dropdown:SetupMenu(function(_, root)
             for _, guid in ipairs(self.characterGuids) do
                 local character = characters[guid]
-                root:CreateRadio(classColoredName(character.name, character.classID),
+                root:CreateRadio(Lists.ClassColoredName(character.name, character.classID),
                     function() return self.guildMainGuid == guid end, function() self.guildMainGuid = guid end)
             end
         end)
