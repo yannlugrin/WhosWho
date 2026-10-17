@@ -210,8 +210,8 @@ local function setButtonText(button, text)
     button:SetWidth(button:GetTextWidth() + BUTTON_TEXT_PADDING)
 end
 
----Opens the dialog for a character that belongs to no person yet; with a club ID, for that guild: my guild's record
----links the character, and its members get it.
+---Opens the dialog for a character that belongs to no person yet, or, for my guild, to one I added; with a club ID,
+---for that guild: my guild's record links the character, and its members get it.
 ---@param guid string
 ---@param character WhosWho.NewCharacter
 ---@param clubId integer? my guild, for the guild master and the officers
@@ -663,15 +663,9 @@ function PeopleDialogs.EditGuildNickname(clubId, id)
     StaticPopup_Show("WHOSWHO_GUILD_NICKNAME", coloredNickname(id), nil, { clubId = clubId, id = id })
 end
 
--- A record can change the people while the dialog is open: it closes once the character belongs to a person,
--- and shows the people as they are otherwise.
+-- A record can change the people while the dialog is open: it shows them as they are.
 People.OnChanged(function()
-    if not dialog:IsShown() then return end
-    if People.Exists(dialog.guid) then
-        dialog:Hide()
-    else
-        dialog:Refresh()
-    end
+    if dialog:IsShown() then dialog:Refresh() end
 end)
 
 -- Skin -------------------------------------------------------------------------------------------
