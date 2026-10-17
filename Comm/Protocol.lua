@@ -474,13 +474,14 @@ end
 
 ---@type { rev: integer, sentAt: number }? my GSGET in flight: the revision it asks for, and when it left (GetTime)
 local guildSettingsRequest
----@type table<integer, true> revisions of guild settings I refused: never asked for again
+---@type table<string, integer> by member, the revision of the guild settings I refused from them: never asked of
+---them again
 local refusedGuildSettings = {}
 
 -- One GSGET to a member who announced newer guild settings; another member announcing them gets none while it waits.
 local function requestGuildSettings(name, rev)
     local request = guildSettingsRequest
-    if refusedGuildSettings[rev] then return end
+    if refusedGuildSettings[name] == rev then return end
     -- One request at a time, but a member trusted for a guild's first settings is asked over one who isn't.
     local trusted = Scopes.TrustedForGuildSettings(name)
     if request and request.rev >= rev and GetTime() - request.sentAt < REQUEST_DELAY_SECONDS
@@ -494,10 +495,10 @@ end
 ---@type WhosWho.GuildSettingsRecord? the newest verified record held back until the game gives my guild's club ID, and
 ---its signing character is confirmed and in my roster, tried again as they change
 local pendingGuildSettings
--- Whether a member trusted for a guild's first settings sent the record held back.
-local pendingSentByTrusted = false
+-- The member who sent the record held back.
+local pendingSender
 
-local function acceptGuildSettings(signedRecord, sentByTrusted)
+local function acceptGuildSettings(signedRecord, sender)
     -- Right after joining, the game may not give my guild's club ID yet: the record waits for it.
     local clubId = Identity.GuildId(UnitGUID("player"))
     local result
@@ -506,16 +507,17 @@ local function acceptGuildSettings(signedRecord, sentByTrusted)
     elseif signedRecord.guild ~= clubId then
         result = "another guild"
     else
-        result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid), sentByTrusted)
+        result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid),
+            Scopes.TrustedForGuildSettings(sender))
     end
     traceGuildSettings(signedRecord, result)
     if result == "accepted" then
         guildSettingsRequest = nil
     elseif result == "refused" then
-        refusedGuildSettings[signedRecord.rev] = true
+        refusedGuildSettings[sender] = signedRecord.rev
     elseif result == "pending"
         and not (pendingGuildSettings and GuildSettings.IsNewerThan(pendingGuildSettings, signedRecord)) then
-        pendingGuildSettings, pendingSentByTrusted = signedRecord, sentByTrusted
+        pendingGuildSettings, pendingSender = signedRecord, sender
     end
 end
 
@@ -523,7 +525,7 @@ local function retryPendingGuildSettings()
     local signedRecord = pendingGuildSettings
     if not signedRecord then return end
     pendingGuildSettings = nil
-    acceptGuildSettings(signedRecord, pendingSentByTrusted)
+    acceptGuildSettings(signedRecord, pendingSender)
 end
 
 -- Whether my guild's settings changed since they last went out.
@@ -924,8 +926,7 @@ local function receiveGuildSettingsUpdate(update, sender)
     if clubId and signedRecord.guild ~= clubId then return traceGuildSettings(signedRecord, "another guild") end
     if not GuildSettings.IsNewer(signedRecord) then return traceGuildSettings(signedRecord, "not newer") end
     traceGuildSettings(signedRecord, "checking its signature")
-    local sentByTrusted = Scopes.TrustedForGuildSettings(sender)
-    RecordVerification.Queue(signedRecord, GuildSettings, function(verified) acceptGuildSettings(verified, sentByTrusted) end)
+    RecordVerification.Queue(signedRecord, GuildSettings, function(verified) acceptGuildSettings(verified, sender) end)
 end
 
 -- A member of my current guild asking for my list of it.

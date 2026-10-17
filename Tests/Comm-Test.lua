@@ -2210,6 +2210,47 @@ do
     logout(bea)
 end
 
+-- A refused record blocks only its sender: Vic, an officer, turns the guild's rule on while Ula is offline; Ned, below
+-- the officers, with a modified client, sends her his own record at Vic's revision.
+do
+    local GUILD9 = 31000009
+    local vicAccount, nedAccount, ulaAccount = account("Vic"), account("Ned"), account("Ula")
+    local vicMain = character("Vic Main", "Player-1-0000FF01", MAGE, GUILD9)
+    local nedMain = character("Ned Main", "Player-1-0000FF02", ROGUE, GUILD9)
+    local ulaMain = character("Ula Main", "Player-1-0000FF03", PRIEST, GUILD9)
+    vicMain.rankIndex, nedMain.rankIndex, ulaMain.rankIndex = 1, 3, 3
+    local vic = login(vicAccount, vicMain)
+    slash(vic, "link")
+    local ned = login(nedAccount, nedMain)
+    slash(ned, "link")
+    local ula = login(ulaAccount, ulaMain)
+    slash(ula, "link")
+    run(60)
+    vic.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
+    run(60)
+    logout(ula)
+    vic.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = true })
+    run(60)
+    local rev = vic.ns.GuildSettings.Revision(GUILD9)
+    logout(vic)
+    local forged = ned.ns.GuildSettings.Change(GUILD9, { enable = true, enforceLinking = false }, nedMain.guid, rev)
+    forged.rev = rev
+    forged.sig = ned.ns.Identity.Sign(ned.ns.GuildSettings.Canonical(forged))
+    ula = login(ulaAccount, ulaMain)
+    run(3)
+    ned.ns.Protocol:SendCommMessage("WhosWho", ned.ns.Codec.GuildSettingsUpdate(forged), "WHISPER", "Ula Main")
+    run(60)
+    check(not ula.ns.GuildSettings.EnforcesLinking(GUILD9), "a record signed below the officers is refused")
+    clearLog()
+    vic = login(vicAccount, vicMain)
+    run(120)
+    check(sent({ from = "Ula Main", type = "GSGET", target = "Vic Main" }) == 1 and ula.ns.GuildSettings.EnforcesLinking(GUILD9),
+        "an officer announcing the same revision is still asked for it")
+    logout(ula)
+    logout(ned)
+    logout(vic)
+end
+
 -- Announcement format -----------------------------------------------------------------------------------
 
 do

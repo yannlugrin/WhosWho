@@ -19,6 +19,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Notes and nicknames**: when the person you're editing merges into another or is forgotten before you save, the editor now says so and keeps what you typed, instead of closing and losing it.
 - **Minimap button**: its tooltip and its settings now say that a click shows or hides the window, as it does.
 - **Guild settings**: right after you join a guild, a member of it can no longer change the Who's Who settings you hold for another of your guilds.
+- **Guild settings**: a guild member can no longer stop you from getting the officers' new settings by sending you a record of their own first.
 
 ## [0.3.0] - 2026-10-14
 
