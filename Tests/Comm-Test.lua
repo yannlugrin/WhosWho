@@ -2251,6 +2251,45 @@ do
     logout(vic)
 end
 
+-- A list passing for another's: Ari, an officer, holds a list Dee doesn't (Cy arrived while Dee was offline); as Dee
+-- logs in, Bo, with a modified client, sends a list of his own content under Ari's hash.
+do
+    local GUILD10 = 31000010
+    local ariAccount, boAccount, cyAccount, deeAccount = account("Ari"), account("Bo"), account("Cy"), account("Dee")
+    local ariMain = character("Ari Main", "Player-1-0000EE01", MAGE, GUILD10)
+    local boMain = character("Bo Main", "Player-1-0000EE02", ROGUE, GUILD10)
+    local cyMain = character("Cy Main", "Player-1-0000EE03", PRIEST, GUILD10)
+    local deeMain = character("Dee Main", "Player-1-0000EE04", WARRIOR, GUILD10)
+    ariMain.rankIndex, boMain.rankIndex, cyMain.rankIndex, deeMain.rankIndex = 1, 3, 3, 3
+    local ari = login(ariAccount, ariMain)
+    slash(ari, "link")
+    local bo = login(boAccount, boMain)
+    slash(bo, "link")
+    local dee = login(deeAccount, deeMain)
+    slash(dee, "link")
+    run(60)
+    ari.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
+    run(120)
+    logout(dee)
+    local cy = login(cyAccount, cyMain)
+    slash(cy, "link")
+    run(120)
+    logout(cy)
+    local at, hash = ari.ns.GuildList.Revision(GUILD10, ari.ns.Identity.Ruleset(ariMain.guid), SERVER_TIME_START + world.clock)
+    local entries = {}
+    for i = 1, 300 do entries[("%064x"):format(i)] = 1 end
+    clearLog()
+    dee = login(deeAccount, deeMain)
+    run(2)
+    bo.ns.Protocol:SendCommMessage("WhosWho", bo.ns.Codec.GuildListUpdate(GUILD10, at, hash, entries, {}), "GUILD")
+    run(120)
+    check(sent({ from = "Dee Main", type = "GLGET", target = "Ari Main" }) == 1 and dee.ns.People.Find(cyMain.guid) ~= nil,
+        "a list whose hash isn't that of its content is dropped: the officer's list is still asked for")
+    logout(dee)
+    logout(bo)
+    logout(ari)
+end
+
 -- Announcement format -----------------------------------------------------------------------------------
 
 do

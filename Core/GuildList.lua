@@ -70,12 +70,14 @@ local function canonical(entries)
 end
 
 ---The short hash of a list's content, its identities then its guild records: the same content always gives the same
----hash.
+---hash. Without guild records, it is 0.3.0's, which hashes the identities only.
 ---@param entries table<string, integer>
 ---@param guildRecordEntries table<string, integer>
 ---@return string hash 8 hex characters
 function GuildList.Hash(entries, guildRecordEntries)
-    return Crypto.ToHex(Crypto.SHA512(canonical(entries) .. "|" .. canonical(guildRecordEntries))):sub(1, 8)
+    local content = canonical(entries)
+    if next(guildRecordEntries) then content = content .. "|" .. canonical(guildRecordEntries) end
+    return Crypto.ToHex(Crypto.SHA512(content)):sub(1, 8)
 end
 
 -- The hash of my list of that guild.

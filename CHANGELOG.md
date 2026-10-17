@@ -20,6 +20,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Minimap button**: its tooltip and its settings now say that a click shows or hides the window, as it does.
 - **Guild settings**: right after you join a guild, a member of it can no longer change the Who's Who settings you hold for another of your guilds.
 - **Guild settings**: a guild member can no longer stop you from getting the officers' new settings by sending you a record of their own first.
+- **Guild lists**: a guild member can no longer pass off a list of their own as an officer's and stop you from getting the officer's list; members still on 0.3.0 now recognise a list without guild records as their own.
 
 ## [0.3.0] - 2026-10-14
 

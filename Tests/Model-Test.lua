@@ -1407,6 +1407,17 @@ do
         "leaving the guild forgets its records and what they linked, not the players' own")
 end
 
+-- Guild list hash --------------------------------------------------------------------------------------------------
+
+do
+    local GL, Crypto = ns.GuildList, ns.Crypto
+    local A, G = string.rep("a", 64), "G00000000000000a1"
+    check(GL.Hash({ [A] = 3 }, {}) == Crypto.ToHex(Crypto.SHA512(A .. ":3")):sub(1, 8),
+        "a list without guild records has 0.3.0's hash: its identities only")
+    check(GL.Hash({ [A] = 3 }, { [G] = 5 }) == Crypto.ToHex(Crypto.SHA512(A .. ":3|" .. G .. ":5")):sub(1, 8),
+        "with guild records, they follow the identities after a |")
+end
+
 -- A shared person without a main in its record, its guild main leaving the guild ---------------------------------
 
 fresh()

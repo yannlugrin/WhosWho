@@ -937,11 +937,12 @@ local function receiveGuildListRequest(sender)
 end
 
 -- A member's list of my current guild, asked for by me or by another member: taken unless taken already or the same
--- as mine.
+-- as mine. One whose hash isn't that of its content is dropped: its hash would name another member's list.
 ---@param update WhosWho.GuildListUpdate
 local function receiveGuildListUpdate(update, sender)
     local clubId, _, hash = ownGuildList()
     if update.guild ~= clubId then return end
+    if GuildList.Hash(update.entries, update.guildEntries) ~= update.hash then return end
     listOffers[sender] = { at = update.at, hash = update.hash }
     if listRequest and listRequest.name == sender then listRequest = nil end
     if takenListHashes[update.hash] or update.hash == hash then return end
