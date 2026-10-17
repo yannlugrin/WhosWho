@@ -18,6 +18,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Linked characters required by the guild**: when the character a guild member is shown under left the guild, and their main isn't in it, Who's Who could raise errors in its windows until that member shared again; they're now shown under another of their characters.
 - **Notes and nicknames**: when the person you're editing merges into another or is forgotten before you save, the editor now says so and keeps what you typed, instead of closing and losing it.
 - **Minimap button**: its tooltip and its settings now say that a click shows or hides the window, as it does.
+- **Guild settings**: right after you join a guild, a member of it can no longer change the Who's Who settings you hold for another of your guilds.
 
 ## [0.3.0] - 2026-10-14
 

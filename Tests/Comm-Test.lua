@@ -2095,8 +2095,8 @@ logout(pia)
 -- A first list is never offered: Rex holds the settings, his list is still the one built when Oz enabled the lists.
 do
     local GUILD4 = 31000004
-    local ozMain = character("Oz Main", "Player-1-0000FA01", MAGE, GUILD4)
-    local rexMain = character("Rex Main", "Player-1-0000FA02", WARRIOR, GUILD4)
+    local ozMain = character("Oz Main", "Player-1-0000FD01", MAGE, GUILD4)
+    local rexMain = character("Rex Main", "Player-1-0000FD02", WARRIOR, GUILD4)
     ozMain.rankIndex, rexMain.rankIndex = 1, 3
     local ozAccount, rexAccount = account("Oz"), account("Rex")
     local oz = login(ozAccount, ozMain)
@@ -2125,9 +2125,9 @@ end
 do
     local GUILD6 = 31000006
     local kaiAccount, luxAccount = account("Kai"), account("Lux")
-    local kaiMain = character("Kai Main", "Player-1-0000FC01", MAGE, GUILD6)
-    local luxMain = character("Lux Main", "Player-1-0000FC02", PRIEST, GUILD6)
-    local luxAlt = character("Lux Alt", "Player-1-0000FC03", ROGUE, GUILD6)
+    local kaiMain = character("Kai Main", "Player-1-0000FD03", MAGE, GUILD6)
+    local luxMain = character("Lux Main", "Player-1-0000FD04", PRIEST, GUILD6)
+    local luxAlt = character("Lux Alt", "Player-1-0000FD05", ROGUE, GUILD6)
     kaiMain.rankIndex = 1
     local luxFirstOnAlt = login(luxAccount, luxAlt)
     run(5)
@@ -2153,6 +2153,61 @@ do
         "renamed, a character the rule adds starts a new revision: the guild gets its new name")
     logout(luxOnAlt)
     logout(kai)
+end
+
+-- Joining a guild before the game gives its club ID: Tom's alt is in Alpha, whose settings he holds; his main joins
+-- Beta, whose officer Bea, with a modified client, signs settings for Alpha.
+do
+    local ALPHA, BETA = 31000007, 31000008
+    local adaAccount, beaAccount, tomAccount = account("Ada"), account("Bea"), account("Tom")
+    local adaMain = character("Ada Main", "Player-1-0000FE01", MAGE, ALPHA)
+    local beaMain = character("Bea Main", "Player-1-0000FE02", PRIEST, BETA)
+    local tomMain = character("Tom Main", "Player-1-0000FE03", WARRIOR)
+    local tomAlt = character("Tom Alt", "Player-1-0000FE04", ROGUE, ALPHA)
+    adaMain.rankIndex, beaMain.rankIndex = 1, 1
+    local ada = login(adaAccount, adaMain)
+    slash(ada, "link")
+    local tom = login(tomAccount, tomAlt)
+    slash(tom, "link")
+    run(60)
+    ada.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
+    run(60)
+    local alphaRevision = tom.ns.GuildSettings.Revision(ALPHA)
+    logout(tom)
+    logout(ada)
+
+    local bea = login(beaAccount, beaMain)
+    slash(bea, "link")
+    run(10)
+    bea.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
+    run(10)
+    tom = login(tomAccount, tomMain)
+    slash(tom, "link")
+    -- He knows Bea from a group.
+    world.group = { tomMain, beaMain }
+    tom.ns.settings.scopes.group, bea.ns.settings.scopes.group = true, true
+    bea.ns.Protocol:SendCommMessage("WhosWho",
+        bea.ns.Codec.Announcement(bea.ns.Identity.Id(), bea.ns.Identity.Revision(), 10, true, true, nil, nil, 0), "PARTY")
+    run(60)
+    world.group = {}
+    tom.ns.settings.scopes.group, bea.ns.settings.scopes.group = false, false
+
+    tomMain.guild, tom.joinedGuild, tom.clubIdHidden = BETA, true, true
+    fire(tom, "PLAYER_GUILD_UPDATE", "player")
+    run(5)
+    local forged = bea.ns.GuildSettings.Change(ALPHA, { enable = false, enforceLinking = false }, beaMain.guid,
+        SERVER_TIME_START + world.clock + 1000000)
+    bea.ns.Protocol:SendCommMessage("WhosWho", bea.ns.Codec.GuildSettingsUpdate(forged), "WHISPER", "Tom Main")
+    run(5)
+    check(tom.ns.GuildSettings.Get(ALPHA).enable and tom.ns.GuildSettings.Revision(ALPHA) == alphaRevision,
+        "before the club ID, settings naming another guild wait: those held of it stay")
+    tom.clubIdHidden = nil
+    run(60)
+    check(tom.ns.GuildSettings.Get(ALPHA).enable and tom.ns.GuildSettings.Revision(ALPHA) == alphaRevision,
+        "once the club ID is given, they are dropped: they are not about the guild joined")
+    check(tom.ns.GuildSettings.Get(BETA).enable, "and the guild joined gets its own settings")
+    logout(tom)
+    logout(bea)
 end
 
 -- Announcement format -----------------------------------------------------------------------------------

@@ -491,14 +491,23 @@ local function requestGuildSettings(name, rev)
     sendQueued(Codec.GuildSettingsRequest(), "WHISPER", name)
 end
 
----@type WhosWho.GuildSettingsRecord? the newest verified record held back until its signing character is confirmed and
----in my roster, tried again as they change
+---@type WhosWho.GuildSettingsRecord? the newest verified record held back until the game gives my guild's club ID, and
+---its signing character is confirmed and in my roster, tried again as they change
 local pendingGuildSettings
 -- Whether a member trusted for a guild's first settings sent the record held back.
 local pendingSentByTrusted = false
 
 local function acceptGuildSettings(signedRecord, sentByTrusted)
-    local result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid), sentByTrusted)
+    -- Right after joining, the game may not give my guild's club ID yet: the record waits for it.
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    local result
+    if not clubId then
+        result = "pending"
+    elseif signedRecord.guild ~= clubId then
+        result = "another guild"
+    else
+        result = GuildSettings.Accept(signedRecord, Scopes.GuildRankIndex(signedRecord.signerGuid), sentByTrusted)
+    end
     traceGuildSettings(signedRecord, result)
     if result == "accepted" then
         guildSettingsRequest = nil
@@ -910,7 +919,7 @@ end
 ---@param update WhosWho.GuildSettingsUpdate
 local function receiveGuildSettingsUpdate(update, sender)
     local signedRecord = update.signedRecord
-    -- Right after joining, the game may not give my guild's club ID yet: the record is then kept under its own.
+    -- Right after joining, the game may not give my guild's club ID yet: the record then waits for it (acceptGuildSettings).
     local clubId = Identity.GuildId(UnitGUID("player"))
     if clubId and signedRecord.guild ~= clubId then return traceGuildSettings(signedRecord, "another guild") end
     if not GuildSettings.IsNewer(signedRecord) then return traceGuildSettings(signedRecord, "not newer") end
@@ -1156,8 +1165,9 @@ function Protocol.GuildChanged()
     end
 end
 
----GUILD_ROSTER_UPDATE, after Scopes.GuildRosterChanged: guild settings held back until their signer is in my roster,
----and the announcement to the guild I joined, to each online member, once the roster gives the guild's club ID.
+---GUILD_ROSTER_UPDATE, after Scopes.GuildRosterChanged: guild settings held back until my guild's club ID is given and
+---their signer is in my roster, and the announcement to the guild I joined, to each online member, once the roster
+---gives the guild's club ID.
 function Protocol.GuildRosterChanged()
     retryPendingGuildSettings()
     if not guildJoinAnnouncementPending or GetNumGuildMembers() == 0 then return end
