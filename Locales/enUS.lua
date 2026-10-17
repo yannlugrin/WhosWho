@@ -40,6 +40,7 @@ L["The name contains characters that are not allowed."] = true
 L["The name is too long."] = true
 L["The name is too short."] = true
 L["This character is no longer linked to your identity."] = true
+L["This person no longer exists."] = true
 L["This character is now linked to your identity."] = true
 L["This character: %s"] = true
 L["Usage: /ww debug <on|off>"] = true

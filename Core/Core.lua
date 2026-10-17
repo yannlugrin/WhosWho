@@ -7,7 +7,7 @@ local addonName, ns = ...
 ---@field Version string
 ---@field Print fun(msg: string)
 ---@field UnitWholeName fun(unit: string): string?
----@field NameErrorMessages table<WhosWho.NameErrorCode, string>
+---@field NameErrorMessages table<WhosWho.NameErrorCode|"missing", string>
 ---@field Commands table<string, fun(rest: string)>
 ---@field db table AceDB object
 ---@field data WhosWho.Data
@@ -63,11 +63,12 @@ function ns.UnitWholeName(unit)
     return surname and (name .. " " .. surname) or name
 end
 
----Why a name was refused, by error code.
+---Why a name was refused, by error code; also a note, when its person is gone.
 ns.NameErrorMessages = {
     short = L["The name is too short."],
     long = L["The name is too long."],
     invalid = L["The name contains characters that are not allowed."],
+    missing = L["This person no longer exists."],
 }
 
 -- Events -----------------------------------------------------------------------------------------

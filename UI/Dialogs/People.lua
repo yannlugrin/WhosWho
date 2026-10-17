@@ -420,8 +420,13 @@ function noteEditor:Open(id)
     self.Text:SetFocus()
 end
 
+-- A refused note keeps the editor open, the reason in place of its title, so the text typed is not lost.
 noteEditor.SaveButton:SetScript("OnClick", function()
-    People.SetNote(noteEditor.id, noteEditor.Text:GetInputText())
+    local ok, err = People.SetNote(noteEditor.id, noteEditor.Text:GetInputText())
+    if not ok then
+        noteEditor.About:SetText(RED_FONT_COLOR:WrapTextInColorCode(ns.NameErrorMessages[err] or err))
+        return
+    end
     noteEditor:Hide()
 end)
 noteEditor.CancelButton:SetScript("OnClick", function() noteEditor:Hide() end)

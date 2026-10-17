@@ -40,6 +40,7 @@ L["The name contains characters that are not allowed."] = "Le nom contient des c
 L["The name is too long."] = "Le nom est trop long."
 L["The name is too short."] = "Le nom est trop court."
 L["This character is no longer linked to your identity."] = "Ce personnage n'est plus lié à votre identité."
+L["This person no longer exists."] = "Cette personne n'existe plus."
 L["This character is now linked to your identity."] = "Ce personnage est maintenant lié à votre identité."
 L["This character: %s"] = "Ce personnage : %s"
 L["Usage: /ww debug <on|off>"] = "Utilisation : /ww debug <on|off>"
