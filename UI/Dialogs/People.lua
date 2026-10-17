@@ -23,6 +23,18 @@ local BUTTON_HEIGHT = 22
 local BUTTON_TEXT_PADDING = 40
 local BUTTON_SPACING = 6
 
+-- The person's name as the popups show it, in its glyph's colour.
+local function coloredNickname(id)
+    local person = People.Get(id)
+    return Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
+end
+
+-- A character of the person, in its class colour.
+local function coloredCharacter(id, guid)
+    local character = People.Get(id).chars[guid]
+    return Lists.ClassColoredName(character.name, character.classID)
+end
+
 -- Link character ---------------------------------------------------------------------------------
 
 local dialog = CreateFrame("Frame", nil, UIParent, "DefaultPanelFlatTemplate")
@@ -290,10 +302,7 @@ StaticPopupDialogs.WHOSWHO_UNLINK_FROM_PERSON = {
 ---@param id string
 ---@param guid string
 function PeopleDialogs.ConfirmUnlink(id, guid)
-    local person = People.Get(id)
-    local character = person.chars[guid]
-    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
-    StaticPopup_Show("WHOSWHO_UNLINK_FROM_PERSON", Lists.ClassColoredName(character.name, character.classID), nickname,
+    StaticPopup_Show("WHOSWHO_UNLINK_FROM_PERSON", coloredCharacter(id, guid), coloredNickname(id),
         { id = id, guid = guid })
 end
 
@@ -344,9 +353,7 @@ StaticPopupDialogs.WHOSWHO_EDIT_PERSON_NICKNAME = {
 ---Asks for my nickname for a person.
 ---@param id string
 function PeopleDialogs.EditNickname(id)
-    local person = People.Get(id)
-    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
-    StaticPopup_Show("WHOSWHO_EDIT_PERSON_NICKNAME", nickname, nil, id)
+    StaticPopup_Show("WHOSWHO_EDIT_PERSON_NICKNAME", coloredNickname(id), nil, id)
 end
 
 -- Note -------------------------------------------------------------------------------------------
@@ -411,10 +418,8 @@ noteEditor.Text:RegisterCallback("OnTextChanged", updateCount, noteEditor)
 ---@param id string
 function noteEditor:Open(id)
     self.id = id
-    local person = People.Get(id)
-    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
-    self.About:SetText(L["About %s"]:format(nickname))
-    self.Text:SetText(person.note or "")
+    self.About:SetText(L["About %s"]:format(coloredNickname(id)))
+    self.Text:SetText(People.Get(id).note or "")
     updateCount()
     self:Show()
     self.Text:SetFocus()
@@ -450,10 +455,7 @@ StaticPopupDialogs.WHOSWHO_MAKE_PERSON_MAIN = {
 ---@param id string
 ---@param guid string
 function PeopleDialogs.ConfirmMakeMain(id, guid)
-    local person = People.Get(id)
-    local character = person.chars[guid]
-    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
-    StaticPopup_Show("WHOSWHO_MAKE_PERSON_MAIN", Lists.ClassColoredName(character.name, character.classID), nickname,
+    StaticPopup_Show("WHOSWHO_MAKE_PERSON_MAIN", coloredCharacter(id, guid), coloredNickname(id),
         { id = id, guid = guid })
 end
 
@@ -475,10 +477,9 @@ StaticPopupDialogs.WHOSWHO_FORGET_PERSON = {
 ---Asks to forget a person and their characters.
 ---@param id string
 function PeopleDialogs.ConfirmForget(id)
-    local person = People.Get(id)
-    local nickname = Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
+    local nickname = coloredNickname(id)
     local characterCount = 0
-    for _ in pairs(person.chars) do characterCount = characterCount + 1 end
+    for _ in pairs(People.Get(id).chars) do characterCount = characterCount + 1 end
     StaticPopup_Show("WHOSWHO_FORGET_PERSON", nickname,
         L["%s and their %d |4character:characters; are removed from your list. This can't be undone."]:format(
             nickname, characterCount), id)
@@ -598,18 +599,6 @@ StaticPopupDialogs.WHOSWHO_GUILD_NICKNAME = {
     -- Centred, where the game stacks its popups at the top of the screen.
     AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
 }
-
--- The person's name as the popups show it, in its glyph's colour.
-local function coloredNickname(id)
-    local person = People.Get(id)
-    return Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
-end
-
--- A character of the person, in its class colour.
-local function coloredCharacter(id, guid)
-    local character = People.Get(id).chars[guid]
-    return Lists.ClassColoredName(character.name, character.classID)
-end
 
 ---Asks to unlink, for my guild, a character its record links; GuildRecord.CanUnlink tells which ones.
 ---@param clubId integer
