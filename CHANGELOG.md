@@ -10,6 +10,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Who's Who in the guild window**: the Who's Who tab of the game's guild window now lists your guild by identity, like the game's roster: search, offline members, columns to sort by, and a panel next to the window with the person's characters, the one in the guild open with its zone and rank. The guild master and officers reach the guild's settings from a button there, and can link characters for the guild from its right-click menus.
 - **Key bindings**: in the game's Key Bindings, a Who's Who section lets you set a key to show or hide the Who's Who window, and one to show or hide the guild window on its Who's Who tab (also `/ww guild`). None is set by default.
 
+### Fixed
+
+- **Guild roster**: removing a member or editing a note in the game's guild roster could be blocked, blaming Who's Who, after using a Who's Who entry in the roster's right-click menu. Who's Who no longer adds its entries to that menu; its own tab in the guild window has them.
+
 ## [0.3.0] - 2026-10-14
 
 ### Changed

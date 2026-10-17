@@ -15,12 +15,13 @@ local issecretvalue = issecretvalue or function() return false end
 local UnitMenu = {}
 ns.UnitMenu = UnitMenu
 
--- The game's right-click menus on a player that get the Who's Who entry.
+-- The game's right-click menus on a player that get the Who's Who entry. Not the guild roster's
+-- (MENU_UNIT_COMMUNITIES_GUILD_MEMBER): picking an add-on's entry there taints the roster (see README-Technical,
+-- Workarounds).
 local MENUS = {
     "MENU_UNIT_SELF", "MENU_UNIT_PLAYER", "MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_PARTY",
     "MENU_UNIT_RAID_PLAYER", "MENU_UNIT_FRIEND", "MENU_UNIT_FRIEND_OFFLINE", "MENU_UNIT_GUILD",
-    "MENU_UNIT_GUILD_OFFLINE", "MENU_UNIT_COMMUNITIES_GUILD_MEMBER", "MENU_UNIT_BN_FRIEND", "MENU_UNIT_RECENT_ALLY",
-    "MENU_UNIT_RECENT_ALLY_OFFLINE",
+    "MENU_UNIT_GUILD_OFFLINE", "MENU_UNIT_BN_FRIEND", "MENU_UNIT_RECENT_ALLY", "MENU_UNIT_RECENT_ALLY_OFFLINE",
 }
 
 -- The whole name, "First Surname", from its two parts; a name without a second part is already whole.
