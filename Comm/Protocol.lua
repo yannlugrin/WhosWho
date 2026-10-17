@@ -140,8 +140,9 @@ local function announcementText(level, acceptsGet, wantsAnnouncement)
     if not revision then return Identity.IsRemoved(guid) and Codec.NoIdentity() or nil end
     local listAt, listHash
     if guildListsActive() then
-        local _
-        _, listAt, listHash = ownGuildList()
+        local _, at, hash = ownGuildList()
+        -- A first list is only there to be replaced: never offered.
+        if at > 0 then listAt, listHash = at, hash end
     end
     return Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement, listAt, listHash,
         GuildSettings.Revision(Identity.GuildId(guid)))

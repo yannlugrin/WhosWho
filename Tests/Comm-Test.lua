@@ -2092,6 +2092,35 @@ logout(mia)
 logout(oli)
 logout(pia)
 
+-- A first list is never offered: Rex holds the settings, his list is still the one built when Oz enabled the lists.
+do
+    local GUILD4 = 31000004
+    local ozMain = character("Oz Main", "Player-1-0000FA01", MAGE, GUILD4)
+    local rexMain = character("Rex Main", "Player-1-0000FA02", WARRIOR, GUILD4)
+    ozMain.rankIndex, rexMain.rankIndex = 1, 3
+    local ozAccount, rexAccount = account("Oz"), account("Rex")
+    local oz = login(ozAccount, ozMain)
+    slash(oz, "link")
+    local rex = login(rexAccount, rexMain)
+    slash(rex, "link")
+    run(60)
+    oz.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
+    run(60)
+    logout(oz)
+    logout(rex)
+    clearLog()
+    rex = login(rexAccount, rexMain)
+    run(10)
+    local at = rex.ns.GuildList.Revision(GUILD4, rex.ns.Identity.Ruleset(rexMain.guid), 0)
+    local announcement
+    for _, entry in ipairs(world.log) do
+        if entry.from == "Rex Main" and entry.type == "ANNOUNCE" then announcement = rex.ns.Codec.Decode(entry.text) end
+    end
+    check(rex.ns.GuildSettings.Get(GUILD4).enable and at == 0 and announcement and announcement.guildListAt == nil,
+        "a member whose list is still a first one announces no list")
+    logout(rex)
+end
+
 -- Announcement format -----------------------------------------------------------------------------------
 
 do
