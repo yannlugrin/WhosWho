@@ -744,24 +744,25 @@ local function holdsPlayersCharacter(person, memberGuids)
 end
 
 -- Forgets what I hold of a person through that guild, for the characters its roster no longer lists (members): the
--- characters its rule added, but those never seen in my roster, and the ones its records linked. A shared person goes
--- too when it had a character in that guild and is left without a character the player told me of; a guild identity
--- that guild made, when it is left without characters, or when no roster is given (I left the guild). Whether anything
--- was forgotten.
+-- characters its rule added, but those never seen in my roster, and the ones its records linked. A character its roster
+-- lists left the guild whose records linked it: that link goes too. A shared person goes too when it had a character in
+-- that guild and is left without a character the player told me of; a guild identity, when it is left without
+-- characters, or, made by that guild, when no roster is given (I left the guild). Whether anything was forgotten.
 local function forgetFormerMember(person, clubId, memberGuids)
     local inThatGuild, removedFromPerson = false, {}
     for guid, character in pairs(person.chars) do
         inThatGuild = inThatGuild or character.guild == clubId
         local forcedThere = (character.guild == clubId or character.guild == nil) and isForced(person, guid)
         local linkedThere = character.state == "guild" and character.guild == clubId
-        if not memberGuids[guid] and (forcedThere or linkedThere) then
+        local linkedElsewhere = character.state == "guild" and character.guild ~= clubId
+        if (not memberGuids[guid] and (forcedThere or linkedThere)) or (memberGuids[guid] and linkedElsewhere) then
             person.chars[guid] = nil
             unindexCharacter(guid, person.id)
             removedFromPerson[guid] = true
         end
     end
     if person.madeByGuild then
-        if person.madeByGuild == clubId and not (next(person.chars) and next(memberGuids)) then
+        if not next(person.chars) or (person.madeByGuild == clubId and not next(memberGuids)) then
             forget(person.id)
             return true
         end
@@ -790,7 +791,8 @@ local function forgetFormerMembers(clubId, memberGuids)
 end
 
 ---Applies a whole guild roster: its characters get the guild, the others lose it. What I hold only through that guild,
----a player or what its records linked, is forgotten once the roster no longer lists them.
+---a player or what its records linked, is forgotten once the roster no longer lists them; another guild's links, once it
+---lists them.
 ---@param clubId integer
 ---@param memberGuids table<string, true>
 function People.UpdateGuildMembers(clubId, memberGuids)

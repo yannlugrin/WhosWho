@@ -1407,6 +1407,39 @@ do
         "leaving the guild forgets its records and what they linked, not the players' own")
 end
 
+-- A character linked by one guild's records, then in another guild's roster -------------------------------------
+
+for _, loginOrder in ipairs({ { 1, 2 }, { 2, 1 } }) do
+    fresh()
+    local P, GR = ns.People, ns.GuildRecord
+    local ALPHA, BETA = 1001, 2002
+    local O, GO = string.rep("1", 64), "Player-70-000000F0"
+    local ALPHA_IDENTITY, BETA_IDENTITY = "G00000000000000a1", "G00000000000000b1"
+    local revision = 1792000000
+    local function guildRecord(clubId, id, guid)
+        revision = revision + 1
+        return { v = GR.VERSION, guild = clubId, id = id, main = guid,
+            chars = { [guid] = { name = "Bob Stone", ruleset = NORMAL, classID = WARRIOR } },
+            signer = O, signerGuid = GO, rev = revision, sig = ("cd"):rep(64) }
+    end
+    P.Accept(makeRecord(O, 1, { GO }))
+    P.Confirm(O, GO, 60)
+
+    GR.Accept(guildRecord(ALPHA, ALPHA_IDENTITY, G1), 1)
+    P.UpdateGuildMembers(BETA, { [G1] = true })
+    check(not P.Exists(G1) and P.Get(ALPHA_IDENTITY) == nil,
+        "a character another guild's roster lists left the guild whose record linked it: the link goes")
+    check(pcall(GR.Accept, guildRecord(BETA, BETA_IDENTITY, G1), 1) and holderId(G1) == BETA_IDENTITY
+        and select(2, P.Find(G1)).guild == BETA, "and the guild it joined links it")
+
+    P.Reset()
+    local clubs = { ALPHA, BETA }
+    for _, i in ipairs(loginOrder) do P.ApplyGuild(clubs[i]) end
+    P.UpdateGuildMembers(BETA, { [G1] = true })
+    check(holderId(G1) == BETA_IDENTITY and select(2, P.Find(G1)).guild == BETA,
+        "at login, the former guild's record doesn't take it back, in either order")
+end
+
 if failures > 0 then
     print(("%d of %d checks FAILED"):format(failures, checks))
     os.exit(1)
