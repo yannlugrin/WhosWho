@@ -139,15 +139,15 @@ L["Sharing settings"] = true
 -- Launcher
 L["Adds the nickname after the name, for every player you know."] = true
 L["Show nicknames in chat"] = true
-L["A button on the edge of the minimap: click to open your identity, right-click for a menu."] = true
-L["Click: open your identity"] = true
+L["A button on the edge of the minimap: click to show or hide the window, right-click for a menu."] = true
+L["Click: show or hide the window"] = true
 L["Display"] = true
 L["Right-click: menu"] = true
 L["Settings"] = true
 L["Show in the add-on compartment"] = true
 L["Minimap"] = true
 L["Show minimap button"] = true
-L["Who's Who in the add-on compartment next to the minimap: click to open your identity, right-click for a menu."] = true
+L["Who's Who in the add-on compartment next to the minimap: click to show or hide the window, right-click for a menu."] = true
 
 -- Glyphs and People
 L["Confirmed"] = true

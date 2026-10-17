@@ -191,12 +191,12 @@ Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosW
     Settings.VarType.Boolean, L["Show minimap button"], true,
     function() return not ns.settings.launcher.hide end,
     function(value) ns.Launcher.SetMinimapButtonShown(value) end),
-    L["A button on the edge of the minimap: click to open your identity, right-click for a menu."])
+    L["A button on the edge of the minimap: click to show or hide the window, right-click for a menu."])
 Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_AddOnsMenu",
     Settings.VarType.Boolean, L["Show in the add-on compartment"], true,
     function() return ns.settings.launcher.showInCompartment == true end,
     function(value) ns.Launcher.SetCompartmentShown(value) end),
-    L["Who's Who in the add-on compartment next to the minimap: click to open your identity, right-click for a menu."])
+    L["Who's Who in the add-on compartment next to the minimap: click to show or hide the window, right-click for a menu."])
 
 -- Data -------------------------------------------------------------------------------------------
 

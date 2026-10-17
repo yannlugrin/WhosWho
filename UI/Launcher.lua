@@ -26,7 +26,7 @@ local dataObject = LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
     end,
     OnTooltipShow = function(tooltip)
         tooltip:AddLine(L["Who's Who"])
-        tooltip:AddLine(L["Click: open your identity"], 1, 1, 1)
+        tooltip:AddLine(L["Click: show or hide the window"], 1, 1, 1)
         tooltip:AddLine(L["Right-click: menu"], 1, 1, 1)
     end,
 })

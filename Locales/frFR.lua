@@ -139,15 +139,15 @@ L["Sharing settings"] = "Paramètres de partage"
 -- Launcher
 L["Adds the nickname after the name, for every player you know."] = "Ajoute le surnom après le nom, pour chaque joueur que vous connaissez."
 L["Show nicknames in chat"] = "Afficher les surnoms dans la discussion"
-L["A button on the edge of the minimap: click to open your identity, right-click for a menu."] = "Un bouton au bord de la minicarte : clic pour ouvrir votre identité, clic droit pour un menu."
-L["Click: open your identity"] = "Clic : ouvrir votre identité"
+L["A button on the edge of the minimap: click to show or hide the window, right-click for a menu."] = "Un bouton au bord de la minicarte : clic pour afficher ou masquer la fenêtre, clic droit pour un menu."
+L["Click: show or hide the window"] = "Clic : afficher ou masquer la fenêtre"
 L["Display"] = "Affichage"
 L["Right-click: menu"] = "Clic droit : menu"
 L["Settings"] = "Paramètres"
 L["Show in the add-on compartment"] = "Afficher dans le compartiment d'AddOns"
 L["Minimap"] = "Minicarte"
 L["Show minimap button"] = "Afficher le bouton de la minicarte"
-L["Who's Who in the add-on compartment next to the minimap: click to open your identity, right-click for a menu."] = "Who's Who dans le compartiment d'AddOns à côté de la minicarte : clic pour ouvrir votre identité, clic droit pour un menu."
+L["Who's Who in the add-on compartment next to the minimap: click to show or hide the window, right-click for a menu."] = "Who's Who dans le compartiment d'AddOns à côté de la minicarte : clic pour afficher ou masquer la fenêtre, clic droit pour un menu."
 
 -- Glyphs and People
 L["Confirmed"] = "Confirmé"
