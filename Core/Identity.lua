@@ -485,7 +485,7 @@ end
 
 ---@param nickname string? nil removes the override: the main character's name is shown
 ---@return boolean ok
----@return WhosWho.ErrorCode? err when refused
+---@return WhosWho.NameErrorCode? err when refused
 function Identity.SetNickname(nickname)
     local clean, err = ns.Record.CleanName(nickname)
     if err then return false, err end

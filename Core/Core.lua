@@ -7,7 +7,7 @@ local addonName, ns = ...
 ---@field Version string
 ---@field Print fun(msg: string)
 ---@field UnitWholeName fun(unit: string): string?
----@field NameErrorMessages table<WhosWho.ErrorCode, string>
+---@field NameErrorMessages table<WhosWho.NameErrorCode, string>
 ---@field Commands table<string, fun(rest: string)>
 ---@field db table AceDB object
 ---@field data WhosWho.Data

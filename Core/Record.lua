@@ -56,7 +56,7 @@ Record.MAX_NAME_LENGTH = 25
 -- Control characters would corrupt saved data and records; "|" starts WoW escape sequences (colors, links).
 Record.FORBIDDEN = "[%c|]"
 
----@alias WhosWho.ErrorCode "short"|"long"|"invalid"
+---@alias WhosWho.NameErrorCode "short"|"long"|"invalid"
 
 local function collapseSpaces(s)
     s = s:gsub("%s+", " ")
@@ -66,7 +66,7 @@ end
 ---A name as it may appear in shared data: spaces trimmed and collapsed, no forbidden character, length checked.
 ---@param name string? nil stays nil: no name
 ---@return string? clean
----@return WhosWho.ErrorCode? err when refused
+---@return WhosWho.NameErrorCode? err when refused
 function Record.CleanName(name)
     if name == nil then return nil end
 

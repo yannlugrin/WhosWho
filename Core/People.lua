@@ -332,7 +332,7 @@ end
 ---@param id string
 ---@param nickname string? nil removes mine
 ---@return boolean ok
----@return WhosWho.ErrorCode|"missing"? err
+---@return WhosWho.NameErrorCode|"missing"? err
 function People.Rename(id, nickname)
     local person = ns.data.people[id]
     if not person then return false, "missing" end
