@@ -138,14 +138,16 @@ local function announcementText(level, acceptsGet, wantsAnnouncement)
     local guid = UnitGUID("player")
     local revision = Identity.AnnouncedRevision(guid)
     if not revision then return Identity.IsRemoved(guid) and Codec.NoIdentity() or nil end
+    -- Logging out, I answer no request: no guild list or settings to offer.
     local listAt, listHash
-    if guildListsActive() then
+    if acceptsGet and guildListsActive() then
         local _, at, hash = ownGuildList()
         -- A first list is only there to be replaced: never offered.
         if at > 0 then listAt, listHash = at, hash end
     end
+    local settingsRevision = acceptsGet and GuildSettings.Revision(Identity.GuildId(guid)) or 0
     return Codec.Announcement(Identity.Id(), revision, level, acceptsGet, wantsAnnouncement, listAt, listHash,
-        GuildSettings.Revision(Identity.GuildId(guid)))
+        settingsRevision)
 end
 
 -- My announcement to that audience, in its order: at logout, the client drops the messages past its limit. One that

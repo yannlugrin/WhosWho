@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+
+- **Guild lists**: logging out no longer makes guild members ask you for your guild list or settings, which you could no longer send.
+
 ## [0.4.0] - 2026-10-18
 
 ### Added
