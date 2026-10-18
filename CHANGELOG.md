@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-18
+
 ### Added
 
 - **Guild links**: the guild master and officers can link members' characters for the whole guild, from the Guild tab's right-click menu: to a member's identity, or to a new person for someone who doesn't use Who's Who, with its own nickname and main. Every member who uses Who's Who sees them, even for players they never met; what a player shares about themselves always comes first. When a player links characters the guild had linked for them, the guild's link gives way: the guild master or an officer chooses to move the rest to that player or keep it apart.
@@ -111,7 +113,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/yannlugrin/WhosWho/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/yannlugrin/WhosWho/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.1...0.2.0
 [0.1.1]: https://github.com/yannlugrin/WhosWho/compare/0.1.0...0.1.1
