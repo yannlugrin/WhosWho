@@ -2118,6 +2118,15 @@ do
     end
     check(rex.ns.GuildSettings.Get(GUILD4).enable and at == 0 and announcement and announcement.guildListAt == nil,
         "a member whose list is still a first one announces no list")
+    local Crypto, hashes = rex.ns.Crypto, 0
+    local sha512 = Crypto.SHA512
+    Crypto.SHA512 = function(message)
+        hashes = hashes + 1
+        return sha512(message)
+    end
+    rex.ns.GuildList.Revision(GUILD4, rex.ns.Identity.Ruleset(rexMain.guid), 0)
+    Crypto.SHA512 = sha512
+    check(hashes == 0, "my list is hashed again only when its content changed")
     logout(rex)
 end
 

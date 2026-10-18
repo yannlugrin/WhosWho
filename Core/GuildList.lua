@@ -69,20 +69,38 @@ local function canonical(entries)
     return table.concat(pairsList, ",")
 end
 
----The short hash of a list's content, its identities then its guild records: the same content always gives the same
----hash. Without guild records, it is 0.3.0's, which hashes the identities only.
+-- A list's content, its identities then its guild records. Without guild records, it is 0.3.0's: the identities only.
+local function content(entries, guildRecordEntries)
+    local text = canonical(entries)
+    if next(guildRecordEntries) then text = text .. "|" .. canonical(guildRecordEntries) end
+    return text
+end
+
+local function hashOf(text)
+    return Crypto.ToHex(Crypto.SHA512(text)):sub(1, 8)
+end
+
+---The short hash of a list's content: the same content always gives the same hash.
 ---@param entries table<string, integer>
 ---@param guildRecordEntries table<string, integer>
 ---@return string hash 8 hex characters
 function GuildList.Hash(entries, guildRecordEntries)
-    local content = canonical(entries)
-    if next(guildRecordEntries) then content = content .. "|" .. canonical(guildRecordEntries) end
-    return Crypto.ToHex(Crypto.SHA512(content)):sub(1, 8)
+    return hashOf(content(entries, guildRecordEntries))
 end
 
--- The hash of my list of that guild.
+---@type table<integer, { content: string, hash: string }> by club ID: my list's content last hashed, for the session
+local ownHashes = {}
+
+-- The hash of my list of that guild, hashed again only when its content changed: about 250 ms for 1 000 entries in game,
+-- while building its content takes about 1 ms.
 local function ownHash(clubId, ruleset)
-    return GuildList.Hash(GuildList.Entries(clubId, ruleset), GuildList.GuildRecordEntries(clubId))
+    local text = content(GuildList.Entries(clubId, ruleset), GuildList.GuildRecordEntries(clubId))
+    local held = ownHashes[clubId]
+    if not (held and held.content == text) then
+        held = { content = text, hash = hashOf(text) }
+        ownHashes[clubId] = held
+    end
+    return held.hash
 end
 
 ---My list's revision for that guild: when its content last changed, at the latest when this is called, and its hash.

@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+
+- **Guild lists**: in a large guild, Who's Who no longer freezes the game for a moment each time it announces you or receives a guild list: your own list is hashed again only when it changed.
+
 ## [0.4.1] - 2026-10-18
 
 ### Fixed
