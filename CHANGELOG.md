@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-18
+
 ### Fixed
 
 - **Guild lists**: logging out no longer makes guild members ask you for your guild list or settings, which you could no longer send.
@@ -117,7 +119,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.1...HEAD
+[0.4.1]: https://github.com/yannlugrin/WhosWho/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/yannlugrin/WhosWho/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/yannlugrin/WhosWho/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/yannlugrin/WhosWho/compare/0.1.1...0.2.0
