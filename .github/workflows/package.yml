@@ -15,12 +15,24 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     env:
       CF_API_KEY: ${{ secrets.CF_API_TOKEN }}
       # WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
       GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # Release only a commit whose Checks passed on main.
+      - name: Require passing checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow checks.yml --commit "$GITHUB_SHA" \
+            --event push --json conclusion --jq '.[0].conclusion')
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::Checks on $GITHUB_SHA: ${conclusion:-not finished or not run}. Push main and wait for them to pass."
+            exit 1
+          fi
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0

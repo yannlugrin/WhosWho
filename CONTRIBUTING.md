@@ -19,7 +19,8 @@ Open an issue with what you did, what you expected and what happened. For a prob
    bash .release/release.sh -dlz
    ```
    Then link `Libs` to the libraries it built, for example on Windows (cmd): `mklink /J Libs .release\WhosWho\Libs`. Running `release.sh -dlz` again refreshes them. Never copy library files into the repository; a new library goes in `.pkgmeta` and `Libs.xml`.
-3. Restart the client: `/reload` does not pick up new files.
+3. Turn on the repository's Git hooks: `git config core.hooksPath .githooks`. Its `pre-push` hook refuses to push a release tag until the Checks have passed on the commit it tags; it needs the [GitHub CLI](https://cli.github.com/) (`gh`), and without it only prints a warning.
+4. Restart the client: `/reload` does not pick up new files.
 
 ## Checking your change
 
@@ -73,7 +74,7 @@ Update the documents your change touches, in the same pull request:
        found && (/^## \[/ || /^\[[^]]*\]: /) { exit }
        found { print }' CHANGELOG.md | tr -d '\r'; } | git tag -a "$version" --cleanup=whitespace -F -
    ```
-   Check it with `git for-each-ref "refs/tags/$version" --format='%(contents)'` and compare it with the previous tag's, then push the branch and the tag. A tag containing `alpha` or `beta` makes an alpha or beta release; any other tag, a full release.
-4. `.github/workflows/package.yml` packages the add-on and uploads it to CurseForge, then creates the GitHub release (a pre-release for alpha and beta) with that version's section of the changelog. It stops if the changelog has no section for the tag.
+   Check it with `git for-each-ref "refs/tags/$version" --format='%(contents)'` and compare it with the previous tag's, then push the branch, wait for its Checks to pass, and push the tag. A tag containing `alpha` or `beta` makes an alpha or beta release; any other tag, a full release.
+4. `.github/workflows/package.yml` stops unless the Checks passed on the tagged commit, then packages the add-on and uploads it to CurseForge, then creates the GitHub release (a pre-release for alpha and beta) with that version's section of the changelog. It stops if the changelog has no section for the tag.
 
 A pushed tag is final: never delete it or push it again. Deleting it turns its GitHub release into a draft, and pushing it again uploads the package a second time. A mistake found after the push is fixed in the next version.
