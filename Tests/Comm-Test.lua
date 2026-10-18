@@ -2195,9 +2195,9 @@ do
     tomMain.guild, tom.joinedGuild, tom.clubIdHidden = BETA, true, true
     fire(tom, "PLAYER_GUILD_UPDATE", "player")
     run(5)
-    local forged = bea.ns.GuildSettings.Change(ALPHA, { enable = false, enforceLinking = false }, beaMain.guid,
+    local alphaSettings = bea.ns.GuildSettings.Change(ALPHA, { enable = false, enforceLinking = false }, beaMain.guid,
         SERVER_TIME_START + world.clock + 1000000)
-    bea.ns.Protocol:SendCommMessage("WhosWho", bea.ns.Codec.GuildSettingsUpdate(forged), "WHISPER", "Tom Main")
+    bea.ns.Protocol:SendCommMessage("WhosWho", bea.ns.Codec.GuildSettingsUpdate(alphaSettings), "WHISPER", "Tom Main")
     run(5)
     check(tom.ns.GuildSettings.Get(ALPHA).enable and tom.ns.GuildSettings.Revision(ALPHA) == alphaRevision,
         "before the club ID, settings naming another guild wait: those held of it stay")
@@ -2233,12 +2233,12 @@ do
     run(60)
     local rev = vic.ns.GuildSettings.Revision(GUILD9)
     logout(vic)
-    local forged = ned.ns.GuildSettings.Change(GUILD9, { enable = true, enforceLinking = false }, nedMain.guid, rev)
-    forged.rev = rev
-    forged.sig = ned.ns.Identity.Sign(ned.ns.GuildSettings.Canonical(forged))
+    local nedSettings = ned.ns.GuildSettings.Change(GUILD9, { enable = true, enforceLinking = false }, nedMain.guid, rev)
+    nedSettings.rev = rev
+    nedSettings.sig = ned.ns.Identity.Sign(ned.ns.GuildSettings.Canonical(nedSettings))
     ula = login(ulaAccount, ulaMain)
     run(3)
-    ned.ns.Protocol:SendCommMessage("WhosWho", ned.ns.Codec.GuildSettingsUpdate(forged), "WHISPER", "Ula Main")
+    ned.ns.Protocol:SendCommMessage("WhosWho", ned.ns.Codec.GuildSettingsUpdate(nedSettings), "WHISPER", "Ula Main")
     run(60)
     check(not ula.ns.GuildSettings.EnforcesLinking(GUILD9), "a record signed below the officers is refused")
     clearLog()
