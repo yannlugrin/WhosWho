@@ -11,6 +11,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Messages from other players**: Who's Who no longer handles them during combat, and handles at most one record or guild list per frame, so a burst of them no longer lowers your frame rate.
 - **Combat**: Who's Who no longer checks signatures or sends records and guild lists during combat; they wait for its end.
 
+### Fixed
+
+- **Mac**: Who's Who could fail to load on Mac, leaving an empty window on screen.
+
 ## [0.4.1] - 2026-10-18
 
 ### Fixed

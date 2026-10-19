@@ -31,7 +31,7 @@ Core\Identity.lua
 Core\AutomaticChanges.lua
 Core\People.lua
 Core\Resolver.lua
-Core\RecordVerification.lua
+Core\RecordVerification.lua
 Core\GuildSettings.lua
 Core\GuildRecord.lua
 Core\GuildList.lua
