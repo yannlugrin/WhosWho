@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-19
+
 ### Fixed
 
 - **Guild links**: a member who logged in while no officer they had met was online no longer stays without the guild's links for the session: an officer passes them on as soon as one is online.
@@ -137,7 +139,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.2...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.3...HEAD
+[0.4.3]: https://github.com/yannlugrin/WhosWho/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/yannlugrin/WhosWho/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/yannlugrin/WhosWho/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/yannlugrin/WhosWho/compare/0.3.0...0.4.0
