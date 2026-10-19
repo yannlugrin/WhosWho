@@ -35,8 +35,9 @@ local issecretvalue = issecretvalue or function() return false end
 ---@field maxSeconds number from the first call of a batch: the send happens by then, however many calls follow
 
 -- Runs `send` once the calls have stopped for `wait.seconds` (each call pushes the send back), and at the latest
--- `wait.maxSeconds` after the first call of the batch, so a steady flow of calls never holds it forever. While `held`
--- says so, the send waits, checking again every `wait.seconds`. A call made during `send` starts the next batch.
+-- `wait.maxSeconds` after the first call of the batch, so a steady flow of calls never holds it forever. While I am in
+-- combat, or while `held` says so, the send waits, checking again every `wait.seconds`: what a send builds (a record or
+-- a guild list packed, a guild's record signed) takes tens of ms. A call made during `send` starts the next batch.
 -- Returns the function to call, which may give its own wait, and whether a batch is waiting.
 ---@param wait WhosWho.GatheringWait
 ---@param send fun()
@@ -51,7 +52,7 @@ local function newGathering(wait, send, held)
         if not sendAt then return end
         local now = GetTime()
         local due = math.min(sendAt, startedAt + wait.maxSeconds)
-        if now >= due and held and held() then due = now + wait.seconds end
+        if now >= due and (UnitAffectingCombat("player") or held and held()) then due = now + wait.seconds end
         if now < due then
             timerRunning = true
             C_Timer.After(due - now, fire)

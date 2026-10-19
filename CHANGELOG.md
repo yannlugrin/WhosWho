@@ -9,6 +9,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Guild lists**: in a large guild, Who's Who no longer freezes the game for a moment each time it announces you or receives a guild list: your own list is hashed again only when it changed.
 - **Records received**: checking a record's signature no longer makes the game stutter: the check is spread over more frames, in smaller pieces.
 - **Messages from other players**: Who's Who no longer handles them during combat, and handles at most one record or guild list per frame, so a burst of them no longer lowers your frame rate.
+- **Combat**: Who's Who no longer checks signatures or sends records and guild lists during combat; they wait for its end.
 
 ## [0.4.1] - 2026-10-18
 

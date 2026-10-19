@@ -170,11 +170,14 @@ local function fire(session, event, ...)
     end
 end
 
--- The frame handling the messages a session received (Protocol's queue).
+-- The frame handling the messages a session received (Protocol's queue): the last of the frames waiting for the end of
+-- combat, Protocol loading after RecordVerification.
 local function inboxFrame(session)
+    local found
     for _, frame in ipairs(session.frames) do
-        if frame.events.PLAYER_REGEN_ENABLED and frame.scripts.OnUpdate then return frame end
+        if frame.events.PLAYER_REGEN_ENABLED and frame.scripts.OnUpdate then found = frame end
     end
+    return found
 end
 
 -- Saved values missing, from the defaults.
@@ -2431,6 +2434,28 @@ do
     check(byFrame[1] == "REC" and byFrame[2] == "REC REC" and byFrame[3] == "REC REC ANNOUNCE",
         ("one payload in a frame, in arrival order (%s / %s / %s)"):format(byFrame[1], byFrame[2], byFrame[3]))
     run(10)
+
+    -- A verification started before combat waits for its end.
+    uma.ns.Identity.SetNickname("Umi")
+    wes.comm("WhosWho", uma.ns.Codec.RecordUpdate(uma.ns.Identity.SignedRecord()), "GUILD", "Uma Main")
+    inbox.scripts.OnUpdate(inbox, 0.016)
+    wesMain.inCombat = true
+    run(10)
+    check(wes.ns.People.Nickname(umaId) == "Uma Main", "a record whose signature I check in combat waits")
+    wesMain.inCombat = false
+    fire(wes, "PLAYER_REGEN_ENABLED")
+    run(10)
+    check(wes.ns.People.Nickname(umaId) == "Umi", "and is accepted once combat ends")
+
+    -- What a gathering sends waits for the end of combat.
+    clearLog()
+    wes.ns.Identity.SetNickname("Wesley")
+    wesMain.inCombat = true
+    run(60)
+    check(sent({ from = "Wes Main", type = "ANNOUNCE" }) == 0, "my change of revision isn't announced in combat")
+    wesMain.inCombat = false
+    run(10)
+    check(sent({ from = "Wes Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1, "it is once combat ends")
     logout(uma)
     logout(wes)
 end

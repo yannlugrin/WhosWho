@@ -28,8 +28,13 @@ local queued = {}
 ---@type thread?
 local running
 
+-- None while I am in combat: the queue waits for its end, a verification paused along the way too.
 local frame = CreateFrame("Frame")
 frame:Hide()
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+frame:SetScript("OnEvent", function()
+    if queue[1] then frame:Show() end
+end)
 
 local function finish(queuedRecord, signatureValid)
     running = nil
@@ -41,6 +46,11 @@ local function finish(queuedRecord, signatureValid)
 end
 
 frame:SetScript("OnUpdate", function()
+    if UnitAffectingCombat("player") then
+        frame:Hide()
+        return
+    end
+
     local verification = queue[1]
     if not running then
         -- The crypto code yields along the way: a few ms of work in each frame (Crypto.Slice).

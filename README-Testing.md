@@ -240,6 +240,7 @@ Needs the guild of Guild Lists: A in it, and a guildmate C whom A only knows thr
 Needs A and B in one group, both linked with the Group scope on, and `/ww debug on` on B.
 
 - B fights a training dummy; A changes its nickname. About 15 seconds later B shows `Received, PARTY <A>: 1 ANNOUNCE …` but sends no `GET` while in combat. When B leaves combat, B sends `Sent, WHISPER <A>: 1 GET …` and `/ww people <A's character>` on B shows the new nickname.
+- B fights a training dummy for more than 15 seconds and changes its own nickname meanwhile: B sends no `ANNOUNCE` while in combat; within 5 seconds of leaving combat, B shows `Sent, PARTY: 1 ANNOUNCE …`.
 
 ## Still to Test
 
