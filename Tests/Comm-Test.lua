@@ -1771,6 +1771,26 @@ hal.ns.Protocol:SendCommMessage("WhosWho", hal.ns.Codec.GuildRecordUpdate(guildR
 run(10)
 check(kim.ns.GuildRecord.Held(31000099, MAX) == nil, "and one about another guild is dropped")
 
+-- A record signed by an officer Kim never confirmed: refused from a member below the trusted rank, asked for again from
+-- the first officer offering the guild's list.
+local odoMain = character("Odo Main", "Player-1-0000F801", PRIEST, GUILD2)
+odoMain.rankIndex = 1
+local odo = login(account("Odo"), odoMain)
+run(5)
+local odoRecord = guildRecordBy(odo, { maxMain })
+logout(odo)
+hal.ns.GuildRecord.Accept(odoRecord, 1, true)
+clearLog()
+joe.ns.Protocol:SendCommMessage("WhosWho", joe.ns.Codec.GuildRecordUpdate(odoRecord), "GUILD")
+run(10)
+check(kim.ns.GuildRecord.Held(GUILD2, MAX).rev < odoRecord.rev,
+    "a guild record whose signer I haven't confirmed, from a member below the trusted rank, is refused")
+hal.ns.Protocol.AnnounceLevel(60)
+run(10)
+check(sent({ from = "Kim Main", type = "GIGET", target = "Hal Main" }) == 1
+    and kim.ns.GuildRecord.Held(GUILD2, MAX).rev == odoRecord.rev,
+    "it is asked for from the first officer offering the guild's list, and taken from it")
+
 -- An officer's changes, sent at once to the guild.
 local roxMain = character("Rox Main", "Player-1-0000F701", MAGE, GUILD2)
 roxMain.rankIndex = 3

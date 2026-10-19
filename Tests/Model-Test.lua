@@ -1324,6 +1324,11 @@ do
     -- The officer, confirmed.
     P.Accept(makeRecord(O, 1, { GO }))
     check(GR.Accept(guildRecord(BOB, { G1 }, G1), 1) == "refused", "a record whose signer isn't confirmed yet is refused")
+    check(GR.Accept(guildRecord(BOB, { G1 }, G1), 3, true) == "refused",
+        "sent by a trusted member, one signed below the trusted rank is still refused")
+    local vouchedGuid = "Player-70-00000019"
+    check(GR.Accept(guildRecord("G00000000000000c3", { vouchedGuid }, vouchedGuid), 1, true) == "accepted"
+        and state(vouchedGuid) == "guild", "sent by a trusted member, it needs no confirmed signer")
     P.Confirm(O, GO, 60)
     check(GR.Accept(guildRecord(BOB, { G1 }, G1), 3) == "refused", "so is one signed below the trusted rank")
 

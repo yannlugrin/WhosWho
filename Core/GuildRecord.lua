@@ -197,16 +197,17 @@ function GuildRecord.ApplyHeld()
     for clubId in pairs(heldByGuild()) do People.ApplyGuild(clubId) end
 end
 
----Holds a verified record that is newer, when its signer may write it: its signing character confirmed under its
----identity (a record refused for that is asked for again with the guild's next list), at a rank index up to
----GuildList.TRUSTED_RANK_INDEX in my roster. Then applies it to the people I hold.
+---Holds a verified record that is newer, when its signer may write it: its signing character at a rank index up to
+---GuildList.TRUSTED_RANK_INDEX in my roster, and confirmed under its identity unless a member of that rank sent me the
+---record. Then applies it to the people I hold.
 ---@param signedRecord WhosWho.SignedGuildRecord signature verified
 ---@param signerRankIndex integer? the signing character's rank index in my roster, nil when it does not list it
+---@param fromTrustedMember boolean? sent by a member at a rank index up to GuildList.TRUSTED_RANK_INDEX in my roster
 ---@return "accepted"|"stale"|"refused"
-function GuildRecord.Accept(signedRecord, signerRankIndex)
+function GuildRecord.Accept(signedRecord, signerRankIndex, fromTrustedMember)
     if not GuildRecord.IsNewer(signedRecord) then return "stale" end
     if not (signerRankIndex and signerRankIndex <= ns.GuildList.TRUSTED_RANK_INDEX
-        and People.IsConfirmedCharacter(signedRecord.signer, signedRecord.signerGuid)) then
+        and (fromTrustedMember or People.IsConfirmedCharacter(signedRecord.signer, signedRecord.signerGuid))) then
         return "refused"
     end
     hold(signedRecord)

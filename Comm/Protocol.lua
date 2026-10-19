@@ -645,8 +645,11 @@ local listRequesters = {}
 local relayRequesters = {}
 ---@type table<string, table<string, true>> by identity ID, then name: members asking me for a guild's record I hold
 local guildRecordRequesters = {}
+---@type table<string, true> IDs of my guild's records refused from members outside the trusted rank, for the session
+local unvouchedGuildRecords = {}
 
--- Whether that member's rank in my roster lets it pass on identities I don't hold yet.
+-- Whether that member's rank in my roster lets it pass on identities I don't hold yet, and guild records whose signer I
+-- haven't confirmed.
 local function trustedMember(name)
     local guid = Scopes.SenderGuid(name)
     local rankIndex = guid and Scopes.GuildRankIndex(guid)
@@ -704,24 +707,37 @@ end
 
 local scheduleGuildListEvaluation = newGathering(ANNOUNCEMENT_WAIT, evaluateGuildLists)
 
--- A member's list: the identities I hold at an older revision, and the guild's records I lack or hold older, from the
--- members holding that list; the identities I don't hold, from its trusted holders only, otherwise from the most recent
--- list a trusted member announced.
+-- A member's list: the identities I hold at an older revision, from the members holding that list; the guild's records
+-- I lack or hold older, from its trusted holders when any is online (theirs need no confirmed signer), otherwise from
+-- any holder; the identities I don't hold, from its trusted holders only, otherwise from the most recent list a trusted
+-- member announced.
 ---@param update WhosWho.GuildListUpdate
 local function takeGuildList(update)
     takenListHashes[update.hash] = true
     local held, unknown = GuildList.Missing(update.entries)
-    requestFromHolders(held, listHolders(update.hash), RECORDS)
-    requestFromHolders(GuildList.MissingGuildRecords(update.guild, update.guildEntries), listHolders(update.hash),
-        GUILD_RECORDS)
-    if not unknown[1] then return end
     local trusted = listHolders(update.hash, true)
+    requestFromHolders(held, listHolders(update.hash), RECORDS)
+    requestFromHolders(GuildList.MissingGuildRecords(update.guild, update.guildEntries),
+        trusted[1] and trusted or listHolders(update.hash), GUILD_RECORDS)
+    if not unknown[1] then return end
     if trusted[1] then
         requestFromHolders(unknown, trusted, RECORDS)
         return
     end
     local newest = newestOffer(true)
     if newest and not listRequestInFlight() then requestGuildList(newest.hash) end
+end
+
+-- The guild's records refused from members outside the trusted rank, from a member of that rank offering the guild's
+-- list: theirs need no confirmed signer.
+local function requestUnvouchedGuildRecords(name)
+    if not (next(unvouchedGuildRecords) and guildListsActive() and trustedMember(name)) then return end
+
+    local ids = {}
+    for id in pairs(unvouchedGuildRecords) do ids[#ids + 1] = id end
+    table.sort(ids)
+    unvouchedGuildRecords = {}
+    requestFromHolders(ids, { name }, GUILD_RECORDS)
 end
 
 -- My list, to the members who asked for it: one GLIST on GUILD for several, a whisper for one.
@@ -816,6 +832,7 @@ local function receiveAnnouncement(announcement, sender)
     if announcement.guildListAt and Scopes.GuildReaches(sender) then
         listOffers[sender] = { at = announcement.guildListAt, hash = announcement.guildListHash }
         scheduleGuildListEvaluation()
+        requestUnvouchedGuildRecords(sender)
     end
     -- An anonymous character only updates the identities I hold, and asks nothing; without any linked character, it
     -- takes nothing.
@@ -963,16 +980,20 @@ local function receiveGuildRecordRequest(request, sender)
     answerGuildRecordRequests()
 end
 
--- A record of my current guild, from any of its members (PAYLOAD_SENDERS): the signature and the signer's rank decide.
+-- A record of my current guild, from any of its members (PAYLOAD_SENDERS): the signature, the signer's rank, and the
+-- signer confirmed or the sender trusted decide. One refused from a member outside the trusted rank is asked for again
+-- from the first trusted member offering the guild's list.
 ---@param update WhosWho.GuildRecordUpdate
-local function receiveGuildRecordUpdate(update)
+local function receiveGuildRecordUpdate(update, sender)
     local signedRecord = update.signedRecord
     if signedRecord.guild ~= Identity.GuildId(UnitGUID("player")) or not GuildRecord.IsNewer(signedRecord) then return end
+
+    local fromTrustedMember = trustedMember(sender)
     RecordVerification.Queue(signedRecord, GuildRecord, function(verified)
         guildRecordRequests[verified.id] = nil
-        if GuildRecord.Accept(verified, Scopes.GuildRankIndex(verified.signerGuid)) == "accepted" then
-            tidyGuildRecords()
-        end
+        local result = GuildRecord.Accept(verified, Scopes.GuildRankIndex(verified.signerGuid), fromTrustedMember)
+        unvouchedGuildRecords[verified.id] = result == "refused" and not fromTrustedMember or nil
+        if result == "accepted" then tidyGuildRecords() end
     end)
 end
 
@@ -1015,7 +1036,7 @@ local function handle(text, distribution, sender)
     elseif message.type == "GIGET" then
         receiveGuildRecordRequest(message, sender)
     elseif message.type == "GIREC" then
-        receiveGuildRecordUpdate(message)
+        receiveGuildRecordUpdate(message, sender)
     end
 end
 
@@ -1217,7 +1238,9 @@ function Protocol.GuildChanged()
     local inGuild = IsInGuild()
     local joined = inGuild and not wasInGuild
     wasInGuild = inGuild
-    if joined or not inGuild then listOffers, takenListHashes, listRequest = {}, {}, nil end
+    if joined or not inGuild then
+        listOffers, takenListHashes, listRequest, unvouchedGuildRecords = {}, {}, nil, {}
+    end
     -- A guild update while already in the guild keeps the announcement waiting.
     if joined then
         Scopes.GuildJoined()
