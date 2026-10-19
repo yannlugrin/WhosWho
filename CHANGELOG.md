@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-19
+
 ### Changed
 
 - **Guild lists**: in a large guild, Who's Who no longer freezes the game for a moment each time it announces you or receives a guild list: your own list is hashed again only when it changed.
@@ -130,7 +132,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.1...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.2...HEAD
+[0.4.2]: https://github.com/yannlugrin/WhosWho/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/yannlugrin/WhosWho/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/yannlugrin/WhosWho/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/yannlugrin/WhosWho/compare/0.2.0...0.3.0

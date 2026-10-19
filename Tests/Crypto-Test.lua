@@ -94,7 +94,7 @@ do
     local seed, message = ("\1"):rep(32), ("b"):rep(300)
     local digest, signature = Crypto.SHA512(message), Ed.Sign(message, seed)
     local co = coroutine.create(function() return Ed.Verify(FromHex(v.msg), FromHex(v.sig), FromHex(v.pk)) end)
-    local resumes, ok, result = 0, nil, nil
+    local resumes, ok, result = 0
     local mainThreadRight = true
     repeat
         ok, result = coroutine.resume(co)
