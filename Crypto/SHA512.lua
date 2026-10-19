@@ -4,6 +4,8 @@
 
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
+local Crypto = ns.Crypto
+local slice = Crypto.Slice
 
 local bxor, band = bit.bxor, bit.band
 local floor = math.floor
@@ -143,6 +145,7 @@ local function SHA512(message)
         .. rep("\0", 8) .. word(floor(length * 8 / TWO32)) .. word(length * 8 % TWO32)
     for offset = 0, #padded - 1, 128 do
         compress(H, padded, offset)
+        slice()
     end
 
     local out = {}
@@ -162,10 +165,6 @@ local function FromHex(hex)
     return (hex:gsub("%x%x", function(h) return char(tonumber(h, 16)) end))
 end
 
----@class WhosWho.Crypto
----@field Ed25519 WhosWho.Ed25519 set by Ed25519.lua
-local Crypto = {}
-ns.Crypto = Crypto
 Crypto.SHA512 = SHA512
 Crypto.ToHex = ToHex
 Crypto.FromHex = FromHex

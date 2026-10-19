@@ -8,8 +8,8 @@ local _, ns = ...
 local RecordVerification = {}
 ns.RecordVerification = RecordVerification
 
--- At 16 bits per slice, one verification takes about 33 frames of at most 21 ms each (build 1.60.1).
-local SLICE_BITS = 16
+-- Crypto slice points per frame: a few ms of work at most (see Crypto/Slicing.lua).
+local SLICE_POINTS = 4
 
 ---A kind of signed record: Record for identity records, GuildSettings for guild settings, GuildRecord for guild records.
 ---@class WhosWho.SignedFormat
@@ -47,7 +47,7 @@ frame:SetScript("OnUpdate", function()
     local verification = queue[1]
     if not running then
         running = coroutine.create(function()
-            ns.Crypto.Ed25519.SetSlicing(SLICE_BITS)
+            ns.Crypto.SetSlicing(SLICE_POINTS)
             return verification.format.Verify(verification.signedRecord)
         end)
     end

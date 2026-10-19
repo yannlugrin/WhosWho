@@ -8,7 +8,7 @@ local _, ns = ...
 
 local floor = math.floor
 local byte, char, concat = string.byte, string.char, table.concat
-local SHA512 = ns.Crypto.SHA512
+local SHA512, slice = ns.Crypto.SHA512, ns.Crypto.Slice
 
 -- Field arithmetic modulo p = 2^255 - 19 ------------------------------------------------
 
@@ -61,11 +61,16 @@ end
 
 local function S(o, a) M(o, a, a) end
 
+-- Steps of an inversion or square root between two slice points: each step is about two field multiplications, so 16
+-- steps cost about 0.6 ms in game, like a SHA-512 block or a bit of scalar multiplication.
+local SLICE_STEPS = 16
+
 local function inv(o, x)
     local c = gf(x)
     for a = 253, 0, -1 do
         S(c, c)
         if a ~= 2 and a ~= 4 then M(c, c, x) end
+        if a % SLICE_STEPS == 0 then slice() end
     end
     set(o, c)
 end
@@ -75,6 +80,7 @@ local function pow2523(o, x)
     for a = 250, 0, -1 do
         S(c, c)
         if a ~= 1 then M(c, c, x) end
+        if a % SLICE_STEPS == 0 then slice() end
     end
     set(o, c)
 end
@@ -154,14 +160,10 @@ local function add(p, q)
     M(p[1], te, tf); M(p[2], th, tg); M(p[3], tg, tf); M(p[4], te, th)
 end
 
--- When set, scalar multiplication yields every `sliceEvery` bits if it runs inside a coroutine,
--- so a caller can spread one signature check over several frames.
-local sliceEvery
-
 local function scalarmult(q, s)
     local p = { gf(), gf(gf1), gf(gf1), gf() }
     for i = 255, 0, -1 do
-        if sliceEvery and i % sliceEvery == 0 and coroutine.running() then coroutine.yield() end
+        slice()
         local b = floor(s[floor(i / 8)] / 2 ^ (i % 8)) % 2
         if b == 1 then
             for k = 1, 4 do p[k], q[k] = q[k], p[k] end
@@ -302,12 +304,6 @@ end
 
 ---@class WhosWho.Ed25519
 local Ed25519 = {}
-
----Inside a coroutine, scalar multiplication yields every `bits` bits, so one call can be spread over frames.
----@param bits integer? nil never yields
-function Ed25519.SetSlicing(bits)
-    sliceEvery = bits
-end
 
 ---@param seed string private key, 32 bytes
 ---@return string publicKey 32 bytes

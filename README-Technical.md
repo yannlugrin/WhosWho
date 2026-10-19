@@ -28,8 +28,9 @@ WhosWho/
 │   ├── enUS.lua                   English strings, default and fallback (AceLocale)
 │   └── frFR.lua                   French strings
 ├── Crypto/
+│   ├── Slicing.lua                ns.Crypto, and its slicing: SetSlicing, Slice (yields inside a coroutine)
 │   ├── SHA512.lua                 ns.Crypto.SHA512, ToHex, FromHex
-│   └── Ed25519.lua                ns.Crypto.Ed25519: PublicKey, Sign, Verify, SetSlicing
+│   └── Ed25519.lua                ns.Crypto.Ed25519: PublicKey, Sign, Verify
 ├── Core/
 │   ├── Core.lua                   Init and character refresh (login, logout, level up), player name and ruleset, slash commands, key binding names
 │   ├── Store.lua                  AceDB defaults and init (ns.data = account-wide data, ns.settings = profile)
@@ -486,7 +487,7 @@ Recognised by content: an announcement or a `REC` carrying my identity ID is min
 
 - Ed25519 (RFC 8032) over SHA-512, pure Lua 5.1 on doubles, TweetNaCl algorithms. Curve constants are computed at load and checked by the vectors.
 - In game (build 1.60.1): public key 120 ms, sign 122 ms, verify 249 ms. Offline under PUC Lua 5.1 it is about 2.5× faster.
-- `Ed25519.SetSlicing(bits)` makes scalar multiplication yield inside a coroutine. At 16 bits per slice, one verify takes 33 frames at most 21 ms each. `RecordVerification.Queue(signedRecord, format, onVerified)` always runs this way, for identity records (`Record`) and guild settings (`GuildSettings`), one record at a time in a background queue (a frame's `OnUpdate`, hidden when idle). Its result is cached for the session by canonical bytes and signature, not by identity and revision, so a forged copy of a revision cannot block the genuine one.
+- `Crypto.SetSlicing(points)` makes the crypto code yield inside a coroutine once every `points` slice points (`Crypto.Slice`). Each point marks about 0.3 to 0.6 ms of work in game (build 70450): a SHA-512 block, a bit of scalar multiplication, 16 steps of a field inversion or square root. Every long step has them, so no frame runs a whole hash or inversion: at 16 bits per slice, before them, the first frame of a verify took 24 ms and the last 10 ms. `RecordVerification` runs at 4 points per frame. `RecordVerification.Queue(signedRecord, format, onVerified)` always runs this way, for identity records (`Record`) and guild settings (`GuildSettings`), one record at a time in a background queue (a frame's `OnUpdate`, hidden when idle). Its result is cached for the session by canonical bytes and signature, not by identity and revision, so a forged copy of a revision cannot block the genuine one.
 - Not constant-time; side channels are out of scope in a game client.
 - Possible improvement: faster field arithmetic, about 1.5–2× expected; not needed while verification is spread over frames.
 - Key generation: `math.randomseed` does not exist on Forever (add-ons cannot seed `math.random`); the seed is SHA-512 over several local entropy sources.

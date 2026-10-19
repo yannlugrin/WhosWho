@@ -19,6 +19,7 @@ Libs.xml
 Locales\enUS.lua
 Locales\frFR.lua
 
+Crypto\Slicing.lua
 Crypto\SHA512.lua
 Crypto\Ed25519.lua
 
