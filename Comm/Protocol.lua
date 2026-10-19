@@ -647,6 +647,8 @@ local relayRequesters = {}
 local guildRecordRequesters = {}
 ---@type table<string, true> IDs of my guild's records refused from members outside the trusted rank, for the session
 local unvouchedGuildRecords = {}
+---@type table<string, integer> by name: the members who took my list, with when I gave it to them (server time)
+local listGivenTo = {}
 
 -- Whether that member's rank in my roster lets it pass on identities I don't hold yet, and guild records whose signer I
 -- haven't confirmed.
@@ -702,15 +704,40 @@ local function evaluateGuildLists()
     local _, at, hash = ownGuildList()
     takenListHashes[hash] = true
     local newest = newestOffer(false)
-    if newest and GuildList.IsLater(newest.at, newest.hash, at, hash) then requestGuildList(newest.hash) end
+    if newest and GuildList.IsLater(newest.at, newest.hash, at, hash) then
+        requestGuildList(newest.hash)
+        return
+    end
+
+    -- A list changed after a member took mine: mine merged with more. My own list may have changed since I gave it, and
+    -- be dated after theirs.
+    for name, givenAt in pairs(listGivenTo) do
+        local offer = listOffers[name]
+        if offer and offer.at > givenAt and not takenListHashes[offer.hash] and Scopes.GuildReaches(name) then
+            requestGuildList(offer.hash)
+            return
+        end
+    end
 end
 
 local scheduleGuildListEvaluation = newGathering(ANNOUNCEMENT_WAIT, evaluateGuildLists)
 
+-- My list renewed and announced to the guild, asking for none back, after a list I took lacked what its member would
+-- take from mine: the members holding another list take mine. Renewed when it goes out, so that it holds what I asked
+-- for meanwhile, and once for the lists taken close together.
+local announceRenewedList = newGathering(ANNOUNCEMENT_WAIT, function()
+    if not guildListsActive() then return end
+
+    local ownCharacterGuid = UnitGUID("player")
+    GuildList.Renew(Identity.GuildId(ownCharacterGuid), Identity.Ruleset(ownCharacterGuid), GetServerTime())
+    local announcement = announcementText(UnitLevel("player"), true, false)
+    if announcement then sendToGuild(announcement) end
+end)
+
 -- A member's list: the identities I hold at an older revision, from the members holding that list; the guild's records
 -- I lack or hold older, from its trusted holders when any is online (theirs need no confirmed signer), otherwise from
 -- any holder; the identities I don't hold, from its trusted holders only, otherwise from the most recent list a trusted
--- member announced.
+-- member announced. When it lacks what its member would take from mine, my list is announced back.
 ---@param update WhosWho.GuildListUpdate
 local function takeGuildList(update)
     takenListHashes[update.hash] = true
@@ -719,6 +746,11 @@ local function takeGuildList(update)
     requestFromHolders(held, listHolders(update.hash), RECORDS)
     requestFromHolders(GuildList.MissingGuildRecords(update.guild, update.guildEntries),
         trusted[1] and trusted or listHolders(update.hash), GUILD_RECORDS)
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    if GuildList.LacksFromMine(update.guild, ruleset, update, Protocol.CanChangeGuildRecords()) then
+        announceRenewedList()
+    end
+
     if not unknown[1] then return end
     if trusted[1] then
         requestFromHolders(unknown, trusted, RECORDS)
@@ -752,6 +784,8 @@ local function sendGuildList()
     local clubId, at, hash = ownGuildList()
     local message = Codec.GuildListUpdate(clubId, at, hash, GuildList.Entries(clubId, Identity.Ruleset(UnitGUID("player"))),
         GuildList.GuildRecordEntries(clubId))
+    local givenAt = GetServerTime()
+    for _, name in ipairs(names) do listGivenTo[name] = givenAt end
     if names[2] and Scopes.CanSendOnGuild() then
         sendQueued(message, "GUILD")
         return
@@ -1239,7 +1273,7 @@ function Protocol.GuildChanged()
     local joined = inGuild and not wasInGuild
     wasInGuild = inGuild
     if joined or not inGuild then
-        listOffers, takenListHashes, listRequest, unvouchedGuildRecords = {}, {}, nil, {}
+        listOffers, takenListHashes, listRequest, unvouchedGuildRecords, listGivenTo = {}, {}, nil, {}, {}
     end
     -- A guild update while already in the guild keeps the announcement waiting.
     if joined then

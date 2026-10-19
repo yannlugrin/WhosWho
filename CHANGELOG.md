@@ -7,6 +7,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Fixed
 
 - **Guild links**: a member who logged in while no officer they had met was online no longer stays without the guild's links for the session: an officer passes them on as soon as one is online.
+- **Guild lists**: a member whose list was more recent but lacked the guild's links or other members no longer waits for luck to get them: the first member holding them who takes that list announces its own back, and the member takes it.
 
 ## [0.4.2] - 2026-10-19
 

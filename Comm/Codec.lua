@@ -56,6 +56,7 @@ local VERSION = "1"
 ---@field hash string the hash of its content
 ---@field entries table<string, integer> revision by identity ID
 ---@field guildEntries table<string, integer> revision by identity ID of the guild's records; empty from 0.3.0
+---@field carriesGuildRecords boolean false from 0.3.0, whose lists hold no guild records
 
 ---A request for what the guild says about some identities.
 ---@class WhosWho.GuildRecordRequest
@@ -271,7 +272,7 @@ local function decodeGuildListUpdate(fields)
     end
     return {
         type = "GLIST", guild = list.guild, at = list.at, hash = list.hash, entries = list.entries,
-        guildEntries = guildEntries,
+        guildEntries = guildEntries, carriesGuildRecords = list.guildEntries ~= nil,
     }
 end
 

@@ -150,6 +150,28 @@ function GuildList.IsLater(at, hash, otherAt, otherHash)
     return hash > otherHash
 end
 
+---Whether another member's list lacks something its member would take from my list of that guild, by the rules of
+---taking a list: one of my guild's records it lacks or holds older (none from a list that can't hold them, from
+---0.3.0), an identity it holds at an older revision, or, only from a trusted member, an identity it lacks.
+---@param clubId integer
+---@param ruleset WhosWho.Ruleset the ruleset of the character I play
+---@param list WhosWho.GuildListUpdate
+---@param fromTrustedMember boolean the character I play at a rank index up to TRUSTED_RANK_INDEX in my roster
+---@return boolean
+function GuildList.LacksFromMine(clubId, ruleset, list, fromTrustedMember)
+    for id, rev in pairs(GuildList.Entries(clubId, ruleset)) do
+        local theirs = list.entries[id]
+        if (theirs and theirs < rev) or (not theirs and fromTrustedMember) then return true end
+    end
+
+    if not list.carriesGuildRecords then return false end
+    for id, rev in pairs(GuildList.GuildRecordEntries(clubId)) do
+        local theirs = list.guildEntries[id]
+        if not theirs or theirs < rev then return true end
+    end
+    return false
+end
+
 ---The identities of another member's list that it holds at a newer revision than I do, apart from mine: the ones I
 ---hold, which any member may pass on, and the ones I don't, which only a trusted member may.
 ---@param entries table<string, integer> revision by identity ID

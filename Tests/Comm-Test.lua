@@ -2378,10 +2378,12 @@ do
         "a GIGET names player and guild identity IDs")
     check(Codec.Decode("1 GIGET G123") == nil, "and nothing else")
     local list = Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }, { [guildId] = 5, [id] = 4 }))
-    check(list and list.entries[id] == 3 and list.guildEntries[guildId] == 5 and list.guildEntries[id] == 4,
+    check(list and list.entries[id] == 3 and list.guildEntries[guildId] == 5 and list.guildEntries[id] == 4
+        and list.carriesGuildRecords,
         "a GLIST carries the guild's records apart from the identities, the same ID in both")
     list = Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }))
-    check(list and next(list.guildEntries) == nil, "one from 0.3.0 has no guild records")
+    check(list and next(list.guildEntries) == nil and not list.carriesGuildRecords,
+        "one from 0.3.0 has no guild records, and is marked as unable to hold them")
     local entries, guildEntries = {}, {}
     for i = 1, 1500 do entries[("%064x"):format(i)] = 1 end
     for i = 1, 501 do guildEntries[("G%016x"):format(i)] = 1 end
@@ -2403,6 +2405,53 @@ do
     end
     ann.ns.settings.diagnostic.enable = false
     check(shortened, "the diagnostic log leaves out the payload of a REC, GSET, GLIST and GIREC")
+end
+
+-- A more recent list lacking the guild's records: the officer who takes it announces its own back.
+do
+    local GUILD12 = 31000012
+    local zedAccount, yulAccount = account("Zed"), account("Yul")
+    local zedMain = character("Zed Main", "Player-1-0000F901", MAGE, GUILD12)
+    local yulMain = character("Yul Main", "Player-1-0000F902", ROGUE, GUILD12)
+    local quinMain = character("Quin Main", "Player-1-0000F903", WARRIOR, GUILD12)
+    zedMain.rankIndex, yulMain.rankIndex, quinMain.rankIndex = 1, 3, 3
+    local zed = login(zedAccount, zedMain)
+    slash(zed, "link")
+    local yul = login(yulAccount, yulMain)
+    slash(yul, "link")
+    run(60)
+    zed.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false })
+    run(60)
+    logout(yul)
+    local QUIN = "G000000000000f903"
+    local zedRuleset = zed.ns.Identity.Ruleset(zedMain.guid)
+    zed.ns.Protocol.SendGuildRecord(zed.ns.GuildRecord.Link(GUILD12, QUIN, quinMain.guid,
+        { name = quinMain.name, ruleset = zedRuleset, classID = quinMain.classID }))
+    run(60)
+    logout(zed)
+    yul = login(yulAccount, yulMain)
+    run(60)
+    -- A second more recent than the officer's list at its login, older than the officer's renewal that follows.
+    yul.ns.GuildList.Renew(GUILD12, yul.ns.Identity.Ruleset(yulMain.guid), SERVER_TIME_START + world.clock + 1)
+    clearLog()
+    zed = login(zedAccount, zedMain)
+    for _ = 1, 30 do
+        if sent({ from = "Yul Main", type = "GLIST" }) > 0 then break end
+        run(1)
+    end
+    -- Once given, Yul's own list changes and is dated after the officer's renewal to come, as when the member gains
+    -- identities from the answers to its login.
+    yul.ns.GuildList.Renew(GUILD12, yul.ns.Identity.Ruleset(yulMain.guid), SERVER_TIME_START + world.clock + 3600)
+    run(60)
+    check(sent({ from = "Zed Main", type = "GLGET", target = "Yul Main" }) == 1
+        and sent({ from = "Yul Main", type = "GLGET", target = "Zed Main" }) == 1
+        and yul.ns.GuildRecord.Held(GUILD12, QUIN) ~= nil,
+        "an officer taking a more recent list that lacks the guild's records announces its own, and the member who gave it takes it, though its own list changed since")
+    check(sent({ from = "Zed Main", type = "ANNOUNCE", distribution = "GUILD" }) == 2
+        and sent({ from = "Yul Main", type = "ANNOUNCE", distribution = "GUILD" }) == 0,
+        "once: the member's list then lacks nothing the officer holds")
+    logout(zed)
+    logout(yul)
 end
 
 -- The message queue -------------------------------------------------------------------------------------
