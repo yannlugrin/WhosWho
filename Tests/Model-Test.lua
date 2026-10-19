@@ -197,7 +197,11 @@ do
         identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true, guild = 7 } } },
         forgotten = { a = 7, b = { rev = 2, at = 50 } },
         guildSettings = { [7] = { v = 1, guild = 7 } },
-        people = { p = { id = "p", chars = { [G3] = { state = "guild" }, [G4] = { state = "listed" } } } },
+        people = {
+            p = { id = "p", chars = { [G3] = { state = "guild" }, [G4] = { state = "listed" } } },
+            e = { id = "e", signedRecord = { id = "e", rev = 3 }, chars = {} },
+            g = { id = "g", madeByGuild = 7, chars = {} },
+        },
     }
     ns.Migrations.Data(data)
     check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
@@ -207,6 +211,8 @@ do
     check(data.guildSettings[7].record.guild == 7, "a 0.1.1 guild settings record is held in its entry")
     check(data.people.p.chars[G3].state == "relayed" and data.people.p.chars[G4].state == "listed",
         "a character 0.3.0 had as passed on by the guild (\"guild\") is now \"relayed\"")
+    check(data.people.e == nil and data.forgotten.e == nil and data.people.g ~= nil,
+        "a player's identity kept without characters goes, its revision not held as forgotten")
 
     check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
         and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
@@ -446,10 +452,11 @@ do
     check(not P.Confirm(A, G3, 10), "a character the record does not list is not confirmed")
     check(P.Confirm(A, G2, 10) and state(G2) == "confirmed", "listed character confirmed")
 
-    P.Accept(makeRecord(B, 1, { G2 }, "Bob"))
-    check(holderId(G2) == A and P.Get(B).chars[G2] == nil, "a character another identity holds is not taken by a later record")
+    check(P.Accept(makeRecord(B, 1, { G2 }, "Bob")) == "forgotten" and holderId(G2) == A and P.Get(B) == nil,
+        "a character another identity holds is not taken by a later record, which isn't kept with nothing left to it")
     P.Confirm(B, G2, 10)
-    check(holderId(G2) == B and P.Get(A).chars[G2] == nil, "a confirmation moves the character; the other identity no longer has it")
+    check(P.Accept(makeRecord(B, 1, { G2 }, "Bob")) == "updated" and holderId(G2) == B and P.Get(A).chars[G2] == nil,
+        "a confirmation waiting for that record moves the character when it arrives again; the other identity no longer has it")
 
     P.Accept(makeRecord(A, 2, { G2, G3 }, "Ann"))
     check(P.Get(A).chars[G1] == nil and not P.Exists(G1), "a character dropped from the record is gone")
@@ -485,11 +492,12 @@ do
         "a confirmed character's next confirmation only updates its activity")
 
     P.Accept(makeRecord(C, 1, { G5 }))
-    P.Accept(makeRecord(D, 1, { G5 }))
-    check(holderId(G5) == C and P.Get(D).chars[G5] == nil, "listed by two records: the first one keeps it")
+    check(P.Accept(makeRecord(D, 1, { G5 })) == "forgotten" and holderId(G5) == C,
+        "listed by two records: the first one keeps it")
     P.Confirm(D, G5, 10)
-    check(holderId(G5) == D and state(G5) == "confirmed" and P.Get(C).chars[G5] == nil,
-        "a confirmation takes a character the identity never held")
+    P.Accept(makeRecord(D, 1, { G5 }))
+    check(holderId(G5) == D and state(G5) == "confirmed" and P.Get(C) == nil and ns.data.forgotten[C] == nil,
+        "a confirmation takes a character the identity never held; the one left without characters goes, its revision not held as forgotten")
     check(indexMatchesSavedData({ G1, G2, G3, G4, G5 }), "index kept up to date: shared identities")
 end
 
@@ -885,8 +893,8 @@ do
 
     local B = string.rep("b", 64)
     P.UpdateGuildMembers(7, { [G3] = true })
-    P.Accept(makeRecord(B, 1, { G3 }))
     P.Confirm(B, G3, 10)
+    P.Accept(makeRecord(B, 1, { G3 }))
     check(holderId(G3) == B and character(G3).guild == 7, "a character taken by another identity keeps what I saw of it")
 
     local C = string.rep("c", 64)

@@ -452,7 +452,7 @@ local CONFIRMATION_CLAIM = 4
 -- record of my guild takes the character from an older one that links it. A stronger claim takes it from
 -- another person, an equal one updates it on its own person: a player keeps a character they declared, my guild's
 -- link gives way to the player's record, mine to both. `confirmedLevel` is given when a message from the character
--- proved it (its level then). My manual identity holding the character merges into `toPerson`; a guild identity left
+-- proved it (its level then). My manual identity holding the character merges into `toPerson`; an identity left
 -- without characters goes. Whether the character is in `toPerson`.
 local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedLevel, takesGuildLink)
     local claim = confirmedLevel and CONFIRMATION_CLAIM or CLAIMS[state]
@@ -469,10 +469,11 @@ local function storeCharacter(toPerson, guid, recordCharacter, state, confirmedL
             AutomaticChanges.Record(fromCharacter.state == "added" and "moved" or "taken", fromPerson, toPerson, { [guid] = true })
         end
         fromPerson.chars[guid] = nil
-        if fromPerson.madeByGuild and not next(fromPerson.chars) then
+        if next(fromPerson.chars) then
+            if fromPerson.madeByGuild then keepShownMain(fromPerson) end
+        else
+            -- Nothing left to it: a guild identity's characters went to stronger claims, a player's confirmed others.
             forget(fromPerson.id)
-        elseif fromPerson.madeByGuild then
-            keepShownMain(fromPerson)
         end
     elseif fromPerson then
         mergeManualPerson(fromPerson, toPerson)
@@ -569,7 +570,9 @@ end
 ---Stores a newer revision of a player's record, or the one replacing the revision I hold. Its characters that declared
 ---no identity are left out, but those my guild vouches for: a record my guild sent, and its roster lists them. A
 ---revision without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my
----nickname and added alts with it.
+---nickname and added alts with it. One whose characters other identities hold more strongly (messages from them
+---confirmed those) is not kept either, but its revision is not held as forgotten: a new identity can arrive before the
+---message from its character that takes the character from the old one.
 ---@param signedRecord WhosWho.SignedIdentityRecord already validated and verified
 ---@param fromGuild boolean? relayed by a member of my guild, not sent by the player: the new characters are "guild"
 ---@param guildMembers table<string, true>? by GUID, the record's characters my guild's roster lists, when my guild sent it
@@ -625,6 +628,11 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
         for clubId, records in pairs(ns.data.guildRecords) do
             if records[signedRecord.id] then applyGuild(clubId) end
         end
+    end
+    if not next(sharedPerson.chars) then
+        forget(signedRecord.id)
+        changed()
+        return "forgotten"
     end
     changed()
 

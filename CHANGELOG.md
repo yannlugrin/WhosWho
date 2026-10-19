@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+
+- **People**: a player's old identity, whose characters now show under their new one, no longer stays in your saved data without any character.
+
 ## [0.4.3] - 2026-10-19
 
 ### Fixed

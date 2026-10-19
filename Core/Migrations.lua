@@ -51,6 +51,12 @@ local DATA_STEPS = {
             end
         end
     end,
+    -- 6. 0.4.3: a player's identity whose characters all confirmed other identities was kept without any (People).
+    function(data)
+        for id, person in pairs(data.people) do
+            if person.signedRecord and not next(person.chars) then data.people[id] = nil end
+        end
+    end,
 }
 
 ---@type fun(settings: WhosWho.Settings)[]
