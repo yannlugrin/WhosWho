@@ -84,7 +84,7 @@ function GuildRecord.Canonical(record)
     return Record.SignedBytes("WWGR", record)
 end
 
----Slow (about 250 ms in game); call it from a coroutine with crypto slicing on.
+---Slow (about 250 ms in game); call it from a coroutine, where it yields along the way (Crypto.Slice).
 ---@param signedRecord WhosWho.SignedGuildRecord
 ---@return boolean
 function GuildRecord.Verify(signedRecord)

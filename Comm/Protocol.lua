@@ -986,19 +986,8 @@ local PAYLOAD_SENDERS = {
     GIREC = function(_, sender) return guildListsActive() and Scopes.GuildReaches(sender) end,
 }
 
-local function receive(_, text, distribution, sender)
-    if issecretvalue(text) or issecretvalue(sender) then return end
-    Diagnostic.MessageReceived(text, distribution, sender)
-    local messageType = Codec.Type(text)
-    if not messageType then return end
-    -- Without a linked character, I take nothing but announcements and my guild's settings, which hold no identity, and
-    -- what a guild I opted in to sends; a character I unlinked still answers an announcement with NOID.
-    local takenAnyway = messageType == "ANNOUNCE" or messageType == "GSGET" or messageType == "GSET"
-    if Identity.LinkedCount() == 0 and not Scopes.EnforcedGuild() and not takenAnyway then return end
-    local allowedSender = PAYLOAD_SENDERS[messageType]
-    if allowedSender and not allowedSender(distribution, sender) then
-        return Diagnostic.Print(L["%s from %s not unpacked: not taken from that sender"]:format(messageType, sender))
-    end
+-- A message taken at arrival (receive), unpacked and handled.
+local function handle(text, distribution, sender)
     local message = Codec.Decode(text)
     if not message then return end
     -- A member who joined the guild since my roster was read.
@@ -1027,6 +1016,74 @@ local function receive(_, text, distribution, sender)
     elseif message.type == "GIREC" then
         receiveGuildRecordUpdate(message)
     end
+end
+
+---@class WhosWho.ReceivedMessage
+---@field text string
+---@field distribution string
+---@field sender string
+---@field messageType string
+
+-- The messages taken at arrival, handled in that order, each in a coroutine, where a long hash yields along the way
+-- (Crypto.Slice). In each frame, the messages up to the first payload (PAYLOAD_SENDERS): unpacking one takes up to tens
+-- of ms, in one piece. None while I am in combat: they wait for its end.
+---@type WhosWho.ReceivedMessage[]
+local inbox = {}
+---@type thread? handling inbox[1], paused in a hash
+local handling
+
+local inboxFrame = CreateFrame("Frame")
+inboxFrame:Hide()
+inboxFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+inboxFrame:SetScript("OnEvent", function()
+    if inbox[1] then inboxFrame:Show() end
+end)
+inboxFrame:SetScript("OnUpdate", function()
+    if UnitAffectingCombat("player") then
+        inboxFrame:Hide()
+        return
+    end
+
+    while inbox[1] do
+        local received = inbox[1]
+        handling = handling or coroutine.create(function()
+            handle(received.text, received.distribution, received.sender)
+        end)
+
+        local success, err = coroutine.resume(handling)
+        if not success then
+            geterrorhandler()(err)
+        elseif coroutine.status(handling) ~= "dead" then
+            return
+        end
+
+        handling = nil
+        table.remove(inbox, 1)
+        if PAYLOAD_SENDERS[received.messageType] then break end
+    end
+
+    if not inbox[1] then inboxFrame:Hide() end
+end)
+
+local function receive(_, text, distribution, sender)
+    if issecretvalue(text) or issecretvalue(sender) then return end
+    Diagnostic.MessageReceived(text, distribution, sender)
+
+    local messageType = Codec.Type(text)
+    if not messageType then return end
+
+    -- Without a linked character, I take nothing but announcements and my guild's settings, which hold no identity, and
+    -- what a guild I opted in to sends; a character I unlinked still answers an announcement with NOID.
+    local takenAnyway = messageType == "ANNOUNCE" or messageType == "GSGET" or messageType == "GSET"
+    if Identity.LinkedCount() == 0 and not Scopes.EnforcedGuild() and not takenAnyway then return end
+
+    local allowedSender = PAYLOAD_SENDERS[messageType]
+    if allowedSender and not allowedSender(distribution, sender) then
+        return Diagnostic.Print(L["%s from %s not unpacked: not taken from that sender"]:format(messageType, sender))
+    end
+
+    inbox[#inbox + 1] = { text = text, distribution = distribution, sender = sender, messageType = messageType }
+    inboxFrame:Show()
 end
 
 -- Scopes turned on and the sending lock ----------------------------------------------------------

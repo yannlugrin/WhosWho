@@ -312,7 +312,7 @@ function Record.Sign(record, seedHex)
     return record
 end
 
----Slow (about 250 ms in game); call it from a coroutine with crypto slicing on.
+---Slow (about 250 ms in game); call it from a coroutine, where it yields along the way (Crypto.Slice).
 ---@param signedRecord WhosWho.SignedIdentityRecord
 ---@return boolean
 function Record.Verify(signedRecord)

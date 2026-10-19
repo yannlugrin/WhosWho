@@ -170,6 +170,13 @@ local function fire(session, event, ...)
     end
 end
 
+-- The frame handling the messages a session received (Protocol's queue).
+local function inboxFrame(session)
+    for _, frame in ipairs(session.frames) do
+        if frame.events.PLAYER_REGEN_ENABLED and frame.scripts.OnUpdate then return frame end
+    end
+end
+
 -- Saved values missing, from the defaults.
 local function fillDefaults(saved, defaults)
     for k, v in pairs(defaults) do
@@ -2290,10 +2297,26 @@ do
     clearLog()
     dee = login(deeAccount, deeMain)
     run(2)
+    local inbox = inboxFrame(dee)
+    local onUpdate, frames, hashFrames = inbox.scripts.OnUpdate, 0, 0
+    inbox.scripts.OnUpdate = function(...)
+        frames = frames + 1
+        return onUpdate(...)
+    end
+    local hashList = dee.ns.GuildList.Hash
+    dee.ns.GuildList.Hash = function(...)
+        local from = frames
+        local result = hashList(...)
+        hashFrames = math.max(hashFrames, frames - from)
+        return result
+    end
     bo.ns.Protocol:SendCommMessage("WhosWho", bo.ns.Codec.GuildListUpdate(GUILD10, at, hash, entries, {}), "GUILD")
     run(120)
+    inbox.scripts.OnUpdate, dee.ns.GuildList.Hash = onUpdate, hashList
     check(sent({ from = "Dee Main", type = "GLGET", target = "Ari Main" }) == 1 and dee.ns.People.Find(cyMain.guid) ~= nil,
         "a list whose hash isn't that of its content is dropped: the officer's list is still asked for")
+    -- 300 identities: about 20 KB to hash, 160 SHA-512 blocks.
+    check(hashFrames > 30, ("a received list's hash is spread over frames (%d)"):format(hashFrames))
     logout(dee)
     logout(bo)
     logout(ari)
@@ -2357,6 +2380,59 @@ do
     end
     ann.ns.settings.diagnostic.enable = false
     check(shortened, "the diagnostic log leaves out the payload of a REC, GSET, GLIST and GIREC")
+end
+
+-- The message queue -------------------------------------------------------------------------------------
+
+do
+    local GUILD11 = 31000011
+    local umaAccount, wesAccount = account("Uma"), account("Wes")
+    local umaMain = character("Uma Main", "Player-1-0000EF01", MAGE, GUILD11)
+    local wesMain = character("Wes Main", "Player-1-0000EF02", WARRIOR, GUILD11)
+    local uma = login(umaAccount, umaMain)
+    slash(uma, "link")
+    run(60)
+    local umaId, umaRecord = uma.ns.Identity.Id(), uma.ns.Identity.SignedRecord()
+    logout(uma)
+    local wes = login(wesAccount, wesMain)
+    slash(wes, "link")
+    run(60)
+
+    wesMain.inCombat = true
+    clearLog()
+    uma = login(umaAccount, umaMain)
+    run(10)
+    check(sent({ from = "Wes Main", type = "GET" }) == 0 and wes.ns.People.Get(umaId) == nil,
+        "a message received in combat waits")
+    wesMain.inCombat = false
+    fire(wes, "PLAYER_REGEN_ENABLED")
+    run(10)
+    check(sent({ from = "Wes Main", type = "GET", target = "Uma Main" }) == 1 and wes.ns.People.Get(umaId) ~= nil,
+        "and is handled once combat ends")
+
+    -- One payload in a frame; the messages after it wait their turn.
+    local decoded = {}
+    local decode = wes.ns.Codec.Decode
+    wes.ns.Codec.Decode = function(text)
+        decoded[#decoded + 1] = wes.ns.Codec.Type(text)
+        return decode(text)
+    end
+    local text = uma.ns.Codec.RecordUpdate(umaRecord)
+    wes.comm("WhosWho", text, "GUILD", "Uma Main")
+    wes.comm("WhosWho", text, "GUILD", "Uma Main")
+    wes.comm("WhosWho", EMPTY_ANNOUNCEMENT, "GUILD", "Uma Main")
+    local inbox = inboxFrame(wes)
+    local byFrame = {}
+    for i = 1, 3 do
+        inbox.scripts.OnUpdate(inbox, 0.016)
+        byFrame[i] = table.concat(decoded, " ")
+    end
+    wes.ns.Codec.Decode = decode
+    check(byFrame[1] == "REC" and byFrame[2] == "REC REC" and byFrame[3] == "REC REC ANNOUNCE",
+        ("one payload in a frame, in arrival order (%s / %s / %s)"):format(byFrame[1], byFrame[2], byFrame[3]))
+    run(10)
+    logout(uma)
+    logout(wes)
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

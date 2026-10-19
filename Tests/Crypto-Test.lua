@@ -66,7 +66,6 @@ check(not Ed.Verify("m", "short", ("\0"):rep(32)), "ed25519 short signature reje
 -- Sliced verification gives the same answer and yields along the way.
 do
     local v = vectors.ed25519[3]
-    Crypto.SetSlicing(4)
     local co = coroutine.create(function() return Ed.Verify(FromHex(v.msg), FromHex(v.sig), FromHex(v.pk)) end)
     local resumes, ok, result = 0
     repeat
@@ -84,7 +83,6 @@ do
         ok, result = coroutine.resume(co)
         resumes = resumes + 1
     until coroutine.status(co) == "dead"
-    Crypto.SetSlicing(nil)
     check(ok and result == Crypto.SHA512(message) and resumes == 5,
         ("sha512 sliced: same digest, a yield every 4 blocks (%d resumes)"):format(resumes))
     check(Ed.Verify(FromHex(v.msg), FromHex(v.sig), FromHex(v.pk)), "ed25519 unsliced outside a coroutine")
@@ -95,7 +93,6 @@ do
     local v = vectors.ed25519[3]
     local seed, message = ("\1"):rep(32), ("b"):rep(300)
     local digest, signature = Crypto.SHA512(message), Ed.Sign(message, seed)
-    Crypto.SetSlicing(4)
     local co = coroutine.create(function() return Ed.Verify(FromHex(v.msg), FromHex(v.sig), FromHex(v.pk)) end)
     local resumes, ok, result = 0, nil, nil
     local mainThreadRight = true
@@ -105,8 +102,30 @@ do
         mainThreadRight = mainThreadRight and Crypto.SHA512(message) == digest
             and (resumes % 10 ~= 0 or Ed.Sign(message, seed) == signature)
     until coroutine.status(co) == "dead"
-    Crypto.SetSlicing(nil)
     check(ok and result == true and mainThreadRight, "ed25519 sliced verify with hashing and signing between frames")
+end
+
+-- Two coroutines in turns, as the verification queue and the message queue run: each counts its own slice points.
+do
+    local v = vectors.ed25519[3]
+    local message = ("a"):rep(2048)
+    local verification = coroutine.create(function() return Ed.Verify(FromHex(v.msg), FromHex(v.sig), FromHex(v.pk)) end)
+    local hashing = coroutine.create(function() return Crypto.SHA512(message) end)
+    local verified, digest, hashResumes
+    hashResumes = 0
+    while coroutine.status(verification) ~= "dead" or coroutine.status(hashing) ~= "dead" do
+        if coroutine.status(verification) ~= "dead" then
+            local _, result = coroutine.resume(verification)
+            verified = result
+        end
+        if coroutine.status(hashing) ~= "dead" then
+            local _, result = coroutine.resume(hashing)
+            digest = result
+            hashResumes = hashResumes + 1
+        end
+    end
+    check(verified == true and digest == Crypto.SHA512(message) and hashResumes == 5,
+        ("two coroutines in turns: both right, the hash yields every 4 blocks (%d resumes)"):format(hashResumes))
 end
 
 -- Rough offline timing (PUC Lua 5.1, bit shim: slower than in game for SHA-512).

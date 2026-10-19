@@ -235,6 +235,12 @@ Needs the guild of Guild Lists: A in it, and a guildmate C whom A only knows thr
 - A's character is removed from the guild while offline (an officer kicks it): at its next login, `/ww status` shows no guild line, and the guild's rule no longer adds that character to A's record.
 - A character the guild linked (to a guild identity or to a member's identity) leaves the guild, with A an officer online: `Sent, GUILD: 1 GIREC …` once A's roster updates, and `/dump WhosWhoDB.global.guildRecords` on A and on another member no longer lists it in that record. With no officer online when it leaves, the first officer to log in sends it.
 
+## Messages in Combat
+
+Needs A and B in one group, both linked with the Group scope on, and `/ww debug on` on B.
+
+- B fights a training dummy; A changes its nickname. About 15 seconds later B shows `Received, PARTY <A>: 1 ANNOUNCE …` but sends no `GET` while in combat. When B leaves combat, B sends `Sent, WHISPER <A>: 1 GET …` and `/ww people <A's character>` on B shows the new nickname.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).

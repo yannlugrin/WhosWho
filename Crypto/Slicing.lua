@@ -1,6 +1,6 @@
 -- Slicing for the crypto code: inside a coroutine, long hashes and signature operations yield along the way, so a
--- caller can spread one over several frames. Each slice point marks about 0.3 to 0.6 ms of work in game: a SHA-512
--- block, a bit of scalar multiplication, 16 steps of a field inversion or square root.
+-- caller can spread one over several frames; outside one, they never yield. Each slice point marks about 0.3 to 0.6 ms
+-- of work in game: a SHA-512 block, a bit of scalar multiplication, 16 steps of a field inversion or square root.
 
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
@@ -13,21 +13,22 @@ local _, ns = ...
 local Crypto = {}
 ns.Crypto = Crypto
 
-local sliceEvery
+-- Slice points between two yields: about 1.5 to 2.4 ms of work in a frame.
+local POINTS_PER_SLICE = 4
+
+-- The coroutine that last passed a slice point, and the points it passed since its last yield: each coroutine starts
+-- counting from zero, whatever another one left.
+---@type thread?
+local counting
 local points = 0
 
----Inside a coroutine, the crypto code yields once every `points` slice points.
----@param slicePoints integer? nil never yields
-function Crypto.SetSlicing(slicePoints)
-    sliceEvery = slicePoints
-    points = 0
-end
-
----A slice point: yields when slicing is on, inside a coroutine, once enough points passed since the last yield.
+---A slice point: inside a coroutine, yields once POINTS_PER_SLICE points passed since its last yield.
 function Crypto.Slice()
-    if not (sliceEvery and coroutine.running()) then return end
+    local thread = coroutine.running()
+    if not thread then return end
+    if thread ~= counting then counting, points = thread, 0 end
     points = points + 1
-    if points < sliceEvery then return end
+    if points < POINTS_PER_SLICE then return end
     points = 0
     coroutine.yield()
 end

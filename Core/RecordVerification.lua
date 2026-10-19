@@ -8,9 +8,6 @@ local _, ns = ...
 local RecordVerification = {}
 ns.RecordVerification = RecordVerification
 
--- Crypto slice points per frame: a few ms of work at most (see Crypto/Slicing.lua).
-local SLICE_POINTS = 4
-
 ---A kind of signed record: Record for identity records, GuildSettings for guild settings, GuildRecord for guild records.
 ---@class WhosWho.SignedFormat
 ---@field Canonical fun(signedRecord: table): string? the signed bytes; never nil for a record its Validate accepts
@@ -46,10 +43,8 @@ end
 frame:SetScript("OnUpdate", function()
     local verification = queue[1]
     if not running then
-        running = coroutine.create(function()
-            ns.Crypto.SetSlicing(SLICE_POINTS)
-            return verification.format.Verify(verification.signedRecord)
-        end)
+        -- The crypto code yields along the way: a few ms of work in each frame (Crypto.Slice).
+        running = coroutine.create(function() return verification.format.Verify(verification.signedRecord) end)
     end
 
     local success, returned = coroutine.resume(running)
