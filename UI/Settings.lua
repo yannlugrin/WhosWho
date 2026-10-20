@@ -184,6 +184,15 @@ Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosW
     function(value) ns.settings.tooltip.note.enable = value end),
     L["Adds the start of your note about the person."])
 
+-- Updates ----------------------------------------------------------------------------------------
+
+addSectionHeader(L["Updates"])
+Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosWho_VersionNotice",
+    Settings.VarType.Boolean, L["Tell me about a newer version"], ns.Store.DEFAULTS.profile.versionNotice.enable,
+    function() return ns.settings.versionNotice.enable end,
+    function(value) ns.settings.versionNotice.enable = value end),
+    L["Once a session, says in chat when another player's Who's Who is a newer release than yours, or any newer version while yours is a pre-release."])
+
 -- Minimap ----------------------------------------------------------------------------------------
 
 addSectionHeader(L["Minimap"])
@@ -301,8 +310,11 @@ local function identityStats()
     for _, key in ipairs(SCOPE_KEYS) do
         if ns.Scopes.Get(key) then scopesOn[#scopesOn + 1] = SCOPE_NAMES[key] end
     end
+    local newestVersion, newestFrom = ns.Protocol.NewestVersion()
     local lines = {
         L["Version: %s"]:format(ns.Version),
+        newestVersion and L["Newest version seen this session: %s (%s)"]:format(newestVersion, newestFrom)
+            or L["Newest version seen this session: none"],
         L["Identity ID: %s"]:format(id and id:sub(1, 8) or L["none"]),
         L["Revision: %d"]:format(Identity.Revision()),
         L["Linked characters: %d"]:format(Identity.LinkedCount()),

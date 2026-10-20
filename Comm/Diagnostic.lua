@@ -17,16 +17,15 @@ Diagnostic.KEPT_MESSAGES = 1000
 ---@field sent boolean false for a message received
 ---@field distribution string the add-on channel: GUILD, PARTY, RAID, WHISPER
 ---@field name string? the receiver of a whisper, or the sender of a message received
----@field text string the message; for a REC, a GSET, a GLIST or a GIREC, only its version and type
+---@field text string the message; for a REC, a GSET, a GLIST or a GIREC, only its version, type and header
 ---@field size integer the message's length in bytes
 
 ---@type fun(message: WhosWho.LoggedMessage)[]
 local listeners = {}
 
--- The payload of a REC, a GSET, a GLIST or a GIREC is binary.
+-- The payload of a REC, a GSET, a GLIST or a GIREC is binary: what comes before it, its header, is kept.
 local function loggedText(text)
-    return text:match("^(%d+ REC) ") or text:match("^(%d+ GSET) ") or text:match("^(%d+ GLIST) ")
-        or text:match("^(%d+ GIREC) ") or text
+    return text:match("^(%d+ %u+ .-) : ") or text
 end
 
 -- Kept only while the diagnostic mode is on.

@@ -7,6 +7,12 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Added
 
 - **Characters**: your record now keeps each linked character's race, and when it reached the highest level, for features to come.
+- **Updates**: once a session, Who's Who tells you in chat when another player's is a newer release than yours (any newer version while yours is a pre-release). You can turn it off in the settings, under Updates.
+- **`/ww status`** and the Diagnostic page show the newest Who's Who version another player's add-on announced this session.
+
+### Changed
+
+- **Protocol**: Who's Who 1.0 speaks a new version of its protocol and no longer exchanges with the beta versions. It skips the records and guild lists it already holds without unpacking them.
 
 ### Fixed
 

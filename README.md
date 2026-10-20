@@ -18,6 +18,7 @@ For **World of Warcraft: Forever**. Source code, issues and releases: [github.co
 - **Your whole guild, known to everyone.** Once the guild master or an officer enables Who's Who for the guild, in a new tab of the guild panel, guild members pass on to each other the identities guildmates shared, so you recognise every guildmate who uses Who's Who, even one you've never been online with. The window's **Guild** tab then lists your guildmates by identity, and the members not known yet.
 - **Guilds that link alts to mains.** The guild master or an officer can require it. Each member is asked first: link their characters in the guild, share them with the guild only without linking them, or refuse, and Who's Who then shares nothing with that guild. Only the guild sees the characters they didn't link.
 - **Guild links.** The guild master and officers can link members' characters for the whole guild, from the Guild tab's right-click menu: to a member's identity, or to a new person for someone who doesn't use Who's Who. Every member sees them; what a player shares about themselves always comes first.
+- **Told when a newer version is out.** Once a session, when another player's Who's Who is a newer release than yours, a line in chat says so. You can turn it off in the settings.
 - *Coming:* **Review** what Who's Who changed on its own, for example when a player you linked yourself starts sharing their own identity.
 
 Open the window with the minimap button, the add-on compartment next to the minimap, or `/ww open`. Right-click the button for a menu. In the game's Key Bindings, under Who's Who, you can set a key to show or hide the window, and one to show or hide the guild window on its Who's Who tab; none is set by default.
@@ -38,7 +39,7 @@ Open the window with the minimap button, the add-on compartment next to the mini
 |---|---|
 | `/ww open` | Show or hide the Who's Who window |
 | `/ww guild` | Show or hide the guild window on its Who's Who tab |
-| `/ww status` | The version, your nickname, this character's link and how many characters are linked, and whether Who's Who is on for your guild |
+| `/ww status` | The version, the newest one another player's Who's Who announced this session, your nickname, this character's link and how many characters are linked, and whether Who's Who is on for your guild |
 | `/ww main` | Make the character you are playing your main |
 | `/ww link` / `/ww unlink` | Link or unlink the character you are playing |
 | `/ww nick <name>` | Set your nickname (`/ww nick` alone goes back to your main character's name) |

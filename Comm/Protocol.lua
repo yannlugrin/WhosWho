@@ -100,6 +100,79 @@ local function sendNow(message, channel, name)
     C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
 end
 
+-- Hello ------------------------------------------------------------------------------------------
+
+-- My add-on version in a HELLO: the TOC version, "x.y.z" with the suffix of a pre-release or of a build after a tag, or
+-- "-" for a copy without one.
+local OWN_VERSION = ns.Version:match("^%d+%.%d+%.%d+%S*$") and ns.Version or "-"
+
+---@type table<string, true> the channels I greeted this session: GUILD, PARTY, RAID, or the name of a player whispered
+local greeted = {}
+
+-- My HELLO, before the first announcement I start on that channel this session.
+local function greet(channel, name)
+    local key = name or channel
+    if greeted[key] then return end
+    greeted[key] = true
+    sendQueued(Codec.Hello(OWN_VERSION), channel, name)
+end
+
+-- An announcement I start, not an answer: my HELLO first on a channel not greeted yet. NOID goes alone.
+local function sendAnnouncement(message, channel, name)
+    if message ~= Codec.NoIdentity() then greet(channel, name) end
+    sendQueued(message, channel, name)
+end
+
+local PRE_RELEASES = { alpha = 1, beta = 2, rc = 3 }
+
+-- A version as the numbers it compares by: x, y, z, then where it stands among those of its x.y.z. A pre-release comes
+-- before the release (alpha, beta, then rc, each by its number: "-beta.2"), a build after the tag after it (the
+-- packager's git describe: "-3-g1a2b3c4", by its count of commits); any other suffix counts as the release. Nil without
+-- "x.y.z".
+local function versionOrder(version)
+    local major, minor, patch, suffix = version:match("^(%d+)%.(%d+)%.(%d+)(%S*)$")
+    if not major then return nil end
+    local stage, step = 2, 0
+    local preRelease, number = suffix:match("^%-(%a+)%.?(%d*)$")
+    local commits = suffix:match("^%-(%d+)%-g%x+$")
+    if commits then
+        stage, step = 3, tonumber(commits)
+    elseif preRelease and PRE_RELEASES[preRelease:lower()] then
+        stage, step = 1, PRE_RELEASES[preRelease:lower()] * 100000 + (tonumber(number) or 0)
+    end
+    return { tonumber(major), tonumber(minor), tonumber(patch), stage, step }
+end
+
+-- Whether a version is older than another; false when either doesn't start with "x.y.z".
+local function isOlderVersion(version, than)
+    local order, thanOrder = versionOrder(version), versionOrder(than)
+    if not (order and thanOrder) then return false end
+    for i = 1, #order do
+        if order[i] ~= thanOrder[i] then return order[i] < thanOrder[i] end
+    end
+    return false
+end
+
+-- Whether a version is a release: "x.y.z", without a suffix.
+local function isRelease(version)
+    return version:match("^%d+%.%d+%.%d+$") ~= nil
+end
+
+-- Whether a version is an update for mine: newer, and a release unless mine isn't one either. A player on a release
+-- isn't told about pre-releases or builds they didn't choose to follow.
+local function isUpdate(version)
+    return isOlderVersion(OWN_VERSION, version) and (isRelease(version) or not isRelease(OWN_VERSION))
+end
+
+---@type { version: string, name: string }? the newest add-on version a HELLO carried this session, and its sender
+local newestVersion
+---@type fun(version: string, name: string)[]
+local updateListeners = {}
+-- Whether an update was seen this session: its listeners are called once.
+local updateSeen = false
+---@type table<string, true> the players a HELLO of mine answered this session, their version being older
+local helloAnswered = {}
+
 -- Guild ------------------------------------------------------------------------------------------
 
 -- Whether I exchange guild lists: in a guild whose settings enable Who's Who, with the Guild scope, from a linked
@@ -129,6 +202,15 @@ local function sendToGuild(message)
         return
     end
     for _, name in ipairs(Scopes.OnlineGuildMembers()) do sendQueued(message, "WHISPER", name) end
+end
+
+-- An announcement I start, to the members of my current guild (sendToGuild).
+local function announceToGuild(message)
+    if Scopes.CanSendOnGuild() then
+        sendAnnouncement(message, "GUILD")
+        return
+    end
+    for _, name in ipairs(Scopes.OnlineGuildMembers()) do sendAnnouncement(message, "WHISPER", name) end
 end
 
 -- Announcements ----------------------------------------------------------------------------------
@@ -289,11 +371,13 @@ local function announceRevision(guildOnly)
     local guildMessage = guildSharingStarted and not wantsAnnouncements and announcementText(level, true, true) or message
     local audience = Scopes.BroadcastAudience()
     for _, channel in ipairs(audience.memberChannels) do
-        if channel == "GUILD" or not guildOnly then sendQueued(channel == "GUILD" and guildMessage or message, channel) end
+        if channel == "GUILD" or not guildOnly then
+            sendAnnouncement(channel == "GUILD" and guildMessage or message, channel)
+        end
     end
-    for _, name in ipairs(audience.guildMembers) do sendQueued(guildMessage, "WHISPER", name) end
+    for _, name in ipairs(audience.guildMembers) do sendAnnouncement(guildMessage, "WHISPER", name) end
     if not guildOnly then
-        for _, name in ipairs(audience.names) do sendQueued(message, "WHISPER", name) end
+        for _, name in ipairs(audience.names) do sendAnnouncement(message, "WHISPER", name) end
     end
     Identity.SetLastBroadcastRevision(Identity.AnnouncedRevision(guid))
 end
@@ -370,7 +454,7 @@ end
 
 local function announceToChannel(channel)
     local message = announcementText(UnitLevel("player"), true, true)
-    if message then sendQueued(message, channel) end
+    if message then sendAnnouncement(message, channel) end
 end
 
 -- The online ones among those friends that no member channel reaches.
@@ -383,7 +467,7 @@ local function announceToFriends(friends)
     for _, friend in ipairs(friends) do
         if friend.connected and Scopes.AnnouncementReaches(friend.name) and not Scopes.GuildReaches(friend.name)
             and not Scopes.GroupReaches(friend.name) then
-            sendQueued(message, "WHISPER", friend.name)
+            sendAnnouncement(message, "WHISPER", friend.name)
             rememberAnnouncement(friend.name, revision)
         end
     end
@@ -545,7 +629,7 @@ local function sendGuildSettings()
     if not (signedRecord and Scopes.Get("guild") and IsInGuild()) then return end
     sendToGuild(Codec.GuildSettingsUpdate(signedRecord))
     local announcement = announceList and signedRecord.settings.enable and announcementText(UnitLevel("player"), true, false)
-    if announcement then sendToGuild(announcement) end
+    if announcement then announceToGuild(announcement) end
 end
 
 ---Whether the character I play may change my guild's records (GuildRecord): while I exchange guild lists, at a rank
@@ -731,7 +815,7 @@ local announceRenewedList = newGathering(ANNOUNCEMENT_WAIT, function()
     local ownCharacterGuid = UnitGUID("player")
     GuildList.Renew(Identity.GuildId(ownCharacterGuid), Identity.Ruleset(ownCharacterGuid), GetServerTime())
     local announcement = announcementText(UnitLevel("player"), true, false)
-    if announcement then sendToGuild(announcement) end
+    if announcement then announceToGuild(announcement) end
 end)
 
 -- A member's list: the identities I hold at an older revision, from the members holding that list; the guild's records
@@ -847,13 +931,6 @@ local answerGuildRecordRequests = newGathering(REQUEST_WAIT, sendGuildRecords)
 ---@param announcement WhosWho.Announcement
 local function receiveAnnouncement(announcement, sender)
     local id = announcement.id
-    -- Empty: a member with nothing to share wants mine, nothing more. My own comes back on GUILD.
-    if not id then
-        if announcement.wantsAnnouncement and sender ~= ns.UnitWholeName("player") and Scopes.Allows(sender) then
-            queueAnnouncement(sender)
-        end
-        return
-    end
     if id == Identity.Id() then return end
 
     -- My answer, whatever the character I play: what it sends, if anything, is decided when the answers go out.
@@ -1031,6 +1108,27 @@ local function receiveGuildRecordUpdate(update, sender)
     end)
 end
 
+-- A player's HELLO: Who's Who is here. My answer joins the pending ones, as for an announcement that wants mine. A sender
+-- with an older version gets my HELLO back, once a session: the players online before it answer with announcements,
+-- which carry no version.
+---@param hello WhosWho.Hello
+local function receiveHello(hello, sender)
+    if sender == ns.UnitWholeName("player") then return end
+    if hello.version and (not newestVersion or isOlderVersion(newestVersion.version, hello.version)) then
+        newestVersion = { version = hello.version, name = sender }
+    end
+    if hello.version and not updateSeen and isUpdate(hello.version) then
+        updateSeen = true
+        for _, listener in ipairs(updateListeners) do listener(hello.version, sender) end
+    end
+    if hello.version and isOlderVersion(hello.version, OWN_VERSION) and not helloAnswered[sender] then
+        helloAnswered[sender] = true
+        greeted[sender] = true
+        sendQueued(Codec.Hello(OWN_VERSION), "WHISPER", sender)
+    end
+    if Scopes.Allows(sender) then queueAnnouncement(sender) end
+end
+
 -- Who may send me a payload, checked before it is unpacked (Codec.Decode): unpacking costs up to 41 ms per KB received.
 -- A REC, from a channel I share on, so strangers cannot fill my saved data; my current guild's settings, from any of its
 -- members, whatever I share with the guild (they hold no identity); a guild list or a guild's record, from a member of
@@ -1051,7 +1149,9 @@ local function handle(text, distribution, sender)
         C_GuildInfo.GuildRoster()
     end
 
-    if message.type == "ANNOUNCE" then
+    if message.type == "HELLO" then
+        receiveHello(message, sender)
+    elseif message.type == "ANNOUNCE" then
         receiveAnnouncement(message, sender)
     elseif message.type == "GET" then
         receiveRecordRequest(message, sender)
@@ -1121,21 +1221,59 @@ inboxFrame:SetScript("OnUpdate", function()
     if not inbox[1] then inboxFrame:Hide() end
 end)
 
+-- Whether a payload is worth unpacking, from its header: a REC of an identity revision I would take (the one I hold
+-- too: a copy from my guild may replace it), settings or a guild record of my current guild not older than the ones I
+-- hold, a list of it whose hash I haven't taken and isn't mine. The content must match the header (Codec.Decode).
+local PAYLOAD_WANTED = {
+    ---@param header WhosWho.PayloadHeader
+    REC = function(header)
+        if header.id == Identity.Id() then return false end
+        local held = People.Get(header.id)
+        return People.IsNewer(header.id, header.rev)
+            or (held ~= nil and held.signedRecord ~= nil and held.signedRecord.rev == header.rev)
+    end,
+    ---@param header WhosWho.PayloadHeader
+    GSET = function(header)
+        -- Right after joining, the game may not give my guild's club ID yet: the record then waits for it.
+        local clubId = Identity.GuildId(UnitGUID("player"))
+        if clubId and header.guild ~= clubId then return false end
+        local held = GuildSettings.Record(header.guild)
+        return not held or held.rev <= header.rev
+    end,
+    ---@param header WhosWho.PayloadHeader
+    GLIST = function(header)
+        local clubId, _, hash = ownGuildList()
+        return header.guild == clubId and not takenListHashes[header.hash] and header.hash ~= hash
+    end,
+    ---@param header WhosWho.PayloadHeader
+    GIREC = function(header)
+        local clubId = Identity.GuildId(UnitGUID("player"))
+        if header.guild ~= clubId then return false end
+        local held = GuildRecord.Held(clubId, header.id)
+        return not held or held.rev <= header.rev
+    end,
+}
+
 local function receive(_, text, distribution, sender)
     if issecretvalue(text) or issecretvalue(sender) then return end
     Diagnostic.MessageReceived(text, distribution, sender)
 
-    local messageType = Codec.Type(text)
+    local messageType, header = Codec.Header(text)
     if not messageType then return end
 
     -- Without a linked character, I take nothing but announcements and my guild's settings, which hold no identity, and
     -- what a guild I opted in to sends; a character I unlinked still answers an announcement with NOID.
-    local takenAnyway = messageType == "ANNOUNCE" or messageType == "GSGET" or messageType == "GSET"
+    local takenAnyway = messageType == "HELLO" or messageType == "ANNOUNCE" or messageType == "GSGET"
+        or messageType == "GSET"
     if Identity.LinkedCount() == 0 and not Scopes.EnforcedGuild() and not takenAnyway then return end
 
     local allowedSender = PAYLOAD_SENDERS[messageType]
     if allowedSender and not allowedSender(distribution, sender) then
         return Diagnostic.Print(L["%s from %s not unpacked: not taken from that sender"]:format(messageType, sender))
+    end
+    local wanted = PAYLOAD_WANTED[messageType]
+    if wanted and not wanted(header) then
+        return Diagnostic.Print(L["%s from %s not unpacked: nothing I would take"]:format(messageType, sender))
     end
 
     inbox[#inbox + 1] = { text = text, distribution = distribution, sender = sender, messageType = messageType }
@@ -1197,6 +1335,20 @@ local function guidsOf(friends)
     return guids
 end
 
+---Calls the listener once a session, at the first HELLO whose version is an update for mine: newer, and a release
+---unless mine isn't one either.
+---@param listener fun(version: string, name: string)
+function Protocol.OnUpdateSeen(listener)
+    updateListeners[#updateListeners + 1] = listener
+end
+
+---The newest add-on version a HELLO carried this session, and who sent it; nil before any.
+---@return string? version
+---@return string? name
+function Protocol.NewestVersion()
+    if newestVersion then return newestVersion.version, newestVersion.name end
+end
+
 ---PLAYER_LOGIN, after the character refresh: registers the prefix, takes the current revision as announced, announces
 ---each change of revision and each scope turned on.
 function Protocol.Start()
@@ -1224,15 +1376,21 @@ function Protocol.AnnounceLogin()
     local quickRelog = lastLogout and lastLogout.guid == guid
         and time() - lastLogout.at < Store.Advanced("quickRelogSeconds")
     if quickRelog and Identity.AnnouncedRevision(guid) == Identity.LastBroadcastRevision() then return end
-    announce(Scopes.LoginAudience(), UnitLevel("player"), true, true, sendQueued)
+    announce(Scopes.LoginAudience(), UnitLevel("player"), true, true, sendAnnouncement)
     -- Sharing nothing with my guild, I still want its members' announcements: they carry its settings.
-    if IsInGuild() and not Scopes.AnnouncesToGuild() then sendToGuild(Codec.EmptyAnnouncement()) end
+    if IsInGuild() and not Scopes.AnnouncesToGuild() then
+        if Scopes.CanSendOnGuild() then
+            greet("GUILD")
+        else
+            for _, name in ipairs(Scopes.OnlineGuildMembers()) do greet("WHISPER", name) end
+        end
+    end
 end
 
 ---PLAYER_LEVEL_UP.
 ---@param level integer the new level
 function Protocol.AnnounceLevel(level)
-    announce(Scopes.BroadcastAudience(), level, true, false, sendQueued)
+    announce(Scopes.BroadcastAudience(), level, true, false, sendAnnouncement)
 end
 
 ---When the logout or quit countdown starts, and on an immediate logout or quit: once per logout. Sent directly, since
@@ -1274,6 +1432,7 @@ function Protocol.GuildChanged()
     wasInGuild = inGuild
     if joined or not inGuild then
         listOffers, takenListHashes, listRequest, unvouchedGuildRecords, listGivenTo = {}, {}, nil, {}, {}
+        greeted.GUILD = nil
     end
     -- A guild update while already in the guild keeps the announcement waiting.
     if joined then
@@ -1292,13 +1451,15 @@ function Protocol.GuildRosterChanged()
     if not guildJoinAnnouncementPending or GetNumGuildMembers() == 0 then return end
     if Identity.GuildIdPending(UnitGUID("player")) then return end
     guildJoinAnnouncementPending = false
-    -- My announcement when I share with the guild (NOID from a character I unlinked).
+    -- My announcement when I share with the guild (NOID from a character I unlinked); otherwise my HELLO alone: its
+    -- members still send theirs back.
     local announcement = Scopes.SharesWithGuild() and announcementText(UnitLevel("player"), true, true)
-    -- When my identity doesn't reach the guild that way, an empty announcement: its members still send theirs back.
-    local emptyAnnouncement = not Scopes.AnnouncesToGuild() and Codec.EmptyAnnouncement()
     for _, name in ipairs(Scopes.OnlineGuildMembers()) do
-        if announcement then sendQueued(announcement, "WHISPER", name) end
-        if emptyAnnouncement then sendQueued(emptyAnnouncement, "WHISPER", name) end
+        if announcement then
+            sendAnnouncement(announcement, "WHISPER", name)
+        elseif not Scopes.AnnouncesToGuild() then
+            greet("WHISPER", name)
+        end
     end
 end
 
@@ -1308,6 +1469,8 @@ function Protocol.GroupRosterChanged()
     if wasInGroup == nil then return end
     local inGroup = IsInGroup()
     local joined = inGroup and not wasInGroup
+    -- Another group, or none: the next one is greeted again.
+    if inGroup ~= wasInGroup then greeted.PARTY, greeted.RAID = nil, nil end
     wasInGroup = inGroup
     if not (joined and Scopes.AnnouncesToGroup()) then return end
 
@@ -1340,6 +1503,6 @@ function Protocol.Whispered(name)
     local announcedRecently = last and GetTime() - last.sentAt < Store.Advanced("whisperAnnouncementSeconds")
     if announcedRecently and last.revision == revision then return end
 
-    sendQueued(message, "WHISPER", name)
+    sendAnnouncement(message, "WHISPER", name)
     rememberAnnouncement(name, revision)
 end

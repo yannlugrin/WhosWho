@@ -32,6 +32,7 @@ ns.Store = Store
 ---@field advanced WhosWho.AdvancedSettings delays of the protocol a player may change (no screen yet)
 ---@field chat { nickname: { enable: boolean } } the nickname after the sender's name
 ---@field tooltip { nickname: { enable: boolean, position: "afterName"|"ownLine" }, otherCharacters: { enable: boolean, classColor: boolean, limit: integer }, note: { enable: boolean } } the nickname, and the "Also:" line: shown, names in class colour, characters named before the others are counted; the start of my note about the person
+---@field versionNotice { enable: boolean } a line in chat, once a session, when another player's Who's Who is an update for mine (Protocol.OnUpdateSeen)
 ---@field diagnostic { enable: boolean, chat: boolean } the diagnostic mode: every Who's Who message sent or received kept in the message log, and printed in chat
 ---@field launcher { hide: boolean, showInCompartment: boolean, minimapPos: number? } LibDBIcon's own format: the minimap button and the add-on compartment entry
 ---@field migrationVersion integer? the last migration step run on the settings (Migrations)
@@ -61,6 +62,7 @@ Store.DEFAULTS = {
             otherCharacters = { enable = true, classColor = true, limit = 4 },
             note = { enable = true },
         },
+        versionNotice = { enable = true },
         diagnostic = { enable = false, chat = true },
         launcher = { hide = false, showInCompartment = true },
     },

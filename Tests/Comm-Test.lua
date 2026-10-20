@@ -228,7 +228,7 @@ local function newEnvironment(session)
     env.geterrorhandler = function() return error end
     env.Enum = { GameRule = {} }
     env.SlashCmdList = {}
-    env.C_AddOns = { GetAddOnMetadata = function() return nil end }
+    env.C_AddOns = { GetAddOnMetadata = function() return c.addonVersion end }
     env.C_CreatureInfo = { GetClassInfo = function(classID) if classID <= 13 then return {} end end }
 
     env.UnitGUID = function(unit)
@@ -454,8 +454,8 @@ local function sent(filter)
     return n
 end
 
--- What a character with no identity to share sends its guild, so its members still send theirs.
-local EMPTY_ANNOUNCEMENT = "1 ANNOUNCE 0 0 0 0 1 0 0"
+-- Who's Who is here, from a copy without a version, as every test client is.
+local HELLO = "2 HELLO -"
 
 local function clearLog()
     world.log = {}
@@ -492,8 +492,8 @@ annMain.friends = { danMain, bobMain }
 local dan = login(danAccount, danMain)
 local ann = login(annAccount, annMain)
 run(1)
-check(sent({ from = "Ann Main" }) == 1 and sent({ from = "Ann Main", text = EMPTY_ANNOUNCEMENT, distribution = "GUILD" }) == 1,
-    "before a character is linked, only an empty announcement to the guild")
+check(sent({ from = "Ann Main" }) == 1 and sent({ from = "Ann Main", text = HELLO, distribution = "GUILD" }) == 1,
+    "before a character is linked, only a HELLO to the guild")
 clearLog()
 slash(ann, "link")
 run(1)
@@ -549,11 +549,11 @@ annMain.level = 11
 -- A GET answered by a REC that just left is not answered again ---------------------------------------
 
 clearLog()
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(10)
 check(sent({ from = "Ann Main", type = "REC" }) == 0, "a GET within 30 seconds of the REC reaching that player is ignored")
 run(30)
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(10)
 check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1, "later, a GET is answered again")
 
@@ -590,12 +590,12 @@ check(sent({ from = "Ann Main", type = "REC", distribution = "WHISPER", target =
 check(bob.ns.People.Nickname(annId) == "Ann" and cat.ns.People.Nickname(annId) == "Ann", "both have the new revision")
 
 clearLog()
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-cat.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+cat.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(40)
 check(sent({ from = "Ann Main", type = "REC" }) == 0, "GETs that crossed a guild REC are ignored")
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-cat.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+cat.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(10)
 check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
     and sent({ from = "Ann Main", type = "REC", distribution = "WHISPER" }) == 0,
@@ -604,7 +604,7 @@ check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
 -- One wait for every REC ----------------------------------------------------------------------------
 
 local function getFromBob()
-    bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+    bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 end
 
 run(40)
@@ -647,8 +647,8 @@ check(sent({ from = "Ann Main", type = "REC", target = "Bob Main" }) == 1,
 logout(ann)
 ann = login(annAccount, annAlt)
 run(1)
-check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == sent({ from = "Ann Alt", text = EMPTY_ANNOUNCEMENT }),
-    "an unlinked character does not announce my identity, only an empty announcement")
+check(sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0 and sent({ from = "Ann Alt", text = HELLO }) > 0,
+    "an unlinked character does not announce my identity, only says hello")
 clearLog()
 slash(ann, "link")
 run(30)
@@ -713,8 +713,8 @@ world.group = { annMain, bobMain, danMain }
 ann.ns.settings.scopes.group = true
 run(40)
 clearLog()
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-dan.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+dan.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(10)
 check(sent({ from = "Ann Main", type = "REC", distribution = "PARTY" }) == 1
     and sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 0
@@ -725,9 +725,9 @@ check(sent({ from = "Ann Main", type = "REC", distribution = "PARTY" }) == 1
 world.group = { annMain, bobMain, danMain }
 run(40)
 clearLog()
-cat.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-dan.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+cat.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+dan.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(10)
 check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
     and sent({ from = "Ann Main", type = "REC", distribution = "PARTY" }) == 0
@@ -739,9 +739,9 @@ check(sent({ from = "Ann Main", type = "REC", distribution = "GUILD" }) == 1
 world.group = { annMain, bobMain, catMain, danMain }
 run(40)
 clearLog()
-cat.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-bob.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
-dan.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. annId, "WHISPER", "Ann Main")
+cat.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+bob.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
+dan.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. annId, "WHISPER", "Ann Main")
 run(10)
 check(sent({ from = "Ann Main", type = "REC", distribution = "PARTY" }) == 1
     and sent({ from = "Ann Main", type = "REC" }) == 1,
@@ -851,7 +851,7 @@ clearLog()
 ann = login(annAccount, annAlt)
 run(10)
 check(sent({ from = "Ann Alt", type = "NOID" }) == 1
-    and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == sent({ from = "Ann Alt", text = EMPTY_ANNOUNCEMENT })
+    and sent({ from = "Ann Alt", type = "ANNOUNCE" }) == 0
     and sent({ from = "Ann Alt", type = "GET" }) == 0 and sent({ from = "Bob Main", type = "GET" }) == 0,
     "at each login, the removed character declares no identity, and asks nothing")
 clearLog()
@@ -890,12 +890,12 @@ levelUp(bob)
 run(1)
 local traced = false
 for _, line in ipairs(printed) do
-    if line:find("Received, GUILD Bob Main: 1 ANNOUNCE " .. bob.ns.Identity.Id(), 1, true) then traced = true end
+    if line:find("Received, GUILD Bob Main: 2 ANNOUNCE " .. bob.ns.Identity.Id(), 1, true) then traced = true end
 end
 check(traced, "with debug messages on, a received announcement is printed")
 local logged = cat.ns.Diagnostic.Messages()[1]
 check(logged and not logged.sent and logged.distribution == "GUILD" and logged.name == "Bob Main"
-    and logged.text:find("^1 ANNOUNCE " .. bob.ns.Identity.Id()), "and logged, most recent first")
+    and logged.text:find("^2 ANNOUNCE " .. bob.ns.Identity.Id()), "and logged, most recent first")
 cat = reload(cat)
 check(cat.ns.Diagnostic.Messages()[1] ~= nil, "the log is kept across a /reload while the diagnostic mode is on")
 slash(cat, "debug off")
@@ -1438,7 +1438,7 @@ world.group = {}
 bobAltSession.ns.settings.scopes.group = false
 
 clearLog()
-fay.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. bobAltSession.ns.Identity.Id(), "WHISPER", "Bob Alt")
+fay.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. bobAltSession.ns.Identity.Id(), "WHISPER", "Bob Alt")
 run(10)
 check(sent({ from = "Bob Alt", type = "REC" }) == 0, "an anonymous character answers no GET")
 
@@ -1456,7 +1456,7 @@ check(sent({ from = "Bob Alt", type = "ANNOUNCE", distribution = "GUILD" }) == 1
     and not lastWantsAnnouncement({ from = "Bob Alt", distribution = "GUILD" }), "only that first announcement")
 run(40)
 clearLog()
-fay.ns.Protocol:SendCommMessage("WhosWho", "1 GET " .. bobAltSession.ns.Identity.Id(), "WHISPER", "Bob Alt")
+fay.ns.Protocol:SendCommMessage("WhosWho", "2 GET " .. bobAltSession.ns.Identity.Id(), "WHISPER", "Bob Alt")
 run(1)
 slash(bobAltSession, "unlink")
 run(30)
@@ -2010,14 +2010,14 @@ run(60)
 check(sent({ from = "Nia Alt", type = "REC" }) >= 1 and sent({ from = "Pia Main", type = "GET", target = "Nia Alt" }) == 1,
     "a character the rule adds answers its guild's GETs")
 check(pia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid].guild.forced, "with the guild's record")
--- Qia never linked anything: her empty announcement brings the members' back, so she learns the guild's rule and is
+-- Qia never linked anything: her HELLO brings the members' back, so she learns the guild's rule and is
 -- asked. Refusing sends nothing to the guild; opting in gives it an identity holding her character in it.
 local qiaAccount = account("Qia")
 local qiaMain = character("Qia Main", "Player-1-0000FA01", PRIEST, GUILD3)
 clearLog()
 local qia = login(qiaAccount, qiaMain)
 run(60)
-check(sent({ from = "Qia Main", text = EMPTY_ANNOUNCEMENT, distribution = "GUILD" }) == 1
+check(sent({ from = "Qia Main", text = HELLO, distribution = "GUILD" }) == 1
     and sent({ type = "ANNOUNCE", target = "Qia Main" }) >= 1 and sent({ type = "GET", target = "Qia Main" }) == 0,
     "a member with nothing to share announces empty: the members answer, and nobody asks for a record")
 check(qia.ns.GuildSettings.EnforcesLinking(GUILD3) and qia.ns.Scopes.EnforcedLinkingChoiceNeeded() == GUILD3,
@@ -2052,7 +2052,7 @@ clearLog()
 mia.ns.Protocol:SendCommMessage("WhosWho",
     mia.ns.Codec.Announcement(mia.ns.Identity.Id(), mia.ns.Identity.Revision(), 10, true, true, nil, nil, 0), "PARTY")
 run(10)
-check(sent({ from = "Rob Alt", type = "ANNOUNCE" }) == sent({ from = "Rob Alt", text = EMPTY_ANNOUNCEMENT }),
+check(sent({ from = "Rob Alt", type = "ANNOUNCE" }) == 0,
     "a character the guild's rule would add, not answered yet, never announces his identity")
 world.group = {}
 rob.ns.settings.scopes.group = false
@@ -2110,13 +2110,12 @@ run(5)
 check(sent({ from = "Sam Main", type = "ANNOUNCE" }) == 0, "joining, nothing goes to the guild before its club ID")
 sam.clubIdHidden = nil
 run(60)
-check(sent({ from = "Sam Main", type = "ANNOUNCE" }) >= 1
-    and sent({ from = "Sam Main", type = "ANNOUNCE" }) == sent({ from = "Sam Main", text = EMPTY_ANNOUNCEMENT })
+check(sent({ from = "Sam Main", type = "HELLO" }) >= 1 and sent({ from = "Sam Main", type = "ANNOUNCE" }) == 0
     and sent({ from = "Sam Main", type = "REC" }) == 0,
-    "then, the rule not accepted, only empty announcements: the guild never learns the identity")
+    "then, the rule not accepted, only hellos: the guild never learns the identity")
 local samTargets = {}
 for _, entry in ipairs(world.log) do
-    if entry.from == "Sam Main" and entry.distribution == "WHISPER" and entry.type == "ANNOUNCE" then
+    if entry.from == "Sam Main" and entry.distribution == "WHISPER" and entry.type == "HELLO" then
         samTargets[#samTargets + 1] = entry.target
     end
 end
@@ -2356,7 +2355,7 @@ do
     logout(ari)
 end
 
--- Announcement format -----------------------------------------------------------------------------------
+-- Message formats -------------------------------------------------------------------------------------
 
 do
     local Codec, id = ann.ns.Codec, ann.ns.Identity.Id()
@@ -2365,19 +2364,43 @@ do
         and decoded.guildListAt == nil and decoded.guildSettingsRev == 1791403200, "an announcement decodes, without a guild list")
     decoded = Codec.Decode(Codec.Announcement(id, 3, 20, true, false, 1791403300, "9f2c41ab", 0))
     check(decoded and decoded.guildListAt == 1791403300 and decoded.guildListHash == "9f2c41ab", "with a guild list, its revision")
-    check(#Codec.Decode(Codec.RecordRequest({ id, id, id })).ids == 3 and Codec.Decode("1 GET " .. id).ids[1] == id
-        and Codec.Decode(Codec.RecordRequest({ id, id, id }) .. " " .. id) == nil,
-        "a GET names one to three identities, as 0.1.0's one")
-    decoded = Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0")
-    check(decoded and decoded.guildSettingsRev == 0, "an announcement from 0.1.0, without guild settings, holds none")
-    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 1791403200.9f2c41ab") ~= nil,
-        "a guild list revision <time>.<hash> is accepted")
-    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0 later fields") ~= nil, "fields a later version adds are ignored")
-    decoded = Codec.Decode(Codec.EmptyAnnouncement())
-    check(decoded and decoded.type == "ANNOUNCE" and decoded.id == nil and decoded.wantsAnnouncement,
-        "an empty announcement carries no identity, and asks for the receiver's")
-    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0") == nil, "an announcement without the guild list field is refused")
-    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 x") == nil, "a malformed guild list revision is refused")
+    check(Codec.Decode("2 ANNOUNCE " .. id .. " 3 20 1 0 0 0 later fields") ~= nil, "fields a later version adds are ignored")
+    check(Codec.Decode("2 ANNOUNCE " .. id .. " 3 20 1 0 0") == nil, "an announcement without the guild settings field is refused")
+    check(Codec.Decode("2 ANNOUNCE " .. id .. " 3 20 1 0 x 0") == nil, "a malformed guild list revision is refused")
+    check(Codec.Decode("1 ANNOUNCE " .. id .. " 3 20 1 0 0 0") == nil and Codec.Header("1 GET " .. id) == nil,
+        "the betas' protocol version 1 is ignored")
+
+    decoded = Codec.Decode(Codec.Hello("1.0.3"))
+    check(decoded and decoded.type == "HELLO" and decoded.version == "1.0.3", "a HELLO carries the add-on version")
+    decoded = Codec.Decode(Codec.Hello("-"))
+    check(decoded and decoded.type == "HELLO" and decoded.version == nil, "a copy without one sends -, read as none")
+    check(Codec.Decode(Codec.Hello("1.0.4-beta.2")).version == "1.0.4-beta.2" and Codec.Decode("2 HELLO 1.0.3 later").version == "1.0.3",
+        "a pre-release keeps its suffix; fields a later version adds are ignored")
+
+    local other = ("%064x"):format(7)
+    check(#Codec.Decode(Codec.RecordRequest({ id, id, id })).ids == 3
+        and #Codec.Decode(Codec.RecordRequest({ id, id, id }) .. " " .. other).ids == 3,
+        "a GET names one to three identities: a fourth is not read")
+    decoded = Codec.Decode("2 GET G1234 " .. id .. " later")
+    check(decoded and #decoded.ids == 1 and decoded.ids[1] == id and Codec.Decode("2 GET G1234") == nil,
+        "tokens that aren't identity IDs are skipped; without any ID, nothing is asked")
+
+    local signedRecord = ann.ns.Identity.SignedRecord()
+    local text = Codec.RecordUpdate(signedRecord)
+    local before = unpackedCount
+    local messageType, header = Codec.Header(text)
+    check(messageType == "REC" and header.id == id and header.rev == signedRecord.rev and unpackedCount == before,
+        "a REC's header gives whose record and which revision, read without unpacking")
+    check(Codec.Decode(text).signedRecord.id == id, "its payload follows the header")
+    check(Codec.Header(text:gsub("^2 REC (%x+) (%d+) : ", "2 REC %1 %2 later : ")) == "REC"
+        and Codec.Decode((text:gsub("^2 REC (%x+) (%d+) : ", "2 REC %1 %2 later : "))) ~= nil,
+        "header fields a later version adds before the separator are ignored")
+    check(Codec.Decode((text:gsub("^2 REC (%x+) (%d+) : ", "2 REC %1 " .. signedRecord.rev + 1 .. " : "))) == nil,
+        "a payload that doesn't match its header is dropped")
+    check(Codec.Header((text:gsub(" : ", " "))) == nil, "a payload without its separator is refused")
+    messageType, header = Codec.Header(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }, {}))
+    check(messageType == "GLIST" and header.guild == 7 and header.at == 100 and header.hash == "9f2c41ab",
+        "a GLIST's header gives its guild and revision")
 end
 
 -- Guild record messages ---------------------------------------------------------------------------------
@@ -2387,14 +2410,10 @@ do
     local request = Codec.Decode(Codec.GuildRecordRequest({ id, guildId }))
     check(request and request.type == "GIGET" and request.ids[1] == id and request.ids[2] == guildId,
         "a GIGET names player and guild identity IDs")
-    check(Codec.Decode("1 GIGET G123") == nil, "and nothing else")
+    check(Codec.Decode("2 GIGET G123") == nil, "and nothing else")
     local list = Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }, { [guildId] = 5, [id] = 4 }))
-    check(list and list.entries[id] == 3 and list.guildEntries[guildId] == 5 and list.guildEntries[id] == 4
-        and list.carriesGuildRecords,
+    check(list and list.entries[id] == 3 and list.guildEntries[guildId] == 5 and list.guildEntries[id] == 4,
         "a GLIST carries the guild's records apart from the identities, the same ID in both")
-    list = Codec.Decode(Codec.GuildListUpdate(7, 100, "9f2c41ab", { [id] = 3 }))
-    check(list and next(list.guildEntries) == nil and not list.carriesGuildRecords,
-        "one from 0.3.0 has no guild records, and is marked as unable to hold them")
     local entries, guildEntries = {}, {}
     for i = 1, 1500 do entries[("%064x"):format(i)] = 1 end
     for i = 1, 501 do guildEntries[("G%016x"):format(i)] = 1 end
@@ -2405,17 +2424,161 @@ do
     local Diagnostic = ann.ns.Diagnostic
     ann.ns.settings.diagnostic.enable = true
     local payloadMessages = {
-        Codec.RecordUpdate({}), Codec.GuildSettingsUpdate({}), Codec.GuildListUpdate(7, 100, "9f2c41ab", {}, {}),
-        Codec.GuildRecordUpdate({}),
+        Codec.RecordUpdate({ id = ("%064x"):format(1), rev = 1 }), Codec.GuildSettingsUpdate({ guild = 7, rev = 1 }),
+        Codec.GuildListUpdate(7, 100, "9f2c41ab", {}, {}), Codec.GuildRecordUpdate({ guild = 7, id = "G000000000000f601", rev = 1 }),
     }
     for _, text in ipairs(payloadMessages) do Diagnostic.MessageReceived(text, "GUILD", "Bob Main") end
     local shortened = true
     for i = 1, #payloadMessages do
         local entry = Diagnostic.Messages()[i]
-        shortened = shortened and entry.text:match("^1 %u+$") ~= nil and entry.size > #entry.text
+        shortened = shortened and entry.text:match("^2 %u+ [%w ]+$") ~= nil and entry.size > #entry.text
     end
     ann.ns.settings.diagnostic.enable = false
-    check(shortened, "the diagnostic log leaves out the payload of a REC, GSET, GLIST and GIREC")
+    check(shortened, "the diagnostic log keeps the header of a REC, GSET, GLIST and GIREC, and leaves out the payload")
+end
+
+-- Hello -----------------------------------------------------------------------------------------------
+
+do
+    local GUILD13 = 31000013
+    local ikeMain = character("Ike Main", "Player-1-0000FB01", MAGE, GUILD13)
+    local jaxMain = character("Jax Main", "Player-1-0000FB02", ROGUE, GUILD13)
+    local kipMain = character("Kip Main", "Player-1-0000FB03", PRIEST, GUILD13)
+    ikeMain.addonVersion, jaxMain.addonVersion, kipMain.addonVersion = "1.0.3", "1.0.1", "1.2.0"
+    local ikeAccount, jaxAccount = account("Ike"), account("Jax")
+    local ike = login(ikeAccount, ikeMain)
+    slash(ike, "link")
+    run(60)
+    logout(ike)
+    local jax = login(jaxAccount, jaxMain)
+    slash(jax, "link")
+    run(60)
+    clearLog()
+    ike = login(ikeAccount, ikeMain)
+    run(60)
+    local first = nil
+    for _, entry in ipairs(world.log) do
+        if entry.from == "Ike Main" and entry.distribution == "GUILD" and not first then first = entry.text end
+    end
+    check(first == "2 HELLO 1.0.3" and sent({ from = "Ike Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1,
+        "my first message on a channel in a session is my HELLO, with my version, then my announcement")
+    check(sent({ from = "Jax Main", type = "HELLO" }) == 0 and sent({ from = "Jax Main", type = "ANNOUNCE", target = "Ike Main" }) == 1,
+        "an answer goes without a HELLO, and a HELLO with my announcement gets one answer")
+    clearLog()
+    levelUp(ike)
+    run(1)
+    check(sent({ from = "Ike Main", type = "HELLO" }) == 0 and sent({ from = "Ike Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1,
+        "my later announcements there go without it")
+    check(ike.ns.Protocol.NewestVersion() == nil, "a newer client learns nothing from an older one's answers")
+    check(jax.ns.Protocol.NewestVersion() == "1.0.3", "the older one learns the newer version from its HELLO")
+
+    clearLog()
+    local kip = login(account("Kip"), kipMain)
+    run(10)
+    check(sent({ from = "Ike Main", type = "HELLO", target = "Kip Main" }) == 0
+        and sent({ from = "Kip Main", type = "HELLO", distribution = "GUILD" }) == 1,
+        "a HELLO from a newer version gets no HELLO back")
+    clearLog()
+    logout(jax)
+    jax = login(jaxAccount, jaxMain)
+    local notices = {}
+    jax.env.print = function(line) if line:find("newer version", 1, true) then notices[#notices + 1] = line end end
+    run(10)
+    check(#notices == 1, "a release newer than mine is told once a session, however many players have it")
+    check(sent({ from = "Ike Main", type = "HELLO", target = "Jax Main" }) == 1
+        and sent({ from = "Kip Main", type = "HELLO", target = "Jax Main" }) == 1
+        and jax.ns.Protocol.NewestVersion() == "1.2.0",
+        "an older one gets the newer ones' HELLO back, and learns the newest")
+
+    -- A pre-release before its release, a build after the tag after it, each by its number.
+    local inOrder = true
+    for _, version in ipairs({ "1.3.4-alpha.2", "1.3.4-beta.1", "1.3.4-beta.2", "1.3.4-rc.1", "1.3.4", "1.3.4-2-g1a2b3c4",
+        "1.3.4-10-g1a2b3c4", "1.3.10" }) do
+        jax.comm("WhosWho", ike.ns.Codec.Hello(version), "GUILD", "Vee Main")
+        run(1)
+        inOrder = inOrder and jax.ns.Protocol.NewestVersion() == version
+    end
+    check(inOrder, "versions compare as numbers, a pre-release before its release, a build after the tag after it")
+    jax.comm("WhosWho", ike.ns.Codec.Hello("1.3.10-custom"), "GUILD", "Vee Main")
+    jax.comm("WhosWho", ike.ns.Codec.Hello("1.2.9"), "GUILD", "Vee Main")
+    run(1)
+    check(jax.ns.Protocol.NewestVersion() == "1.3.10", "another suffix counts as the release, an older version as older")
+    clearLog()
+    ike.comm("WhosWho", ike.ns.Codec.Hello("1.0.3-beta.1"), "GUILD", "Vee Main")
+    run(1)
+    check(sent({ from = "Ike Main", type = "HELLO", target = "Vee Main" }) == 1, "a pre-release of my version is older")
+
+    -- A player on a release isn't told about a pre-release; one on a pre-release is told about any newer version.
+    logout(kip)
+    local kipNotices = {}
+    kip = login(account("Kip"), kipMain)
+    kip.env.print = function(line) if line:find("newer version", 1, true) then kipNotices[#kipNotices + 1] = line end end
+    run(10)
+    kip.comm("WhosWho", ike.ns.Codec.Hello("1.3.0-beta.1"), "GUILD", "Vee Main")
+    run(1)
+    check(#kipNotices == 0, "a release player isn't told about a pre-release")
+    kip.comm("WhosWho", ike.ns.Codec.Hello("1.3.0"), "GUILD", "Vee Main")
+    run(1)
+    check(#kipNotices == 1, "but about the release that follows it")
+    logout(kip)
+    kipMain.addonVersion = "1.3.0-beta.1"
+    kipNotices = {}
+    kip = login(account("Kip"), kipMain)
+    kip.env.print = function(line) if line:find("newer version", 1, true) then kipNotices[#kipNotices + 1] = line end end
+    kip.ns.settings.versionNotice.enable = false
+    run(10)
+    kip.comm("WhosWho", ike.ns.Codec.Hello("1.3.0-beta.2"), "GUILD", "Vee Main")
+    run(1)
+    check(#kipNotices == 0, "with the notice turned off, nothing is printed")
+    logout(kip)
+    kipNotices = {}
+    kip = login(account("Kip"), kipMain)
+    kip.env.print = function(line) if line:find("newer version", 1, true) then kipNotices[#kipNotices + 1] = line end end
+    kip.ns.settings.versionNotice.enable = true
+    run(10)
+    kip.comm("WhosWho", ike.ns.Codec.Hello("1.3.0-beta.2"), "GUILD", "Vee Main")
+    run(1)
+    check(#kipNotices == 1, "a pre-release player is told about a newer pre-release")
+    kipMain.addonVersion = "1.2.0"
+
+    -- My HELLO back greets that player: my announcements to them later go without another.
+    local louMain = character("Lou Main", "Player-1-0000FB04", WARRIOR)
+    louMain.addonVersion = "0.9.0"
+    local lou = login(account("Lou"), louMain)
+    slash(lou, "link")
+    lou.ns.settings.scopes.whispers, ike.ns.settings.scopes.whispers = true, true
+    run(60)
+    clearLog()
+    whisper(lou, ikeMain)
+    run(10)
+    whisper(ike, louMain)
+    run(10)
+    check(sent({ from = "Lou Main", type = "HELLO", target = "Ike Main" }) == 1
+        and sent({ from = "Ike Main", type = "HELLO", target = "Lou Main" }) == 1
+        and sent({ from = "Ike Main", type = "ANNOUNCE", target = "Lou Main" }) >= 1,
+        "a HELLO back greets that player: my announcement to them later goes without another")
+    logout(lou)
+    logout(kip)
+    logout(jax)
+    logout(ike)
+end
+
+-- Unwanted payloads ---------------------------------------------------------------------------------------
+
+do
+    local Codec, record = bob.ns.Codec, ann.ns.Identity.SignedRecord()
+    local before = unpackedCount
+    bob.comm("WhosWho", Codec.RecordUpdate(record), "GUILD", "Ann Main")
+    run(1)
+    check(bob.ns.People.Get(record.id).signedRecord.rev == record.rev and unpackedCount == before + 1,
+        "a REC of the revision I hold is still unpacked: a copy from my guild may replace it")
+    local older = {}
+    for key, value in pairs(record) do older[key] = value end
+    older.rev = record.rev - 1
+    before = unpackedCount
+    bob.comm("WhosWho", Codec.RecordUpdate(older), "GUILD", "Ann Main")
+    run(1)
+    check(unpackedCount == before, "an older one isn't unpacked")
 end
 
 -- A more recent list lacking the guild's records: the officer who takes it announces its own back.
@@ -2497,13 +2660,13 @@ do
     local decoded = {}
     local decode = wes.ns.Codec.Decode
     wes.ns.Codec.Decode = function(text)
-        decoded[#decoded + 1] = wes.ns.Codec.Type(text)
+        decoded[#decoded + 1] = (wes.ns.Codec.Header(text))
         return decode(text)
     end
     local text = uma.ns.Codec.RecordUpdate(umaRecord)
     wes.comm("WhosWho", text, "GUILD", "Uma Main")
     wes.comm("WhosWho", text, "GUILD", "Uma Main")
-    wes.comm("WhosWho", EMPTY_ANNOUNCEMENT, "GUILD", "Uma Main")
+    wes.comm("WhosWho", HELLO, "GUILD", "Uma Main")
     local inbox = inboxFrame(wes)
     local byFrame = {}
     for i = 1, 3 do
@@ -2511,7 +2674,7 @@ do
         byFrame[i] = table.concat(decoded, " ")
     end
     wes.ns.Codec.Decode = decode
-    check(byFrame[1] == "REC" and byFrame[2] == "REC REC" and byFrame[3] == "REC REC ANNOUNCE",
+    check(byFrame[1] == "REC" and byFrame[2] == "REC REC" and byFrame[3] == "REC REC HELLO",
         ("one payload in a frame, in arrival order (%s / %s / %s)"):format(byFrame[1], byFrame[2], byFrame[3]))
     run(10)
 
@@ -2543,12 +2706,13 @@ end
 -- Payload limits ----------------------------------------------------------------------------------------
 
 do
-    local Codec, before = ann.ns.Codec, unpackedCount
-    check(Codec.Decode("1 REC " .. ("x"):rep(34817)) == nil and Codec.Decode("1 GSET " .. ("x"):rep(34817)) == nil
-        and Codec.Decode("1 GLIST " .. ("x"):rep(131073)) == nil and unpackedCount == before,
+    local Codec, before, id = ann.ns.Codec, unpackedCount, ann.ns.Identity.Id()
+    local rec, gset, glist = "2 REC " .. id .. " 1 : ", "2 GSET 7 1 : ", "2 GLIST 7 1 9f2c41ab : "
+    check(Codec.Decode(rec .. ("x"):rep(34817)) == nil and Codec.Decode(gset .. ("x"):rep(34817)) == nil
+        and Codec.Decode(glist .. ("x"):rep(131073)) == nil and unpackedCount == before,
         "a payload over its limit is refused before unpacking: 34 KB for a REC or a GSET (32 KB signed, and a margin), 128 KB for a GLIST")
-    Codec.Decode("1 REC " .. ("x"):rep(34816))
-    Codec.Decode("1 GLIST " .. ("x"):rep(131072))
+    Codec.Decode(rec .. ("x"):rep(34816))
+    Codec.Decode(glist .. ("x"):rep(131072))
     check(unpackedCount == before + 2, "one at its limit is unpacked")
 end
 

@@ -15,14 +15,14 @@ Useful commands: `/ww status` (my identity), `/ww people` (the identities I hold
 
 ## Group
 
-**Announcement, request and record.** Group A and B, then re-log A.
+**Announcement, request and record.** Group A and B, then re-log A. `<version>` is the add-on's version, `-` for a copy without one (a development copy).
 
 | A's chat | B's chat |
 |---|---|
-| `Sent, PARTY: 1 ANNOUNCE <A's ID> <rev> <level> 1 1 0` | `Received, PARTY <A>: 1 ANNOUNCE …` |
-| `Received, WHISPER <B>: 1 GET <A's ID>` | `Sent, WHISPER <A>: 1 GET …` |
-| after about 5 s: `Sent, WHISPER <B>: 1 REC (… bytes)` | `Received, WHISPER <A>: 1 REC (… bytes)` |
-| after about 5 s: `Received, WHISPER <B>: 1 ANNOUNCE … 1 0 0` | `Sent, WHISPER <A>: 1 ANNOUNCE <B's ID> <rev> <level> 1 0 0` (B's answer to the login) |
+| `Sent, PARTY: 2 HELLO <version>`, then `Sent, PARTY: 2 ANNOUNCE <A's ID> <rev> <level> 1 1 0` | `Received, PARTY <A>: 2 HELLO …`, then `Received, PARTY <A>: 2 ANNOUNCE …` |
+| `Received, WHISPER <B>: 2 GET <A's ID>` | `Sent, WHISPER <A>: 2 GET …` |
+| after about 5 s: `Sent, WHISPER <B>: 2 REC <A's ID> <rev> (… bytes)` | `Received, WHISPER <A>: 2 REC <A's ID> <rev> (… bytes)` |
+| after about 5 s: `Received, WHISPER <B>: 2 ANNOUNCE … 1 0 0` | `Sent, WHISPER <A>: 2 ANNOUNCE <B's ID> <rev> <level> 1 0 0` (B's answer to the login) |
 
 On B, `/ww people` lists A's character as **confirmed**, with its level. Then re-log B: the same on the other side.
 
@@ -30,13 +30,13 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Linking while grouped.** On A, link another character while playing it.
 
-- A, after 15 s: `Sent, PARTY: 1 ANNOUNCE … 1 0 0`, and no `REC` yet.
-- B: `Sent, WHISPER <A>: 1 GET …`; after about 5 s, A: `Sent, WHISPER <B>: 1 REC …`.
+- A, after 15 s: `Sent, PARTY: 2 ANNOUNCE … 1 0 0`, and no `REC` yet.
+- B: `Sent, WHISPER <A>: 2 GET …`; after about 5 s, A: `Sent, WHISPER <B>: 2 REC …`.
 - B: `/ww people` lists the new character as **confirmed**, with its level.
 
 **Unlinking while grouped.** On A, `/ww unlink` on a linked character.
 
-- A, after 15 s: `Sent, PARTY: 1 ANNOUNCE …` (and `GUILD` if A is in a guild), then B's `GET`, then a `REC`.
+- A, after 15 s: `Sent, PARTY: 2 ANNOUNCE …` (and `GUILD` if A is in a guild), then B's `GET`, then a `REC`.
 - B: `/ww people` no longer lists that character.
 
 ## Removal While Offline
@@ -46,15 +46,15 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 3. B logs back in; group A and B.
 4. Re-log A on that character.
 
-- A: `Sent, PARTY: 1 NOID`, without A's ID, and no announcement.
+- A: `Sent, PARTY: 2 NOID`, without A's ID, and no announcement.
 - B: no `GET`; `/ww people` no longer lists the removed character, and B's Review tab shows nothing.
 - A second re-log of A: the same `NOID`, which changes nothing on B.
-- In a guild together instead: A playing the removed character when B logs in answers B's login announcement with `1 NOID` by whisper, which already removes it on B (the roster gives A's GUID).
+- In a guild together instead: A playing the removed character when B logs in answers B's login announcement with `2 NOID` by whisper, which already removes it on B (the roster gives A's GUID).
 
 **Removal reaching a player met in a group.** A and B not in a guild together, not friends; A whispered B and they grouped, so B holds A's character. B logs out; on A, unlink that character (while playing it); B logs back in.
 
-- A whispers B: `Sent, WHISPER <B>: 1 NOID`; B's `/ww people` no longer lists the character. A whispering B again: nothing more.
-- A and B group again: `Sent, PARTY: 1 NOID` from the one joining, and A answers B's group announcement with `1 NOID` by whisper. Never an announcement from A.
+- A whispers B: `Sent, WHISPER <B>: 2 NOID`; B's `/ww people` no longer lists the character. A whispering B again: nothing more.
+- A and B group again: `Sent, PARTY: 2 NOID` from the one joining, and A answers B's group announcement with `2 NOID` by whisper. Never an announcement from A.
 
 **Unlinking every character** works the same way: after the last unlink, B, offline at the time, forgets A's identity once the last removed character sends `NOID`. `/ww people <A's character>` on B then finds no one.
 
@@ -62,65 +62,65 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **A scope turned off.** On B, `/ww scope group off`. On A, link or unlink a character.
 
-- A: `Sent, PARTY: 1 ANNOUNCE …`.
-- B: `Received, PARTY <A>: 1 ANNOUNCE …`, but no `GET`, and `/ww people` does not change.
+- A: `Sent, PARTY: 2 ANNOUNCE …`.
+- B: `Received, PARTY <A>: 2 ANNOUNCE …`, but no `GET`, and `/ww people` does not change.
 
 **Whispers.** On both, `/ww scope whispers on`; leave the group; A and B don't know each other (`/ww people`).
 
-- B whispers A; A doesn't answer. A gets `Received, WHISPER <B>: 1 ANNOUNCE …`, but sends no `GET`, and `/ww people` does not change: a whisper received allows nothing.
-- A whispers B. A sends `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`, B a `GET`, A the `REC`, and B's answer brings B's record the same way: each `/ww people` shows the other's character, confirmed.
+- B whispers A; A doesn't answer. A gets `Received, WHISPER <B>: 2 ANNOUNCE …`, but sends no `GET`, and `/ww people` does not change: a whisper received allows nothing.
+- A whispers B. A sends `Sent, WHISPER <B>: 2 ANNOUNCE … 1 1 0`, B a `GET`, A the `REC`, and B's answer brings B's record the same way: each `/ww people` shows the other's character, confirmed.
 - On A, link or unlink a character: after 15 s, nothing goes to B (a whispered player is never in a broadcast). A whispers B: the announcement goes out, B sends a `GET` and follows the change.
 - A: `/reload`, then B whispers A: A sends a `GET` (B is still allowed from the saved whisper). `/reload` again, then log out and back in: the same.
 - In A's settings, **Clear history** is on the right of **People I whisper**, usable while it is off. It asks for a confirmation; after it, B whispering A brings no `GET` from A until A whispers B again.
-- Settings open, A grouped with B: turning **My party or raid** on sends nothing until the settings close, then one `1 ANNOUNCE … 1 1 0` on `PARTY`. Turned on then off again before closing: nothing.
+- Settings open, A grouped with B: turning **My party or raid** on sends nothing until the settings close, then one `2 ANNOUNCE … 1 1 0` on `PARTY`. Turned on then off again before closing: nothing.
 - In A's settings, **Whispers count for** is greyed out while **People I whisper** is off. Set it to **1 hour**; one hour after A's last whisper to B, B whispering A brings no `GET` from A.
 
 ## Reaching Players Who Come Later
 
 **Joining a group.** On both, `/ww scope group on`; A and B not grouped. Invite B into A's group.
 
-- B (the one joining): `Sent, PARTY: 1 ANNOUNCE … 1 1 0`. A, the group's only other member, has also just joined, so the same from A.
-- Each, after about 5 s: `Sent, WHISPER <other>: 1 ANNOUNCE … 1 0 0`, and nothing more: an answer is not answered.
+- B (the one joining): `Sent, PARTY: 2 ANNOUNCE … 1 1 0`. A, the group's only other member, has also just joined, so the same from A.
+- Each, after about 5 s: `Sent, WHISPER <other>: 2 ANNOUNCE … 1 0 0`, and nothing more: an answer is not answered.
 - B leaves and is invited again: the same exchange again. A change in the group (a third player joining) sends nothing from A or B unless they join.
 
 **Turning the Group scope on.** A and B grouped, B's Group scope on, A's off; `/reload` both. On A, `/ww scope group on`.
 
-- A, right away: `Sent, PARTY: 1 ANNOUNCE … 1 1 0`.
-- B: a `GET` if it doesn't hold A's revision; after about 5 s, `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0 0`. A then asks for B's record if it doesn't hold it.
+- A, right away: `Sent, PARTY: 2 ANNOUNCE … 1 1 0`.
+- B: a `GET` if it doesn't hold A's revision; after about 5 s, `Sent, WHISPER <A>: 2 ANNOUNCE … 1 0 0`. A then asks for B's record if it doesn't hold it.
 - `/ww scope group off`, then on again: the same announcement again; turning the Whispers scope on sends nothing.
 
 **Turning the Guild scope on** (needs a guild). A and B in the same guild, B's Guild scope on, A's off. On A, `/ww scope guild on`.
 
-- A, after 15 s (the change of revision it makes): `Sent, GUILD: 1 ANNOUNCE … 1 1 0`.
-- B: a `GET`, then its answer `1 ANNOUNCE … 1 0 0`; A gets B's record in turn.
+- A, after 15 s (the change of revision it makes): `Sent, GUILD: 2 ANNOUNCE … 1 1 0`.
+- B: a `GET`, then its answer `2 ANNOUNCE … 1 0 0`; A gets B's record in turn.
 
 **Joining a guild** (needs a guild). A linked, Guild scope on, not in a guild. A joins B's guild.
 
-- A, once its guild roster arrives (a moment after joining): `Sent, WHISPER <member>: 1 ANNOUNCE … 1 1 0` to each online member, nothing on `GUILD` (see Workarounds in README-Technical). B answers as for a login when its roster lists A. *To verify*: whether it does by then (`/dump C_GuildInfo.MemberExistsByName("<A's name>")` on B).
+- A, once its guild roster arrives (a moment after joining): `Sent, WHISPER <member>: 2 ANNOUNCE … 1 1 0` to each online member, nothing on `GUILD` (see Workarounds in README-Technical). B answers as for a login when its roster lists A. *To verify*: whether it does by then (`/dump C_GuildInfo.MemberExistsByName("<A's name>")` on B).
 - A changes its revision in that session (`/ww nick …`): after 15 s, its announcement goes by whisper to each online member, and the `REC`s answering their `GET`s by whisper too; nothing on `GUILD`.
-- A logs out and back in: `Sent, GUILD: 1 ANNOUNCE … 1 1 0`, and B receives it. A member whose roster does not list A yet answers anyway, and its roster is requested (`/dump C_GuildInfo.MemberExistsByName("<A's name>")` on it gives `true` once it comes back).
+- A logs out and back in: `Sent, GUILD: 2 ANNOUNCE … 1 1 0`, and B receives it. A member whose roster does not list A yet answers anyway, and its roster is requested (`/dump C_GuildInfo.MemberExistsByName("<A's name>")` on it gives `true` once it comes back).
 
 **Adding a friend** (needs friends). A and B online, Friends scope on, B lists A as a friend. A adds B.
 
-- A, right away: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`; B answers as for a login. Turning the Friends scope on sends the same to each online friend.
+- A, right away: `Sent, WHISPER <B>: 2 ANNOUNCE … 1 1 0`; B answers as for a login. Turning the Friends scope on sends the same to each online friend.
 - *To verify*: whether the friend list is loaded at login. If it isn't, the first `FRIENDLIST_UPDATE` sends this announcement to every online friend, which the login announcement missed.
 
 **Logging in.** A and B in the same guild, or grouped with the Group scope on. Re-log B.
 
-- B: `Sent, GUILD (or PARTY): 1 ANNOUNCE … 1 1 0`.
-- A, after about 5 s: `Sent, WHISPER <B>: 1 ANNOUNCE … 1 0 0`.
+- B: `Sent, GUILD (or PARTY): 2 ANNOUNCE … 1 1 0`.
+- A, after about 5 s: `Sent, WHISPER <B>: 2 ANNOUNCE … 1 0 0`.
 
 **Logging out.** A and B grouped, A's Group scope on, A outside a rested area.
 
-- A logs out: when the countdown starts, `Sent, PARTY: 1 ANNOUNCE … 0 0 0`. B receives it.
+- A logs out: when the countdown starts, `Sent, PARTY: 2 ANNOUNCE … 0 0 0`. B receives it.
 - A logs out and moves to cancel: nothing after the cancel. A logs out again: the logout announcement goes out again.
 - On A, `/ww nick Test`, then right away log out (countdown): after the logout announcement, nothing more from A, not even the change's announcement 15 s later. A's next login announces it. The same, canceled: the change's announcement goes out after the cancel.
 - `/reload` A: no logout announcement.
-- A logs out in an inn (immediate): B receives `1 ANNOUNCE … 0 0 0`.
+- A logs out in an inn (immediate): B receives `2 ANNOUNCE … 0 0 0`.
 
 **Quick relog.** A and B grouped, A's Group scope on.
 
-- `/reload` A: no `Sent, PARTY: 1 ANNOUNCE … 1 1 0` after the reload.
+- `/reload` A: no `Sent, PARTY: 2 ANNOUNCE … 1 1 0` after the reload.
 - A logs out to character select and back in on the same character within 5 minutes: no login announcement either.
 - The same more than 5 minutes later, or after playing another character in between: the login announcement goes out.
 - On A, `/ww nick Test`, then `/reload` within 15 s: the login announcement goes out, carrying the new revision; B sends a `GET`.
@@ -128,12 +128,12 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 
 **Whispering.** On A, `/ww scope whispers on`; A and B not grouped, not in a guild together; `/reload` both first, so neither has reached the other this session.
 
-- A whispers B: right away, `Sent, WHISPER <B>: 1 ANNOUNCE … 1 1 0`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
+- A whispers B: right away, `Sent, WHISPER <B>: 2 ANNOUNCE … 1 1 0`. With B's Whispers scope off, or B never having whispered A, B sends no announcement back.
 - A whispers B again: nothing more. After a change of A's revision, or 30 minutes after the last one, the next whisper sends the announcement again. Whispering a guild member (Guild scope on) sends none.
-- Once B's character is confirmed on A, A levels up (or changes its revision, or starts a logout): `Sent, WHISPER <B>: 1 ANNOUNCE …`. After a `/reload` of A, the same. After a logout and a login of A more than 5 minutes later, A's login announcement goes to B if A whispered B in the 30 minutes before the logout; otherwise, or after playing another character in between, nothing goes to B until A whispers B again.
+- Once B's character is confirmed on A, A levels up (or changes its revision, or starts a logout): `Sent, WHISPER <B>: 2 ANNOUNCE …`. After a `/reload` of A, the same. After a logout and a login of A more than 5 minutes later, A's login announcement goes to B if A whispered B in the 30 minutes before the logout; otherwise, or after playing another character in between, nothing goes to B until A whispers B again.
 - B on another linked character of the same ruleset, confirmed on A, whispers A and A answers: A's next level-up goes to that character only.
 - B whispers A: A sends nothing.
-- On B, `/ww scope whispers on`, then a change of A's revision and A whispers B: B, having whispered A, answers after about 5 s with `Sent, WHISPER <A>: 1 ANNOUNCE … 1 0 0`. B whispering A again sends nothing more: the answer already reached A.
+- On B, `/ww scope whispers on`, then a change of A's revision and A whispers B: B, having whispered A, answers after about 5 s with `Sent, WHISPER <A>: 2 ANNOUNCE … 1 0 0`. B whispering A again sends nothing more: the answer already reached A.
 
 ## First-Login Prompt
 
@@ -189,9 +189,9 @@ In the People tab, a person's last seen moves to now when one of their character
 Needs a guild where A is the guild master or an officer and B a member below; both linked, Guild scope on, B holding A's identity with A's character confirmed.
 
 - B opens the guild panel: the Who's Who tab under the game's own shows the guild's list, without a **Who's Who settings** button. A opens it: the button under the list; it shows the settings, the checkbox off.
-- A ticks **Enable Who's Who for the guild**; after 5 s: `Sent, GUILD: 1 GSET …`. B: `Received, GUILD <A's name>: 1 GSET …`, then `/dump WhosWhoDB.global.guildSettings` on B shows the record with `enable = true`.
+- A ticks **Enable Who's Who for the guild**; after 5 s: `Sent, GUILD: 2 GSET …`. B: `Received, GUILD <A's name>: 2 GSET …`, then `/dump WhosWhoDB.global.guildSettings` on B shows the record with `enable = true`.
 - A unticks and ticks again within 5 s: one `GSET`, with the last state.
-- B logs out; A changes the setting; B logs back in: A's answer to B's login announcement ends with A's revision, B sends `Sent, WHISPER <A's name>: 1 GSGET`, A answers `1 GSET …` by whisper, and B holds the new record.
+- B logs out; A changes the setting; B logs back in: A's answer to B's login announcement ends with A's revision, B sends `Sent, WHISPER <A's name>: 2 GSGET`, A answers `2 GSET …` by whisper, and B holds the new record.
 - With the Guild scope off on A, or on an unlinked character of A's: the checkbox is greyed out, its tooltip says why.
 
 ## Guild Lists
@@ -199,16 +199,16 @@ Needs a guild where A is the guild master or an officer and B a member below; bo
 Needs a guild with Who's Who enabled (see Guild Settings): A an officer, B and C members, all linked with the Guild scope on.
 
 - With A, B and C online and knowing each other, a login of any of them: no `GLGET` (their lists have the same hash).
-- C logs out. D, a new member, links and logs in with A and B online: D sends one `Sent, WHISPER <A>: 1 GLGET` (the officer), A answers `1 GLIST …` by whisper, then D asks A for C's identity (`1 GET <C's ID>`), A answers with C's `REC`, and `/ww people <C's character>` on D shows it `listed by the guild`. When C logs back in, its announcement confirms it.
-- A turns Who's Who off then on for the guild: `Sent, GUILD: 1 GSET …` then `Sent, GUILD: 1 ANNOUNCE …` ending with A's list revision; members holding the same list send nothing.
+- C logs out. D, a new member, links and logs in with A and B online: D sends one `Sent, WHISPER <A>: 2 GLGET` (the officer), A answers `2 GLIST …` by whisper, then D asks A for C's identity (`2 GET <C's ID>`), A answers with C's `REC`, and `/ww people <C's character>` on D shows it `listed by the guild`. When C logs back in, its announcement confirms it.
+- A turns Who's Who off then on for the guild: `Sent, GUILD: 2 GSET …` then `Sent, GUILD: 2 ANNOUNCE …` ending with A's list revision; members holding the same list send nothing.
 
 ## Enforced Linking
 
 Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a member whose main is outside the guild, with two characters in it, B1 linked and B2 never linked (B logged in on B2 once, answering **Not this character**); C, B's friend, outside the guild; D a player not in the guild who knows B. All linked, Guild scope on.
 
-- A's guild panel, Who's Who tab, **Who's Who settings**: **Require members' characters in the guild to be linked** under **Enable Who's Who for the guild**, greyed out while Who's Who is off for the guild (its tooltip says to enable it first). A ticks it: `Sent, GUILD: 1 GSET …`.
+- A's guild panel, Who's Who tab, **Who's Who settings**: **Require members' characters in the guild to be linked** under **Enable Who's Who for the guild**, greyed out while Who's Who is off for the guild (its tooltip says to enable it first). A ticks it: `Sent, GUILD: 2 GSET …`.
 - B's side: one new revision, announced on `GUILD` only (no whisper to C). A's People tab: B shown under B1's name (the guild main), B2 among B's characters. C's People tab after B's next level-up: B under B's main, without B2.
-- B plays B2: `Sent, GUILD: 1 ANNOUNCE <B's ID> …`, nothing to C or a group; A's People tab shows B2 confirmed.
+- B plays B2: `Sent, GUILD: 2 ANNOUNCE <B's ID> …`, nothing to C or a group; A's People tab shows B2 confirmed.
 - B turns the Guild scope off: A still gets B's record, with B1 and B2 only; C keeps B's record without them.
 - D joins the guild: within a minute D's People tab shows B2 under B (fetched again through the guild lists or from B). D leaves the guild: B2 disappears from D's People tab, B stays.
 - A unticks the setting: the members whose records change make a new revision; B2 disappears from A's People tab once B's new record arrives.
@@ -217,13 +217,13 @@ Needs a guild with Who's Who enabled (see Guild Settings): A an officer; B a mem
 
 Needs the guild of Enforced Linking with the rule on: B a member with an unlinked character in it, E a player who never linked any character, in the guild.
 
-- B logs in: one dialog, "<guild> requires its members to link their characters in it.", listing B's characters in the guild (the unlinked ones marked), with **Link**, **Share without linking**, **Refuse**; the guild-main dropdown when B's main isn't in the guild and B has several characters there. In combat at login: the dialog waits until combat ends. Before answering, nothing from B on `GUILD` but `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`.
+- B logs in: one dialog, "<guild> requires its members to link their characters in it.", listing B's characters in the guild (the unlinked ones marked), with **Link**, **Share without linking**, **Refuse**; the guild-main dropdown when B's main isn't in the guild and B has several characters there. In combat at login: the dialog waits until combat ends. Before answering, nothing from B on `GUILD` but `Sent, GUILD: 2 ANNOUNCE 0 0 0 0 1 0 0`.
 - **Refuse**: nothing to the guild; no dialog until B's next login in another state, nor when another of B's characters logs in in the guild. When another of B's characters joins the guild, the dialog shows again. **Share without linking**: A's People tab shows B's characters in the guild, under the guild main chosen. B's Guild tab shows B's own identity, with those characters, under that guild main. **Link**: they are linked in **My identity**, and the Guild scope is on.
-- E logs in: `Sent, GUILD: 1 ANNOUNCE 0 0 0 0 1 0 0`, the members answer, and the same dialog shows once the guild's settings arrive, in place of the first-login prompt. **Share without linking**: A's People tab shows E's character under an identity of its own.
+- E logs in: `Sent, GUILD: 2 HELLO <version>` alone, the members answer, and the same dialog shows once the guild's settings arrive, in place of the first-login prompt. **Share without linking**: A's People tab shows E's character under an identity of its own.
 - A turns the rule off and on again while B plays: no dialog until B's next login.
 - B's Guild tab, bottom line: "Requires linking:" and B's answer; **Answer** while not answered, **Change** after a refusal (opens the dialog), no button once accepted. In a guild without the rule: whether B's identity reaches it, **Share** with the Guild scope off.
 - B accepted (shared without linking, or all linked with the Guild scope on): turning the Guild scope off, or unlinking one of B's characters in the guild, prints "<guild> requires linking: your characters in it stay shared with its members. Leave the guild to stop." A still sees B's characters in the guild.
-- B's character in the guild unlinked, the rule refused or not answered; B's other character, linked, with the Guild scope on, joins the guild (`/ww debug on`): only `Sent, WHISPER <member>: 1 ANNOUNCE 0 0 0 0 1 0 0`, never B's identity ID, even while the game hasn't given the guild's club ID yet.
+- B's character in the guild unlinked, the rule refused or not answered; B's other character, linked, with the Guild scope on, joins the guild (`/ww debug on`): only `Sent, WHISPER <member>: 2 ANNOUNCE 0 0 0 0 1 0 0`, never B's identity ID, even while the game hasn't given the guild's club ID yet.
 
 ## Leaving a Guild
 
@@ -233,14 +233,14 @@ Needs the guild of Guild Lists: A in it, and a guildmate C whom A only knows thr
 - C leaves the guild: once A's roster updates, C is gone from A's People tab. A guildmate with a character confirmed to A stays when they leave.
 - A leaves the guild while none of A's other characters is in it: C is gone; a guildmate confirmed to A stays. With another of A's characters still in the guild, nothing goes.
 - A's character is removed from the guild while offline (an officer kicks it): at its next login, `/ww status` shows no guild line, and the guild's rule no longer adds that character to A's record.
-- A character the guild linked (to a guild identity or to a member's identity) leaves the guild, with A an officer online: `Sent, GUILD: 1 GIREC …` once A's roster updates, and `/dump WhosWhoDB.global.guildRecords` on A and on another member no longer lists it in that record. With no officer online when it leaves, the first officer to log in sends it.
+- A character the guild linked (to a guild identity or to a member's identity) leaves the guild, with A an officer online: `Sent, GUILD: 2 GIREC …` once A's roster updates, and `/dump WhosWhoDB.global.guildRecords` on A and on another member no longer lists it in that record. With no officer online when it leaves, the first officer to log in sends it.
 
 ## Messages in Combat
 
 Needs A and B in one group, both linked with the Group scope on, and `/ww debug on` on B.
 
-- B fights a training dummy; A changes its nickname. About 15 seconds later B shows `Received, PARTY <A>: 1 ANNOUNCE …` but sends no `GET` while in combat. When B leaves combat, B sends `Sent, WHISPER <A>: 1 GET …` and `/ww people <A's character>` on B shows the new nickname.
-- B fights a training dummy for more than 15 seconds and changes its own nickname meanwhile: B sends no `ANNOUNCE` while in combat; within 5 seconds of leaving combat, B shows `Sent, PARTY: 1 ANNOUNCE …`.
+- B fights a training dummy; A changes its nickname. About 15 seconds later B shows `Received, PARTY <A>: 2 ANNOUNCE …` but sends no `GET` while in combat. When B leaves combat, B sends `Sent, WHISPER <A>: 2 GET …` and `/ww people <A's character>` on B shows the new nickname.
+- B fights a training dummy for more than 15 seconds and changes its own nickname meanwhile: B sends no `ANNOUNCE` while in combat; within 5 seconds of leaving combat, B shows `Sent, PARTY: 2 ANNOUNCE …`.
 
 ## Still to Test
 

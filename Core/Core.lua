@@ -128,6 +128,11 @@ frame:SetScript("OnEvent", function(_, event, ...)
         if issecretvalue(raceID) then raceID = nil end
         ns.Identity.Refresh(UnitGUID("player"), ns.UnitWholeName("player"), ruleset(), classID, raceID, UnitLevel("player"))
         ns.Protocol.Start()
+        ns.Protocol.OnUpdateSeen(function(newerVersion, name)
+            if ns.settings.versionNotice.enable then
+                ns.Print(L["A newer version of Who's Who is available: %s (seen from %s)."]:format(newerVersion, name))
+            end
+        end)
         if IsInGuild() then C_GuildInfo.GuildRoster() end
         if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.IdentityDialogs.AskToLink() end
         ns.Launcher.Register()
@@ -197,6 +202,8 @@ end
 ns.Commands.status = function()
     local guid = UnitGUID("player")
     ns.Print(L["Version: %s"]:format(ns.Version))
+    local newestVersion, newestFrom = ns.Protocol.NewestVersion()
+    if newestVersion then ns.Print(L["Newest version seen this session: %s (%s)"]:format(newestVersion, newestFrom)) end
     ns.Print(L["Nickname: %s"]:format(ns.Identity.Nickname() or L["(no linked character)"]))
     local state
     if ns.Identity.Main() == guid then

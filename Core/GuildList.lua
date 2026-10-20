@@ -69,11 +69,9 @@ local function canonical(entries)
     return table.concat(pairsList, ",")
 end
 
--- A list's content, its identities then its guild records. Without guild records, it is 0.3.0's: the identities only.
+-- A list's content: its identities, then its guild records.
 local function content(entries, guildRecordEntries)
-    local text = canonical(entries)
-    if next(guildRecordEntries) then text = text .. "|" .. canonical(guildRecordEntries) end
-    return text
+    return canonical(entries) .. "|" .. canonical(guildRecordEntries)
 end
 
 local function hashOf(text)
@@ -151,8 +149,8 @@ function GuildList.IsLater(at, hash, otherAt, otherHash)
 end
 
 ---Whether another member's list lacks something its member would take from my list of that guild, by the rules of
----taking a list: one of my guild's records it lacks or holds older (none from a list that can't hold them, from
----0.3.0), an identity it holds at an older revision, or, only from a trusted member, an identity it lacks.
+---taking a list: one of my guild's records it lacks or holds older, an identity it holds at an older revision, or,
+---only from a trusted member, an identity it lacks.
 ---@param clubId integer
 ---@param ruleset WhosWho.Ruleset the ruleset of the character I play
 ---@param list WhosWho.GuildListUpdate
@@ -164,7 +162,6 @@ function GuildList.LacksFromMine(clubId, ruleset, list, fromTrustedMember)
         if (theirs and theirs < rev) or (not theirs and fromTrustedMember) then return true end
     end
 
-    if not list.carriesGuildRecords then return false end
     for id, rev in pairs(GuildList.GuildRecordEntries(clubId)) do
         local theirs = list.guildEntries[id]
         if not theirs or theirs < rev then return true end
