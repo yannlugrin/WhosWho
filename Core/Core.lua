@@ -43,6 +43,7 @@ local addonName, ns = ...
 
 ns.L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 local L = ns.L
+local issecretvalue = issecretvalue or function() return false end
 
 -- Unpackaged builds keep the packager's version keyword.
 local version = C_AddOns.GetAddOnMetadata(addonName, "Version")
@@ -123,7 +124,9 @@ frame:SetScript("OnEvent", function(_, event, ...)
         ns.Identity.EnsureKeys()
         ns.GuildRecord.ApplyHeld()
         local _, _, classID = UnitClass("player")
-        ns.Identity.Refresh(UnitGUID("player"), ns.UnitWholeName("player"), ruleset(), classID, UnitLevel("player"))
+        local _, _, raceID = UnitRace("player")
+        if issecretvalue(raceID) then raceID = nil end
+        ns.Identity.Refresh(UnitGUID("player"), ns.UnitWholeName("player"), ruleset(), classID, raceID, UnitLevel("player"))
         ns.Protocol.Start()
         if IsInGuild() then C_GuildInfo.GuildRoster() end
         if not ns.Identity.IsRegistered(UnitGUID("player")) then ns.IdentityDialogs.AskToLink() end
@@ -152,6 +155,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_LEVEL_UP" then
         -- arg1 is the new level.
         ns.Identity.Seen(UnitGUID("player"), arg1)
+        local maxLevel = GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()
+        if maxLevel and arg1 >= maxLevel then ns.Identity.ReachedMaxLevel(UnitGUID("player")) end
         ns.Protocol.AnnounceLevel(arg1)
     elseif event == "PLAYER_GUILD_UPDATE" and arg1 == "player" then
         ns.Scopes.GuildChanged()

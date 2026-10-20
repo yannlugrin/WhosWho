@@ -41,6 +41,8 @@ Record.RULESET = { Normal = 1, PvP = 2, RP = 3, Hardcore = 4 }
 ---@field name string "First Surname"
 ---@field ruleset WhosWho.Ruleset
 ---@field classID integer the game's class ID, as UnitClass returns it
+---@field raceID integer? the game's race ID, as UnitRace returns it; absent from older records
+---@field maxLevelAt number? seconds, from time(): when it reached the highest level, absent when not known
 ---@field guild WhosWho.CharacterGuild? only in the record sent to the members of a guild that enforces linking
 
 ---What the record of a guild's members says about one of the owner's characters in that guild.
@@ -136,6 +138,11 @@ function Record.IsClassID(n)
     return Record.IsPositiveInteger(n) and C_CreatureInfo.GetClassInfo(n) ~= nil
 end
 
+-- Absent, or a positive integer.
+local function isOptionalPositiveInteger(n)
+    return n == nil or Record.IsPositiveInteger(n)
+end
+
 -- Absent, or a table of markers, each one this version knows true.
 local function isCharacterGuild(guild)
     if guild == nil then return true end
@@ -148,6 +155,8 @@ local function isCharacter(character)
         and Record.IsName(character.name)
         and Record.IsRuleset(character.ruleset)
         and Record.IsClassID(character.classID)
+        and isOptionalPositiveInteger(character.raceID)
+        and isOptionalPositiveInteger(character.maxLevelAt)
         and isCharacterGuild(character.guild)
 end
 

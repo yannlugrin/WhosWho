@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+
+- **Characters**: your record now keeps each linked character's race, and when it reached the highest level, for features to come.
+
 ### Fixed
 
 - **People**: a player's old identity, whose characters now show under their new one, no longer stays in your saved data without any character.

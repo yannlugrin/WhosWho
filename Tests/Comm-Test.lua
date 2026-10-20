@@ -38,7 +38,7 @@ local world = { clock = 1000, timers = {}, messages = {}, log = {}, characters =
 local SERVER_TIME_START = os.time()
 
 local function character(name, guid, classID, guild)
-    local c = { name = name, guid = guid, classID = classID, level = 10, guild = guild, friends = {} }
+    local c = { name = name, guid = guid, classID = classID, raceID = 1, level = 10, guild = guild, friends = {} }
     world.characters[name] = c
     return c
 end
@@ -241,6 +241,8 @@ local function newEnvironment(session)
         return u.name:match("^(%S+) (.+)$")
     end
     env.UnitClass = function() return nil, nil, c.classID end
+    env.UnitRace = function() return nil, nil, c.raceID end
+    env.GetMaxLevelForPlayerExpansion = function() return 60 end
     env.UnitLevel = function(unit)
         local u = unitCharacter(unit)
         return u and u.level
@@ -534,6 +536,15 @@ levelUp(ann)
 run(1)
 check(select(2, bob.ns.People.Find(annMain.guid)).level == 11, "a level-up announcement updates the level")
 check(sent({ type = "GET" }) == 0, "same revision: no GET")
+check(bob.ns.People.Get(annId).signedRecord.chars[annMain.guid].raceID == 1, "the record gives each character's race")
+
+annMain.level = 59
+levelUp(ann)
+run(30)
+local reachedAt = bob.ns.People.Get(annId).signedRecord.chars[annMain.guid].maxLevelAt
+check(reachedAt ~= nil and sent({ from = "Bob Main", type = "GET", target = "Ann Main" }) == 1,
+    "reaching the highest level makes a new revision, which gives when")
+annMain.level = 11
 
 -- A GET answered by a REC that just left is not answered again ---------------------------------------
 

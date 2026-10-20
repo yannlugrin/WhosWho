@@ -29,7 +29,7 @@ read_globals = {
     "CanEditGuildInfo", "GetBuildInfo", "GetCursorPosition", "GetGuildInfo", "GetGuildInfoText",
     "GetGuildRosterInfo", "GetGuildRosterLastOnline", "GetLocale", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetNormalizedRealmName", "GetNumClasses", "GetNumGuildMembers", "GetServerTime", "GetTime",
     "GuildControlGetNumRanks", "GuildControlGetRankName", "GuildRoster", "IsInGroup", "IsInGuild", "IsInInstance", "IsInRaid", "IsResting",
-    "UnitAffectingCombat", "UnitClass", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsConnected", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
+    "UnitAffectingCombat", "UnitClass", "UnitRace", "GetMaxLevelForPlayerExpansion", "UnitExists", "UnitLevel", "UnitFullName", "UnitGUID", "UnitIsConnected", "UnitIsPlayer", "UnitName", "UnitNameUnmodified",
     "WOW_PROJECT_ID", "WOW_PROJECT_CAMELOT", "WOW_PROJECT_MAINLINE",
 }
 

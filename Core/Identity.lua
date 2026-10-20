@@ -79,23 +79,37 @@ end
 -- Characters -------------------------------------------------------------------------------------
 
 ---Records one of this account's characters at login, or refreshes a known one.
----A name change keeps the GUID; a dead Hardcore character moves to another ruleset.
+---A name change keeps the GUID; a dead Hardcore character moves to another ruleset; a race change service changes the
+---race, which characters saved before it was recorded get at their next login.
 ---@param guid string
 ---@param name string "First Surname"
 ---@param ruleset WhosWho.Ruleset
 ---@param classID integer never changes
+---@param raceID integer? nil when the game doesn't give it
 ---@param level integer
-function Identity.Refresh(guid, name, ruleset, classID, level)
+function Identity.Refresh(guid, name, ruleset, classID, raceID, level)
     local identity = data()
     local character = identity.chars[guid]
     if not character then
-        identity.chars[guid] = { name = name, ruleset = ruleset, classID = classID, level = level, lastSeen = time() }
+        identity.chars[guid] = {
+            name = name, ruleset = ruleset, classID = classID, raceID = raceID, level = level, lastSeen = time(),
+        }
         return
     end
 
     Identity.Seen(guid, level)
-    if character.name == name and character.ruleset == ruleset then return end
-    character.name, character.ruleset = name, ruleset
+    raceID = raceID or character.raceID
+    if character.name == name and character.ruleset == ruleset and character.raceID == raceID then return end
+    character.name, character.ruleset, character.raceID = name, ruleset, raceID
+    if Identity.AnnouncedRevision(guid) then nextRevision() end
+end
+
+---The character reached the highest level the game allows: when, in its record.
+---@param guid string
+function Identity.ReachedMaxLevel(guid)
+    local character = data().chars[guid]
+    if not character then return end
+    character.maxLevelAt = time()
     if Identity.AnnouncedRevision(guid) then nextRevision() end
 end
 
@@ -581,7 +595,8 @@ function Identity.UnsignedRecord(clubId, ruleset)
     for _, guid in ipairs(guids) do
         local character = identity.chars[guid]
         chars[guid] = {
-            name = character.name, ruleset = character.ruleset, classID = character.classID, guild = markers[guid] or nil,
+            name = character.name, ruleset = character.ruleset, classID = character.classID, raceID = character.raceID,
+            maxLevelAt = character.maxLevelAt, guild = markers[guid] or nil,
         }
     end
     return {

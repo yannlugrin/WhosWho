@@ -78,8 +78,8 @@ do
     I.EnsureKeys()
     check(I.Id() == id, "keys never replaced")
 
-    I.Refresh(G2, "Okrãg Sorn", NORMAL, WARRIOR, 10)
-    I.Refresh(G1, "Alt Two", PVP, MAGE, 10)
+    I.Refresh(G2, "Okrãg Sorn", NORMAL, WARRIOR, nil, 10)
+    I.Refresh(G1, "Alt Two", PVP, MAGE, nil, 10)
     check(not I.IsRegistered(G1), "a new character is not registered yet")
     check(I.Revision() == 1, "touching an unlinked character keeps the revision")
 
@@ -92,14 +92,14 @@ do
     check(I.Nickname() == "Okrãg Sorn", "without override, the nickname is the main character's name")
     I.Link(G1)
     check(I.Revision() == 3, "linking twice does not bump")
-    I.Refresh(G1, "Alt Renamed", PVP, MAGE, 10)
+    I.Refresh(G1, "Alt Renamed", PVP, MAGE, nil, 10)
     check(I.Revision() == 4, "renaming a linked character bumps")
-    I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, 10)
+    I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, nil, 10)
     check(I.Revision() == 5, "a linked character moving ruleset bumps")
-    I.Refresh(G1, "Alt Renamed", NORMAL, ROGUE, 10)
+    I.Refresh(G1, "Alt Renamed", NORMAL, ROGUE, nil, 10)
     check(I.Revision() == 5 and I.UnsignedRecord().chars[G1].classID == MAGE, "class kept from the first touch")
     clock = 2
-    I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, 11)
+    I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, nil, 11)
     check(I.Revision() == 5, "level and last seen do not bump")
     check(ns.data.identity.chars[G1].level == 11 and ns.data.identity.chars[G1].lastSeen == 2,
         "level and last seen refreshed at login")
@@ -331,17 +331,47 @@ do
     for i = 1, 9 do r.notes[i] = ("x"):rep(4000) end
     check(select(2, R.Validate(r)) == "limits", "signed bytes over 32 KB refused")
 
-    -- The largest legitimate record: 50 characters, names of 25 two-byte letters, the longest GUIDs, guild markers.
+    -- The largest legitimate record: 50 characters, names of 25 two-byte letters, the longest GUIDs, races, dates of
+    -- reaching the highest level, guild markers.
     r = base(); r.chars, r.nickname = {}, string.rep("é", 25)
     for i = 1, R.MAX_CHARACTERS do
         local guid = ("Player-99999-%08X"):format(i)
         r.chars[guid] = { name = string.rep("é", 12) .. " " .. string.rep("è", 12), ruleset = 4, classID = 13,
-            guild = { forced = true, main = i == 1 or nil } }
+            raceID = 99, maxLevelAt = R.MAX_REVISION, guild = { forced = true, main = i == 1 or nil } }
         r.main = guid
     end
     bytes = R.Canonical(r)
     check(R.Validate(r) and #bytes <= R.MAX_SIGNED_LENGTH / 2,
         ("the largest legitimate record, %d signed bytes, stays under half the limit"):format(bytes and #bytes or 0))
+end
+
+-- A character's race and when it reached the highest level, in my record.
+fresh()
+do
+    local I, R = ns.Identity, ns.Record
+    I.EnsureKeys()
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, 3, 10)
+    I.Link(G1)
+    local revision = I.Revision()
+    check(I.UnsignedRecord().chars[G1].raceID == 3, "the record gives the character's race")
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
+    check(I.Revision() == revision and I.UnsignedRecord().chars[G1].raceID == 3, "a race the game doesn't give keeps the saved one")
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, 7, 10)
+    check(I.Revision() == revision + 1 and I.UnsignedRecord().chars[G1].raceID == 7, "a race change bumps")
+    clock = 50
+    I.ReachedMaxLevel(G1)
+    check(I.Revision() == revision + 2 and I.UnsignedRecord().chars[G1].maxLevelAt == 50,
+        "reaching the highest level bumps, with when")
+
+    local record = I.UnsignedRecord()
+    record.chars[G1].raceID = 0
+    check(select(2, R.Validate(record)) == "character", "a race that isn't a positive integer is refused")
+    record = I.UnsignedRecord()
+    record.chars[G1].maxLevelAt = 1.5
+    check(select(2, R.Validate(record)) == "character", "a date that isn't a positive integer is refused")
+    record = I.UnsignedRecord()
+    record.chars[G1].raceID, record.chars[G1].maxLevelAt = nil, nil
+    check(R.Validate(record), "both are optional: an older record has neither")
 end
 
 -- The record of a guild's members ------------------------------------------------------------------
@@ -351,12 +381,12 @@ do
     local I = ns.Identity
     I.EnsureKeys()
     -- G1 my main, outside the guild; G2 linked and G3 not linked in guild 7; G4 not linked, outside it.
-    I.Refresh(G1, "Ann Main", NORMAL, MAGE, 10)
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
     I.Link(G1)
-    I.Refresh(G2, "Ann Zed", NORMAL, MAGE, 10)
+    I.Refresh(G2, "Ann Zed", NORMAL, MAGE, nil, 10)
     I.Link(G2)
-    I.Refresh(G3, "Ann Alt", NORMAL, MAGE, 10)
-    I.Refresh(G4, "Ann Other", NORMAL, MAGE, 10)
+    I.Refresh(G3, "Ann Alt", NORMAL, MAGE, nil, 10)
+    I.Refresh(G4, "Ann Other", NORMAL, MAGE, nil, 10)
     I.SetGuild(G2, 7)
     I.SetGuild(G3, 7)
 
@@ -912,7 +942,7 @@ fresh()
 do
     local I = ns.Identity
     I.EnsureKeys()
-    I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
+    I.Refresh(G1, "Me Myself", PVP, PRIEST, nil, 10)
     check(I.Ruleset(G1) == PVP and I.Ruleset(G2) == nil, "my character's ruleset")
     I.SetGuild(G1, 7)
     check(I.HasCharacterInGuild(7, PVP) and not I.HasCharacterInGuild(8, PVP) and I.Revision() == 1,
@@ -940,7 +970,7 @@ do
     I.SetNickname(nil)
     check(changes == 3 and otherChanges == 1, "every listener notified")
 
-    I.Refresh(G2, "Never Linked", PVP, MAGE, 10)
+    I.Refresh(G2, "Never Linked", PVP, MAGE, nil, 10)
     I.Unlink(G2)
     check(I.AnnouncedRevision(G2) == nil, "a character never linked announces nothing")
     check(I.AnnouncedRevision(G1) == I.Revision(), "a linked character announces the current revision")
@@ -963,7 +993,7 @@ fresh()
 do
     local I, P, R = ns.Identity, ns.People, ns.Resolver
     I.EnsureKeys()
-    I.Refresh(G1, "Me Myself", NORMAL, PRIEST, 10)
+    I.Refresh(G1, "Me Myself", NORMAL, PRIEST, nil, 10)
     I.Link(G1)
     I.SetNickname("Yann")
 
@@ -1142,7 +1172,7 @@ fresh()
 do
     local GS, I = ns.GuildSettings, ns.Identity
     I.EnsureKeys()
-    I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
+    I.Refresh(G1, "Me Myself", PVP, PRIEST, nil, 10)
     I.Link(G1)
     check(GS.Revision(7) == 0 and GS.Get(7).enable == false and GS.Get(7).enforceLinking == false,
         "a guild without a record has the default settings")
@@ -1178,7 +1208,7 @@ do
     local GS, I, P = ns.GuildSettings, ns.Identity, ns.People
     -- The officer's records, signed with the officer's own identity.
     I.EnsureKeys()
-    I.Refresh(G2, "Officer Main", PVP, PRIEST, 10)
+    I.Refresh(G2, "Officer Main", PVP, PRIEST, nil, 10)
     I.Link(G2)
     local officerId = I.Id()
     local enforcing = GS.Change(7, { enable = true, enforceLinking = true }, G2, 2000)
@@ -1192,7 +1222,7 @@ do
     -- My account: a linked character, but not the officer's identity.
     fresh()
     I.EnsureKeys()
-    I.Refresh(G1, "Me Myself", PVP, PRIEST, 10)
+    I.Refresh(G1, "Me Myself", PVP, PRIEST, nil, 10)
     I.Link(G1)
     check(GS.Accept(early, 3) == "refused",
         "a guild's first settings, signed below the officers and sent by a member I don't trust: refused")
