@@ -736,8 +736,8 @@ end
 
 -- Whether the record holds the character only because its guild enforces linking.
 local function isForced(person, guid)
-    local recordCharacter = person.signedRecord and person.signedRecord.chars[guid]
-    return recordCharacter ~= nil and recordCharacter.guild ~= nil and recordCharacter.guild.forced == true
+    local forced = person.signedRecord and person.signedRecord.guild.forced
+    return forced ~= nil and forced[guid] == true
 end
 
 -- Whether the person holds a character the player told me of: one neither I nor my guild linked, and, for one only

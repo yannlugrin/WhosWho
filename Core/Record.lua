@@ -25,9 +25,13 @@ Record.MAX_REVISION = 2 ^ 31 - 1
 ---@field chars table<string, WhosWho.Character> by GUID
 ---@field guild WhosWho.GuildSharing
 
----What the owner allows within the guilds of their characters.
+---What the owner allows within the guilds of their characters, and, in the record sent to a guild's members, that guild's
+---entry: what the owner says there.
 ---@class WhosWho.GuildSharing
 ---@field consent boolean the record may be passed on to the members of those guilds: the owner's Guild scope
+---@field id integer? the club ID of the guild the record was sent to; nil in everyone's record, and the fields below too
+---@field main string? GUID of the character that guild shows the identity under, one of chars; nil: the record's main
+---@field forced table<string, true>? by GUID: the characters in that guild its rule adds, also in chars
 
 ---An identity record with its signature.
 ---@class WhosWho.SignedIdentityRecord: WhosWho.IdentityRecord
@@ -43,12 +47,6 @@ Record.RULESET = { Normal = 1, PvP = 2, RP = 3, Hardcore = 4 }
 ---@field classID integer the game's class ID, as UnitClass returns it
 ---@field raceID integer? the game's race ID, as UnitRace returns it; absent from older records
 ---@field maxLevelAt number? seconds, from time(): when it reached the highest level, absent when not known
----@field guild WhosWho.CharacterGuild? only in the record sent to the members of a guild that enforces linking
-
----What the record of a guild's members says about one of the owner's characters in that guild.
----@class WhosWho.CharacterGuild
----@field forced true? in the record only because the guild enforces linking
----@field main true? the character the guild shows the identity under, the main not being in the guild
 
 -- Names ------------------------------------------------------------------------------------------
 
@@ -143,13 +141,6 @@ local function isOptionalPositiveInteger(n)
     return n == nil or Record.IsPositiveInteger(n)
 end
 
--- Absent, or a table of markers, each one this version knows true.
-local function isCharacterGuild(guild)
-    if guild == nil then return true end
-    return type(guild) == "table" and next(guild) ~= nil
-        and (guild.forced == nil or guild.forced == true) and (guild.main == nil or guild.main == true)
-end
-
 local function isCharacter(character)
     return type(character) == "table"
         and Record.IsName(character.name)
@@ -157,7 +148,22 @@ local function isCharacter(character)
         and Record.IsClassID(character.classID)
         and isOptionalPositiveInteger(character.raceID)
         and isOptionalPositiveInteger(character.maxLevelAt)
-        and isCharacterGuild(character.guild)
+end
+
+-- The record's guild part: the consent, and, sent to a guild's members, that guild's entry, its characters among chars.
+local function isGuildSharing(guild, chars)
+    if type(guild) ~= "table" or type(guild.consent) ~= "boolean" then return false end
+    if guild.id == nil then return guild.main == nil and guild.forced == nil end
+    if not Record.IsPositiveInteger(guild.id) then return false end
+    if guild.main ~= nil and not chars[guild.main] then return false end
+    if guild.forced ~= nil then
+        if type(guild.forced) ~= "table" or next(guild.forced) == nil then return false end
+        for guid, forced in pairs(guild.forced) do
+            if forced ~= true or not chars[guid] then return false end
+        end
+    end
+
+    return true
 end
 
 ---Checks the structure only: the fields this version knows, and the limits of the signed bytes; fields a later version
@@ -173,25 +179,21 @@ function Record.Validate(record)
     if record.nickname ~= nil and not Record.IsName(record.nickname) then return false, "nickname" end
     if record.sig ~= nil and not Record.IsSignature(record.sig) then return false, "sig" end
     if type(record.chars) ~= "table" then return false, "chars" end
-    if type(record.guild) ~= "table" or type(record.guild.consent) ~= "boolean" then
-        return false, "guild"
-    end
 
-    local count, guildMains = 0, 0
+    local count = 0
     for guid, character in pairs(record.chars) do
         if not Record.IsGuid(guid) then return false, "guid" end
         if not isCharacter(character) then return false, "character" end
         count = count + 1
-        if character.guild and character.guild.main then guildMains = guildMains + 1 end
     end
     if count > Record.MAX_CHARACTERS then return false, "chars" end
+    if not isGuildSharing(record.guild, record.chars) then return false, "guild" end
 
-    if guildMains > 1 then return false, "main" end
     if count == 0 then
         if record.main ~= nil then return false, "main" end
     elseif record.main == nil then
         -- The record of a guild's members without my main: its guild main stands for it.
-        if guildMains == 0 then return false, "main" end
+        if record.guild.main == nil then return false, "main" end
     elseif not record.chars[record.main] then
         return false, "main"
     end
@@ -200,24 +202,18 @@ function Record.Validate(record)
     return true
 end
 
----Whether the record carries guild markers: it was sent to the members of a guild enforcing linking.
+---Whether the record holds a guild's entry: it was sent to that guild's members.
 ---@param record WhosWho.IdentityRecord
 ---@return boolean
-function Record.HasGuildMarkers(record)
-    for _, character in pairs(record.chars) do
-        if character.guild then return true end
-    end
-    return false
+function Record.HasGuildEntry(record)
+    return record.guild.id ~= nil
 end
 
 ---The character the record shows the identity under: its guild main when it has one, otherwise its main.
 ---@param record WhosWho.IdentityRecord
 ---@return string? guid
 function Record.ShownMain(record)
-    for guid, character in pairs(record.chars) do
-        if character.guild and character.guild.main then return guid end
-    end
-    return record.main
+    return record.guild.main or record.main
 end
 
 -- Signature --------------------------------------------------------------------------------------

@@ -289,25 +289,28 @@ do
     r = base(); r.guild.other = true
     check(R.Validate(r), "a guild field a later version adds is kept")
 
-    r = base(); r.chars[G1].guild = { forced = true }
-    check(R.Validate(r), "a character marked forced, in the record of a guild's members")
-    r = base(); r.chars[G1].guild = {}
-    check(select(2, R.Validate(r)) == "character", "an empty guild marker refused")
-    r = base(); r.chars[G1].guild = { forced = false }
-    check(select(2, R.Validate(r)) == "character", "a marker other than true refused")
-    r = base(); r.chars[G1].guild = { other = true }
-    check(R.Validate(r), "a guild marker a later version adds is kept")
-    r = base(); r.main = nil; r.chars[G1].guild = { main = true }
+    r = base(); r.guild.id, r.guild.forced = 7, { [G1] = true }
+    check(R.Validate(r), "the record sent to a guild's members holds that guild's entry, with the characters its rule adds")
+    r = base(); r.guild.forced = { [G1] = true }
+    check(select(2, R.Validate(r)) == "guild", "an entry without its guild refused")
+    r = base(); r.guild.id, r.guild.forced = 7, {}
+    check(select(2, R.Validate(r)) == "guild", "an empty set of forced characters refused")
+    r = base(); r.guild.id, r.guild.forced = 7, { [G1] = "yes" }
+    check(select(2, R.Validate(r)) == "guild", "a forced mark other than true refused")
+    r = base(); r.guild.id, r.guild.forced = 7, { [G2] = true }
+    check(select(2, R.Validate(r)) == "guild", "a forced character the record doesn't hold refused")
+    r = base(); r.main = nil; r.guild.id, r.guild.main = 7, G1
     check(R.Validate(r), "a guild main stands for a main the record doesn't hold")
-    r = base(); r.chars[G2] = { name = "C D", ruleset = NORMAL, classID = MAGE, guild = { main = true } }
-    r.chars[G1].guild = { main = true }
-    check(select(2, R.Validate(r)) == "main", "two guild mains refused")
+    r = base(); r.guild.id, r.guild.main = 7, G2
+    check(select(2, R.Validate(r)) == "guild", "a guild main the record doesn't hold refused")
+    r = base(); r.main = nil
+    check(select(2, R.Validate(r)) == "main", "characters without a main or a guild main refused")
     r = base()
     local bytes = R.Canonical(r)
-    r.chars[G1].guild = { forced = true }
-    check(R.Canonical(r) ~= bytes, "the guild markers are signed")
-    r.chars[G1].guild = nil
-    check(R.Canonical(r) == bytes, "a record without markers keeps its bytes")
+    r.guild.id, r.guild.forced = 7, { [G1] = true }
+    check(R.Canonical(r) ~= bytes, "the guild entry is signed")
+    r.guild.id, r.guild.forced = nil, nil
+    check(R.Canonical(r) == bytes, "a record without one keeps its bytes")
 
     -- Fields a later version adds.
     r = base(); r.role = "Healer"; r.chars[G1].note = "alt"
@@ -332,13 +335,14 @@ do
     check(select(2, R.Validate(r)) == "limits", "signed bytes over 32 KB refused")
 
     -- The largest legitimate record: 50 characters, names of 25 two-byte letters, the longest GUIDs, races, dates of
-    -- reaching the highest level, guild markers.
+    -- reaching the highest level, and a guild's entry holding them all, forced, with its guild main.
     r = base(); r.chars, r.nickname = {}, string.rep("é", 25)
+    r.guild.id, r.guild.forced = R.MAX_REVISION, {}
     for i = 1, R.MAX_CHARACTERS do
         local guid = ("Player-99999-%08X"):format(i)
         r.chars[guid] = { name = string.rep("é", 12) .. " " .. string.rep("è", 12), ruleset = 4, classID = 13,
-            raceID = 99, maxLevelAt = R.MAX_REVISION, guild = { forced = true, main = i == 1 or nil } }
-        r.main = guid
+            raceID = 99, maxLevelAt = R.MAX_REVISION }
+        r.main, r.guild.main, r.guild.forced[guid] = guid, guid, true
     end
     bytes = R.Canonical(r)
     check(R.Validate(r) and #bytes <= R.MAX_SIGNED_LENGTH / 2,
@@ -391,28 +395,26 @@ do
     I.SetGuild(G3, 7)
 
     local everyone = I.UnsignedRecord()
-    check(count(everyone.chars) == 2 and not everyone.chars[G3] and not everyone.chars[G1].guild,
-        "everyone else gets my linked characters, without markers")
+    check(count(everyone.chars) == 2 and not everyone.chars[G3] and everyone.guild.id == nil,
+        "everyone else gets my linked characters, without a guild entry")
     local guild = I.UnsignedRecord(7, NORMAL)
-    check(ns.Record.Validate(guild) and count(guild.chars) == 3 and guild.main == G1,
-        "the guild's members get my linked characters and my characters in the guild, with my main")
-    check(guild.chars[G3].guild.forced and not guild.chars[G4] and not (guild.chars[G2].guild or {}).forced,
-        "the characters only the rule adds are marked forced")
-    check(guild.chars[G2].guild.main and not guild.chars[G3].guild.main,
-        "my main outside the guild: the first linked character in it is the guild main")
+    check(ns.Record.Validate(guild) and count(guild.chars) == 3 and guild.main == G1 and guild.guild.id == 7,
+        "the guild's members get my linked characters and my characters in the guild, with my main and the guild's entry")
+    check(guild.guild.forced[G3] and not guild.chars[G4] and not guild.guild.forced[G2],
+        "the characters only the rule adds are listed as forced")
+    check(guild.guild.main == G2, "my main outside the guild: the first linked character in it is the guild main")
     check(count(I.UnsignedRecord(7, ns.Record.RULESET.PvP).chars) == 2, "a guild is its club ID and its ruleset")
 
     ns.settings.scopes.guild = false
     guild = I.UnsignedRecord(7, NORMAL)
     check(ns.Record.Validate(guild) and count(guild.chars) == 2 and guild.main == nil
-        and guild.chars[G2].guild.forced and guild.chars[G3].guild.forced and guild.chars[G2].guild.main,
-        "Guild scope off: only my characters in the guild, all marked, under the guild main")
+        and guild.guild.forced[G2] and guild.guild.forced[G3] and guild.guild.main == G2,
+        "Guild scope off: only my characters in the guild, all forced, under the guild main")
     check(count(I.UnsignedRecord().chars) == 2, "everyone else's record doesn't change")
 
     I.SetGuild(G1, 7)
     guild = I.UnsignedRecord(7, NORMAL)
-    check(guild.main == G1 and not guild.chars[G1].guild.main and not guild.chars[G2].guild.main,
-        "my main in the guild: no guild main")
+    check(guild.main == G1 and guild.guild.main == nil, "my main in the guild: no guild main")
     ns.settings.scopes.guild = true
 
     local signed = I.SignedRecord(7, NORMAL)
@@ -431,7 +433,7 @@ do
     I.SetGuild(G1, nil)
     I.SetGuildMain(G3)
     guild = I.UnsignedRecord(7, NORMAL)
-    check(guild.chars[G3].guild.main and not guild.chars[G2].guild, "the guild main I chose comes before a linked character")
+    check(guild.guild.main == G3 and not guild.guild.forced[G2], "the guild main I chose comes before a linked character")
 end
 
 -- People: shared identities ------------------------------------------------------------------------
@@ -1094,8 +1096,7 @@ do
     -- G1 the main, outside the guild; G2 the guild main; G3 an alt the guild's rule adds.
     local function guildRecord(sig)
         local record = makeRecord(A, 2, { G1, G2, G3 })
-        record.chars[G2].guild = { main = true }
-        record.chars[G3].guild = { forced = true }
+        record.guild.id, record.guild.main, record.guild.forced = 7, G2, { [G3] = true }
         record.sig = sig
         return record
     end
@@ -1117,7 +1118,7 @@ do
 
     local onlyForced = makeRecord(B, 1, { G4 })
     onlyForced.main = nil
-    onlyForced.chars[G4].guild = { forced = true, main = true }
+    onlyForced.guild.id, onlyForced.guild.main, onlyForced.guild.forced = 7, G4, { [G4] = true }
     P.Accept(onlyForced)
     P.UpdateGuildMembers(7, { [G4] = true })
     P.GuildLeft(7)
@@ -1126,7 +1127,8 @@ do
     P.UpdateGuildMembers(7, { [G1] = true, [G2] = true })
     local C = string.rep("c", 64)
     local underGuildMain = makeRecord(C, 1, { G5 })
-    underGuildMain.chars[G4] = { name = "N9", ruleset = NORMAL, classID = MAGE, guild = { forced = true, main = true } }
+    underGuildMain.chars[G4] = { name = "N9", ruleset = NORMAL, classID = MAGE }
+    underGuildMain.guild.id, underGuildMain.guild.main, underGuildMain.guild.forced = 7, G4, { [G4] = true }
     P.Accept(underGuildMain)
     P.UpdateGuildMembers(7, { [G4] = true })
     check(P.Get(C).main == G4, "a person shown under its guild main")
@@ -1467,10 +1469,10 @@ fresh()
 do
     local P, CLUB, A = ns.People, 1001, string.rep("a", 64)
     -- The record a player sends the guild's members with the Guild scope off, opted in to the rule, the main elsewhere.
-    local record = { v = ns.Record.VERSION, id = A, rev = 1, guild = { consent = false }, chars = {
-        [G1] = { name = "Ana First", ruleset = NORMAL, classID = WARRIOR, guild = { forced = true, main = true } },
-        [G2] = { name = "Ana Second", ruleset = NORMAL, classID = WARRIOR, guild = { forced = true } },
-    } }
+    local record = { v = ns.Record.VERSION, id = A, rev = 1, chars = {
+        [G1] = { name = "Ana First", ruleset = NORMAL, classID = WARRIOR },
+        [G2] = { name = "Ana Second", ruleset = NORMAL, classID = WARRIOR },
+    }, guild = { consent = false, id = CLUB, main = G1, forced = { [G1] = true, [G2] = true } } }
     P.Accept(record, false, { [G1] = true, [G2] = true })
     P.UpdateGuildMembers(CLUB, { [G1] = true, [G2] = true })
     check(P.Get(A).main == G1 and P.Nickname(A) == "Ana First", "a person is shown under its guild main")

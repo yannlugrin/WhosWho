@@ -550,19 +550,19 @@ function Identity.CharactersInGuild(clubId, ruleset)
 end
 
 ---The unsigned record of the current revision: my linked characters. For the members of a guild that enforces linking,
----my characters in that guild too, marked forced, and only those with my Guild scope off; the guild shows me under my
----main when it is in the guild, otherwise under the guild main, the first of them. Past Record.MAX_CHARACTERS, the
----main, the guild main and the lowest GUIDs are kept.
+---my characters in that guild too, listed as forced in its entry, and only those with my Guild scope off; the guild
+---shows me under my main when it is in the guild, otherwise under the guild main, the first of them. Past
+---Record.MAX_CHARACTERS, the main, the guild main and the lowest GUIDs are kept.
 ---@param clubId integer? the guild enforcing linking whose members get the record; nil for everyone else
 ---@param ruleset WhosWho.Ruleset? that guild's ruleset
 ---@return WhosWho.IdentityRecord
 function Identity.UnsignedRecord(clubId, ruleset)
     local identity = data()
-    ---@type table<string, WhosWho.CharacterGuild|false> by GUID: the characters in the record, with their guild markers
-    local markers = {}
+    ---@type table<string, boolean> by GUID: the characters in the record, true for the ones that guild's rule adds
+    local included = {}
     if not clubId or ns.Scopes.Get("guild") then
         for guid, character in pairs(identity.chars) do
-            if character.linked then markers[guid] = false end
+            if character.linked then included[guid] = false end
         end
     end
     local guildMain
@@ -571,18 +571,14 @@ function Identity.UnsignedRecord(clubId, ruleset)
         local mainInGuild = false
         for _, guid in ipairs(inGuild) do
             if guid == identity.main then mainInGuild = true end
-            if markers[guid] == nil then markers[guid] = { forced = true } end
+            if included[guid] == nil then included[guid] = true end
         end
         if not mainInGuild then guildMain = inGuild[1] end
-        if guildMain then
-            markers[guildMain] = markers[guildMain] or {}
-            markers[guildMain].main = true
-        end
     end
-    local main = markers[identity.main] ~= nil and identity.main or nil
+    local main = included[identity.main] ~= nil and identity.main or nil
 
     local others = {}
-    for guid in pairs(markers) do
+    for guid in pairs(included) do
         if guid ~= main and guid ~= guildMain then others[#others + 1] = guid end
     end
     table.sort(others)
@@ -591,17 +587,24 @@ function Identity.UnsignedRecord(clubId, ruleset)
     if guildMain then guids[#guids + 1] = guildMain end
     for i = 1, math.min(#others, ns.Record.MAX_CHARACTERS - #guids) do guids[#guids + 1] = others[i] end
 
-    local chars = {}
+    local chars, forced = {}, nil
     for _, guid in ipairs(guids) do
         local character = identity.chars[guid]
         chars[guid] = {
             name = character.name, ruleset = character.ruleset, classID = character.classID, raceID = character.raceID,
-            maxLevelAt = character.maxLevelAt, guild = markers[guid] or nil,
+            maxLevelAt = character.maxLevelAt,
         }
+        if included[guid] then
+            forced = forced or {}
+            forced[guid] = true
+        end
     end
+    -- The guild's entry only when it says something: otherwise its members get everyone's record.
+    local guild = { consent = ns.Scopes.Get("guild") }
+    if clubId and (guildMain or forced) then guild.id, guild.main, guild.forced = clubId, guildMain, forced end
     return {
         v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = identity.nickname,
-        main = main, chars = chars, guild = { consent = ns.Scopes.Get("guild") },
+        main = main, chars = chars, guild = guild,
     }
 end
 

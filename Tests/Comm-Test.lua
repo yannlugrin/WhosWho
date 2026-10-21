@@ -1949,8 +1949,9 @@ check(sent({ from = "Nia Main", type = "ANNOUNCE", distribution = "GUILD" }) == 
     "announced to the guild alone: what everyone else gets didn't change")
 check(lastWantsAnnouncement({ from = "Nia Main", distribution = "GUILD" }) and sent({ type = "ANNOUNCE", target = "Nia Main" }) >= 1,
     "sharing with the guild just started: its members send theirs back")
-local niaAltForMia = mia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid]
-check(niaAltForMia and niaAltForMia.guild.forced, "a member of the guild gets the alt the rule adds, marked")
+local niaRecordForMia = mia.ns.People.Get(niaId).signedRecord
+check(niaRecordForMia.chars[niaAlt.guid] and niaRecordForMia.guild.forced[niaAlt.guid],
+    "a member of the guild gets the alt the rule adds, listed as forced")
 
 clearLog()
 levelUp(nia)
@@ -2009,7 +2010,7 @@ slash(pia, "link")
 run(60)
 check(sent({ from = "Nia Alt", type = "REC" }) >= 1 and sent({ from = "Pia Main", type = "GET", target = "Nia Alt" }) == 1,
     "a character the rule adds answers its guild's GETs")
-check(pia.ns.People.Get(niaId).signedRecord.chars[niaAlt.guid].guild.forced, "with the guild's record")
+check(pia.ns.People.Get(niaId).signedRecord.guild.forced[niaAlt.guid], "with the guild's record")
 -- Qia never linked anything: her HELLO brings the members' back, so she learns the guild's rule and is
 -- asked. Refusing sends nothing to the guild; opting in gives it an identity holding her character in it.
 local qiaAccount = account("Qia")

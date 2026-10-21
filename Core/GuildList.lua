@@ -35,7 +35,7 @@ function GuildList.Entries(clubId, ruleset)
     local entries = {}
     for id, person in pairs(ns.data.people) do
         local record = person.signedRecord
-        if record and not person.outdated and (record.guild.consent or ns.Record.HasGuildMarkers(record)) then
+        if record and not person.outdated and (record.guild.consent or ns.Record.HasGuildEntry(record)) then
             for _, character in pairs(person.chars) do
                 if IN_LIST_STATES[character.state] and character.guild == clubId and character.ruleset == ruleset then
                     entries[id] = record.rev

@@ -1009,7 +1009,7 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     -- member, and its characters are then listed by the guild.
     local fromGuild = false
     if not sentByOwner(signedRecord, sender) then
-        local relayable = signedRecord.guild.consent or Record.HasGuildMarkers(signedRecord)
+        local relayable = signedRecord.guild.consent or Record.HasGuildEntry(signedRecord)
         if not (guildListsActive() and relayable and Scopes.GuildReaches(sender)) then return end
         if not People.Get(signedRecord.id) then
             if not trustedMember(sender) then return end
