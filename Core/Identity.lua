@@ -32,6 +32,7 @@ ns.Identity = Identity
 
 ---@class WhosWho.OwnCharacterGuild
 ---@field id integer? club ID (C_Club.GetGuildClubId), nil until the game gives it after joining
+---@field name string? the guild's name, as last seen
 ---@field joinedAt number? seconds, from time(): when the character joined it, unknown for a guild it was in before
 
 ---What I say in one guild, which its members get in my record (Record: the guild's entry).
@@ -190,16 +191,17 @@ end
 ---its join time.
 ---@param guid string
 ---@param clubId integer?
-function Identity.SetGuild(guid, clubId)
+---@param name string? the guild's name; nil keeps the one last seen
+function Identity.SetGuild(guid, clubId, name)
     local character = data().chars[guid]
     if not character then return end
     local guild = character.guild
     if not clubId then
         character.guild = nil
     elseif guild and (guild.id == nil or guild.id == clubId) then
-        guild.id = clubId
+        guild.id, guild.name = clubId, name or guild.name
     else
-        character.guild = { id = clubId }
+        character.guild = { id = clubId, name = name }
     end
 end
 

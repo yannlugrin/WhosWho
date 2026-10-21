@@ -14,6 +14,11 @@ local CLASS_ICON_SIZE = 18
 local GLYPH_SIZE = 14
 local CHECKBOX_SIZE = 24
 local SCROLL_BAR_WIDTH = 16
+-- The inset's padding and a list header's height, with the gap under it.
+local INSET_PADDING = 4
+local HEADER_SPACE = 18 + 2
+-- Between a heading and its inset.
+local HEADING_SPACE = 18
 
 local CROWN_TEXTURE = ns.Glyphs.CROWN_TEXTURE
 local EDIT_TEXTURE = ns.Glyphs.EDIT_TEXTURE
@@ -70,9 +75,11 @@ panel.LinkedCount:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT", -SIDE_PADDING, -82)
 
 -- My identity: characters list -------------------------------------------------------------------
 
+local INSET_BOTTOM = Lists.FOOTER_SPACE + 4
+
 local inset = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
 inset:SetPoint("TOPLEFT", 8, -88)
-inset:SetPoint("BOTTOMRIGHT", -6, Lists.FOOTER_SPACE + 4)
+inset:SetPoint("BOTTOMRIGHT", -6, INSET_BOTTOM)
 
 local COLUMNS = {
     { key = "Linked", width = 50, label = L["Linked"], justify = "CENTER" },
@@ -235,6 +242,93 @@ view:SetElementExtent(ROW_HEIGHT)
 view:SetElementInitializer("Frame", initRow)
 ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
 
+-- My identity: guilds list ----------------------------------------------------------------------
+
+-- Under My characters, whose list gets shorter by its height, while one of my characters is in a guild.
+local guildsInset = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
+guildsInset:SetPoint("BOTTOMLEFT", 8, INSET_BOTTOM)
+guildsInset:SetPoint("BOTTOMRIGHT", -6, INSET_BOTTOM)
+guildsInset:Hide()
+panel.GuildsInset = guildsInset
+
+panel.GuildsHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+panel.GuildsHeading:SetPoint("BOTTOMLEFT", guildsInset, "TOPLEFT", SIDE_PADDING - 8, 6)
+panel.GuildsHeading:SetText(L["In my guilds"])
+panel.GuildsHeading:Hide()
+
+local GUILD_COLUMNS = {
+    { key = "Edit", width = 30, label = "", justify = "CENTER" },
+    { key = "Main", width = 220, label = L["Main"] },
+    { key = "Nickname", width = 220, label = L["Nickname"] },
+}
+local guildColumnsWidth = Lists.LayOut(GUILD_COLUMNS)
+local GUILD_NAME_LEFT = 6
+
+panel.GuildsHeader = Lists.CreateHeader(guildsInset, { key = "Guild", label = L["Guild"], left = GUILD_NAME_LEFT },
+    GUILD_COLUMNS, guildColumnsWidth)
+panel.GuildsHeader:SetPoint("TOPLEFT", INSET_PADDING, -INSET_PADDING)
+panel.GuildsHeader:SetPoint("TOPRIGHT", -INSET_PADDING, -INSET_PADDING)
+
+local guildColumnByKey = {}
+for _, column in ipairs(GUILD_COLUMNS) do guildColumnByKey[column.key] = column end
+
+---A line of the guilds list.
+---@class WhosWho.MyIdentityGuildRow: Frame
+---@field GuildName FontString
+---@field Nickname FontString
+---@field MainCrown Texture
+---@field MainName FontString
+---@field EditButton Button
+
+---@type WhosWho.MyIdentityGuildRow[]
+local guildRows = {}
+
+---@param index integer
+---@return WhosWho.MyIdentityGuildRow
+local function guildRow(index)
+    if guildRows[index] then return guildRows[index] end
+
+    local row = CreateFrame("Frame", nil, guildsInset)
+    row:SetHeight(ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", panel.GuildsHeader, "BOTTOMLEFT", 0, -2 - (index - 1) * ROW_HEIGHT)
+    row:SetPoint("TOPRIGHT", panel.GuildsHeader, "BOTTOMRIGHT", 0, -2 - (index - 1) * ROW_HEIGHT)
+
+    row.GuildName = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.GuildName:SetPoint("LEFT", GUILD_NAME_LEFT, 0)
+    row.GuildName:SetPoint("RIGHT", row, "RIGHT", -guildColumnsWidth - 6, 0)
+    row.GuildName:SetJustifyH("LEFT")
+    row.GuildName:SetWordWrap(false)
+
+    row.Nickname = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    Lists.Place(row.Nickname, row, guildColumnByKey.Nickname)
+    row.Nickname:SetWordWrap(false)
+
+    local main = guildColumnByKey.Main
+    row.MainCrown = row:CreateTexture(nil, "OVERLAY")
+    row.MainCrown:SetTexture(CROWN_TEXTURE)
+    row.MainCrown:SetSize(GLYPH_SIZE, GLYPH_SIZE)
+    row.MainCrown:SetPoint("LEFT", row, "RIGHT", main.right - main.width, 0)
+    row.MainName = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.MainName:SetPoint("LEFT", row.MainCrown, "RIGHT", 4, 0)
+    row.MainName:SetPoint("RIGHT", row, "RIGHT", main.right, 0)
+    row.MainName:SetJustifyH("LEFT")
+    row.MainName:SetWordWrap(false)
+
+    row.EditButton = CreateFrame("Button", nil, row)
+    row.EditButton:SetSize(GLYPH_SIZE, GLYPH_SIZE)
+    row.EditButton:SetNormalTexture(EDIT_TEXTURE)
+    Lists.Place(row.EditButton, row, guildColumnByKey.Edit)
+    row.EditButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltipTitle, HIGHLIGHT_FONT_COLOR:GetRGB())
+        GameTooltip:Show()
+    end)
+    row.EditButton:SetScript("OnLeave", GameTooltip_Hide)
+
+    guildRows[index] = row
+    return row
+end
+
 -- My identity: footer ----------------------------------------------------------------------------
 
 local footer = Lists.CreateFooter(panel)
@@ -315,6 +409,38 @@ function panel:SetCharacters(characters)
     end
     self.LinkedCount:SetText(L["%d of %d linked"]:format(linked, #characters))
     scrollBox:SetDataProvider(CreateDataProvider(characters))
+end
+
+---@class WhosWho.MyIdentityGuild
+---@field clubId integer
+---@field name string? nil while none of my characters in it was played since its name is saved
+---@field nickname string my nickname in that guild, otherwise my identity's
+---@field nicknameSet boolean I set a nickname in that guild
+---@field mainName string the character that guild shows me under
+---@field mainClassID integer
+
+---Shows a line per guild under My characters, or hides the section when the list is empty.
+---@param guilds WhosWho.MyIdentityGuild[] in the order shown
+function panel:SetGuilds(guilds)
+    local shown = guilds[1] ~= nil
+    self.GuildsHeading:SetShown(shown)
+    guildsInset:SetShown(shown)
+    local guildsHeight = 2 * INSET_PADDING + HEADER_SPACE + #guilds * ROW_HEIGHT
+    guildsInset:SetHeight(guildsHeight)
+    inset:SetPoint("BOTTOMRIGHT", -6, shown and INSET_BOTTOM + guildsHeight + HEADING_SPACE + 8 or INSET_BOTTOM)
+
+    for i, guild in ipairs(guilds) do
+        local row = guildRow(i)
+        local guildName = guild.name and ("<%s>"):format(guild.name) or L["Unknown guild"]
+        row.GuildName:SetText(guild.name and GREEN_FONT_COLOR:WrapTextInColorCode(guildName) or guildName)
+        row.GuildName:SetFontObject(guild.name and "GameFontHighlight" or "GameFontDisable")
+        row.Nickname:SetText(guild.nickname)
+        row.Nickname:SetFontObject(guild.nicknameSet and "GameFontHighlight" or "GameFontDisable")
+        row.MainName:SetText(Lists.ClassColoredName(guild.mainName, guild.mainClassID))
+        row.EditButton.tooltipTitle = L["Edit for %s"]:format(guildName)
+        row:Show()
+    end
+    for i = #guilds + 1, #guildRows do guildRows[i]:Hide() end
 end
 
 -- The list's sort: "Name" (A to Z when ascending), "Level" (lowest first when ascending) or "LastPlayed" (oldest first
@@ -405,6 +531,7 @@ panel.ListHeader.Labels.LastPlayed:SetScript("OnClick", function() sortBy("LastP
 ns.Skin.Apply(function(S)
     skin = S
     S.Inset(inset)
+    S.Inset(guildsInset)
     S.ScrollBar(scrollBar)
     S.Button(panel.SharingSettingsButton)
     S.Button(panel.Empty.LinkButton)

@@ -276,6 +276,7 @@ local function newEnvironment(session)
     end
 
     env.IsInGuild = function() return c.guild ~= nil end
+    env.GetGuildInfo = function() return c.guild and "Guild " .. c.guild or nil end
     env.C_EventUtils = { IsEventValid = function() return true end }
     -- Right after joining, the game may give the roster before the guild's club ID (session.clubIdHidden).
     env.C_Club = { GetGuildClubId = function() return not session.clubIdHidden and c.guild or nil end }

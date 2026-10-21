@@ -7,6 +7,7 @@ local L = ns.L
 ---@field NewIdentity WhosWho.NewIdentityDialog the first-login dialog while no character is linked
 ---@field LinkCharacter WhosWho.LinkCharacterDialog the first-login dialog once an identity exists
 ---@field GuildRule WhosWho.GuildRuleDialog my answer to a guild enforcing linking
+---@field GuildEntry WhosWho.GuildEntryDialog my nickname and main in one guild
 local IdentityDialogs = {}
 ns.IdentityDialogs = IdentityDialogs
 
@@ -326,9 +327,106 @@ local function createGuildRuleDialog()
     return dialog
 end
 
+-- Guild nickname and main -----------------------------------------------------------------------
+
+local function addLabel(dialog, text)
+    local label = addText(dialog, "GameFontNormal")
+    label:SetJustifyH("LEFT")
+    label:SetText(text)
+    return label
+end
+
+local function addHint(dialog)
+    local hint = addText(dialog, "GameFontDisableSmall")
+    hint:SetJustifyH("LEFT")
+    return hint
+end
+
+local function createGuildEntryDialog()
+    ---@class WhosWho.GuildEntryDialog: WhosWho.PromptDialog
+    ---@field SaveButton Button
+    ---@field CancelButton Button
+    local dialog = createDialog(WIDTH)
+    dialog.GuildName = addText(dialog, "GameFontNormalLarge")
+    -- Replaced by the error of a nickname refused (SetError).
+    dialog.Explanation = addText(dialog, "GameFontDisableSmall")
+
+    addLabel(dialog, L["Nickname in this guild"])
+    -- LargeInputBoxTemplate has no placeholder: one like InputBoxInstructionsTemplate's.
+    local input = CreateFrame("EditBox", nil, dialog, "LargeInputBoxTemplate")
+    input.Instructions = input:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    input.Instructions:SetPoint("LEFT", INPUT_TEXT_LEFT, 0)
+    input:SetScript("OnTextChanged", InputBoxInstructions_OnTextChanged)
+    input:SetWidth(WIDTH - 2 * SIDE_PADDING)
+    input:SetAutoFocus(false)
+    input:SetMaxLetters(ns.Record.MAX_NAME_LENGTH)
+    dialog.NicknameInput = input
+    dialog.rows[#dialog.rows + 1] = { region = input }
+    dialog.NicknameHint = addHint(dialog)
+
+    -- Hidden while the guild sees none of my characters in it.
+    dialog.MainLabel = addLabel(dialog, L["Main in this guild"])
+    dialog.MainDropdown = CreateFrame("DropdownButton", nil, dialog, "WowStyle1DropdownTemplate")
+    dialog.MainDropdown:SetWidth(WIDTH - 2 * SIDE_PADDING)
+    dialog.rows[#dialog.rows + 1] = { region = dialog.MainDropdown }
+    dialog.MainHint = addHint(dialog)
+    dialog.MainHint:SetText(L["Your characters in this guild."])
+
+    addButtons(dialog, { { "SaveButton", L["Save"] }, { "CancelButton", CANCEL } })
+
+    ---@param clubId integer
+    ---@param guildName string? nil while unknown
+    ---@param nickname string? my nickname in that guild, nil when not set
+    ---@param identityNickname string my identity's nickname, or my main's name
+    ---@param characters { guid: string, name: string, classID: integer }[] my characters in that guild that its members
+    ---see, in the order shown
+    ---@param mainGuid string? the one it shows me under
+    function dialog:SetGuild(clubId, guildName, nickname, identityNickname, characters, mainGuid)
+        local Lists = ns.Lists
+        self.clubId = clubId
+        self.GuildName:SetText(guildName and ("<%s>"):format(guildName) or L["Unknown guild"])
+        self.Explanation:SetText(L["What this guild's members see."])
+        self.NicknameInput:SetText(nickname or "")
+        self.NicknameInput.Instructions:SetText(identityNickname)
+        self.NicknameHint:SetText(L["Empty: your nickname, %s."]:format(identityNickname))
+
+        local hasCharacters = characters[1] ~= nil
+        self.MainLabel:SetShown(hasCharacters)
+        self.MainDropdown:SetShown(hasCharacters)
+        self.MainHint:SetShown(hasCharacters)
+        self.mainGuid = mainGuid
+        self.MainDropdown:SetupMenu(function(_, root)
+            for _, character in ipairs(characters) do
+                root:CreateRadio(Lists.ClassColoredName(character.name, character.classID),
+                    function() return self.mainGuid == character.guid end,
+                    function() self.mainGuid = character.guid end)
+            end
+        end)
+        layOut(self)
+    end
+
+    ---Shows an error in red in place of the explanation, until the next SetGuild.
+    ---@param message string
+    function dialog:SetError(message)
+        self.Explanation:SetText(RED_FONT_COLOR:WrapTextInColorCode(message))
+        layOut(self)
+    end
+
+    ns.Skin.Apply(function(S)
+        S.Shell(dialog)
+        S.CloseButton(dialog.CloseButton)
+        S.EditBox(dialog.NicknameInput)
+        S.Dropdown(dialog.MainDropdown)
+        S.Button(dialog.SaveButton)
+        S.Button(dialog.CancelButton)
+    end)
+    return dialog
+end
+
 IdentityDialogs.NewIdentity = createNewIdentityDialog()
 IdentityDialogs.LinkCharacter = createLinkCharacterDialog()
 IdentityDialogs.GuildRule = createGuildRuleDialog()
+IdentityDialogs.GuildEntry = createGuildEntryDialog()
 
 ---Closes both first-login dialogs, leaving the character unanswered.
 function IdentityDialogs.HideLinkPrompts()

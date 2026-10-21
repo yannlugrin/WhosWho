@@ -412,7 +412,7 @@ function Scopes.GuildRosterChanged()
         if C_GuildInfo.MemberExistsByName(name) then unlistedGuildSenders[name] = nil end
     end
     local joined = Identity.GuildId(UnitGUID("player")) ~= clubId
-    setOwnGuild(clubId, function() Identity.SetGuild(UnitGUID("player"), clubId) end)
+    setOwnGuild(clubId, function() Identity.SetGuild(UnitGUID("player"), clubId, (GetGuildInfo("player"))) end)
     People.UpdateGuildMembers(clubId, memberGuids)
     -- What I held of a guild I joined again dates from before: its settings count as first ones, my list as a first one.
     if joined then

@@ -142,6 +142,14 @@ L["RP"] = true
 L["Ruleset"] = true
 L["Shared with: %s"] = true
 L["Sharing settings"] = true
+L["Edit for %s"] = true
+L["Empty: your nickname, %s."] = true
+L["In my guilds"] = true
+L["Main in this guild"] = true
+L["Nickname in this guild"] = true
+L["Unknown guild"] = true
+L["What this guild's members see."] = true
+L["Your characters in this guild."] = true
 
 -- Launcher
 L["Adds the nickname after the name, for every player you know."] = true

@@ -451,7 +451,9 @@ do
     I.Refresh(G3, "Ann Alt", NORMAL, MAGE, nil, 10)
     I.SetGuild(G1, 8)
     I.SetGuild(G2, 8)
+    I.SetGuild(G3, 8, "Ashen Covenant")
     I.SetGuild(G3, 8)
+    check(I.Characters()[G3].guild.name == "Ashen Covenant", "a guild's name is kept until the game gives another")
     check(not I.HasGuildContent(8) and I.UnsignedRecord(8, NORMAL).guild.id == nil,
         "a guild where I chose nothing gets everyone's record")
 
