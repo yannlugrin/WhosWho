@@ -325,9 +325,10 @@ local function fewestMessages(names)
 end
 
 -- Every requester my record still reaches, in the fewest messages for each record they get: my guild's members' one,
--- everyone's. The others ask again at my next announcement.
+-- everyone's. The others ask again at my next announcement. Each record is signed when its first REC goes out, about
+-- 110 ms in one frame: when both go out, everyone's waits for the next frame.
 local function answerRequesters(recordUpdate)
-    local guildClubId, guildRuleset = Scopes.EnforcedGuild()
+    local guildClubId, guildRuleset = Scopes.GuildContent()
     local guildNames, names = {}, {}
     for name in pairs(requesters) do
         if Scopes.RecordReaches(name) then
@@ -347,7 +348,11 @@ local function answerRequesters(recordUpdate)
         for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(clubId, ruleset), "WHISPER", name, clubId) end
     end
     answer(guildNames, guildClubId, guildRuleset)
-    answer(names)
+    if guildNames[1] and names[1] then
+        C_Timer.After(0, function() answer(names) end)
+    else
+        answer(names)
+    end
 end
 
 -- Whether the character I play was anonymous at login, until its first announcement.

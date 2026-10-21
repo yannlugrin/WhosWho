@@ -66,11 +66,11 @@ local function showGlyphTooltip(glyphFrame)
     Glyphs.ShowTooltip(glyphFrame, glyphFrame.glyph)
 end
 
----@param frame Frame CommunitiesFrame
 -- The Who's Who tab, once the game's guild window is loaded.
 ---@type CheckButton?
 local guildTab
 
+---@param frame Frame CommunitiesFrame
 local function addTab(frame)
     local blizzardTabs = {
         frame.ChatTab, frame.RosterTab, frame.GuildBenefitsTab, frame.GuildInfoTab, frame.GuildPreferredPlaySettingsTab,

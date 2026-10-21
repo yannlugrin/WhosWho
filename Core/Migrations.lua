@@ -57,6 +57,21 @@ local DATA_STEPS = {
             if person.signedRecord and not next(person.chars) then data.people[id] = nil end
         end
     end,
+    -- 7. 0.4.3: the guild main I chose was a flag on my character in that guild.
+    function(data)
+        local identity = data.identity
+        for guid, character in pairs(identity.chars) do
+            local guild = character.guild
+            if guild and guild.main then
+                if guild.id then
+                    identity.guilds = identity.guilds or {}
+                    identity.guilds[guild.id] = identity.guilds[guild.id] or {}
+                    identity.guilds[guild.id].main = guid
+                end
+                guild.main = nil
+            end
+        end
+    end,
 }
 
 ---@type fun(settings: WhosWho.Settings)[]

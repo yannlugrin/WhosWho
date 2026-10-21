@@ -75,16 +75,16 @@ end
 
 -- My own identity ---------------------------------------------------------------------------------
 
--- My record as my guild's members get it: the guild's content when it enforces linking and my identity is complete
--- there, my linked characters otherwise.
+-- My record as my guild's members get it: the guild's content when they get one of their own (Scopes.GuildContent),
+-- my linked characters otherwise.
 ---@return WhosWho.IdentityRecord
 local function ownGuildRecord()
-    return Identity.UnsignedRecord(ns.Scopes.EnforcedGuild())
+    return Identity.UnsignedRecord(ns.Scopes.GuildContent())
 end
 
--- The name my guild's members show me under: my nickname, otherwise the name of the main they see.
+-- The name my guild's members show me under: my nickname there, otherwise the name of the main they see.
 local function ownNickname(record)
-    return record.nickname or record.chars[ns.Record.ShownMain(record)].name
+    return ns.Record.ShownNickname(record) or record.chars[ns.Record.ShownMain(record)].name
 end
 
 -- My own identity's row: the characters my guild gets, the one I play online.

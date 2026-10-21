@@ -104,11 +104,11 @@ function Scopes.SharesWithGuild()
     return sharesWith(clubId, Identity.Ruleset(guid))
 end
 
--- Sets my current character's guild (apply). When the guild enforces linking and what its members get from me changes,
--- a new revision; a guild left needs none, its members forget the characters it added once their roster drops them.
+-- Sets my current character's guild (apply). When the guild's members get a record of their own and it changes, a new
+-- revision; a guild left needs none, its members forget the characters it added once their roster drops them.
 local function setOwnGuild(clubId, apply)
     local ruleset = Identity.Ruleset(UnitGUID("player"))
-    local bytes = GuildSettings.EnforcesLinking(clubId) and Identity.RecordBytesWithoutRevision(clubId, ruleset)
+    local bytes = Identity.HasGuildContent(clubId) and Identity.RecordBytesWithoutRevision(clubId, ruleset)
     apply()
     if bytes and Identity.RecordBytesWithoutRevision(clubId, ruleset) ~= bytes then Identity.GuildContentChanged() end
 end
@@ -665,13 +665,28 @@ function Scopes.RecordReaches(name)
     return Identity.IsLinked(UnitGUID("player")) or (guildOnly() and Scopes.GuildReaches(name))
 end
 
----The guild whose members' record that player gets: my current guild, when it enforces linking and the player is in it;
----nil for everyone's record.
+---My current guild, when its members get a record of their own from me: it enforces linking and my identity is
+---complete there (Scopes.EnforcedGuild), or I chose my main or my nickname in it (Identity.HasGuildContent).
+---@return integer? clubId
+---@return WhosWho.Ruleset? ruleset
+function Scopes.GuildContent()
+    local clubId, ruleset = Scopes.EnforcedGuild()
+    if clubId then return clubId, ruleset end
+    local guid = UnitGUID("player")
+    clubId = IsInGuild() and Identity.GuildId(guid)
+    if not (clubId and not GuildSettings.EnforcesLinking(clubId) and Identity.HasGuildContent(clubId)) then
+        return nil, nil
+    end
+    return clubId, Identity.Ruleset(guid)
+end
+
+---The guild whose members' record that player gets: my current guild, when its members get one of their own
+---(Scopes.GuildContent) and the player is in it; nil for everyone's record.
 ---@param name string
 ---@return integer? clubId
 ---@return WhosWho.Ruleset? ruleset
 function Scopes.RecordGuildOf(name)
-    local clubId, ruleset = Scopes.EnforcedGuild()
+    local clubId, ruleset = Scopes.GuildContent()
     if clubId and Scopes.GuildReaches(name) then return clubId, ruleset end
     return nil, nil
 end

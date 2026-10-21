@@ -384,6 +384,7 @@ fresh()
 do
     local I = ns.Identity
     I.EnsureKeys()
+    ns.GuildSettings.Change(7, { enable = true, enforceLinking = true }, G1, 1000)
     -- G1 my main, outside the guild; G2 linked and G3 not linked in guild 7; G4 not linked, outside it.
     I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
     I.Link(G1)
@@ -434,6 +435,70 @@ do
     I.SetGuildMain(G3)
     guild = I.UnsignedRecord(7, NORMAL)
     check(guild.guild.main == G3 and not guild.guild.forced[G2], "the guild main I chose comes before a linked character")
+end
+
+-- My main and my nickname in a guild ---------------------------------------------------------------
+
+fresh()
+do
+    local I, R = ns.Identity, ns.Record
+    I.EnsureKeys()
+    -- G1 my main and G2 linked in guild 8, which doesn't enforce linking; G3 not linked in it.
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
+    I.Link(G1)
+    I.Refresh(G2, "Ann Zed", NORMAL, MAGE, nil, 10)
+    I.Link(G2)
+    I.Refresh(G3, "Ann Alt", NORMAL, MAGE, nil, 10)
+    I.SetGuild(G1, 8)
+    I.SetGuild(G2, 8)
+    I.SetGuild(G3, 8)
+    check(not I.HasGuildContent(8) and I.UnsignedRecord(8, NORMAL).guild.id == nil,
+        "a guild where I chose nothing gets everyone's record")
+
+    local revision = I.Revision()
+    check(I.SetGuildNickname(8, "  Annie ") and I.Revision() == revision + 1 and I.HasGuildContent(8),
+        "a guild nickname bumps, and gives the guild a record of its own")
+    check(I.SetGuildNickname(8, "Annie") and I.Revision() == revision + 1, "the same nickname again doesn't")
+    local guild = I.UnsignedRecord(8, NORMAL)
+    check(R.Validate(guild) and guild.guild.id == 8 and guild.guild.nickname == "Annie" and guild.guild.main == nil
+        and guild.guild.forced == nil and count(guild.chars) == 2,
+        "its entry holds the nickname, no guild main and no forced character: the guild doesn't enforce linking")
+    check(I.UnsignedRecord().guild.id == nil and I.UnsignedRecord(9, NORMAL).guild.id == nil,
+        "everyone else's record and another guild's hold none")
+    check(R.ShownNickname(guild) == "Annie" and R.ShownNickname(I.UnsignedRecord()) == nil,
+        "the record shows the guild nickname, otherwise its own")
+    check(not I.SetGuildNickname(8, string.rep("a", 40)) and I.UnsignedRecord(8, NORMAL).guild.nickname == "Annie",
+        "a nickname too long is refused")
+
+    I.SetGuildMain(G2)
+    check(I.Revision() == revision + 2 and I.UnsignedRecord(8, NORMAL).guild.main == G2,
+        "the guild main I chose, my main being in the guild too")
+    I.SetGuildMain(G2)
+    check(I.Revision() == revision + 2, "choosing it again doesn't bump")
+    I.SetGuildMain(G3)
+    check(I.UnsignedRecord(8, NORMAL).guild.main == nil, "a guild main not in the record isn't shown")
+    I.SetGuildMain(G1)
+    check(I.UnsignedRecord(8, NORMAL).guild.main == nil, "my main chosen: no guild main")
+
+    I.SetGuildNickname(8, nil)
+    check(I.HasGuildContent(8) and I.UnsignedRecord(8, NORMAL).guild.id == nil,
+        "without a nickname, my main chosen there says nothing: no entry")
+
+    local record = I.UnsignedRecord()
+    record.guild.nickname = "Annie"
+    check(select(2, R.Validate(record)) == "guild", "a guild nickname without its guild refused")
+    record.guild.id, record.guild.nickname = 8, ""
+    check(select(2, R.Validate(record)) == "guild", "a guild nickname that isn't a name refused")
+end
+
+-- Migration: the guild main I chose, a flag on my character in that guild.
+do
+    local data = { identity = { chars = { [G1] = { guild = { id = 8, main = true } }, [G2] = { guild = { main = true } } } },
+        people = {}, forgotten = {}, guildSettings = {}, migrationVersion = 6 }
+    ns.Migrations.Data(data)
+    check(data.identity.guilds[8].main == G1 and data.identity.chars[G1].guild.main == nil
+        and data.identity.chars[G2].guild.main == nil and data.migrationVersion == 7,
+        "the guild main I chose moves to my entry for that guild")
 end
 
 -- People: shared identities ------------------------------------------------------------------------

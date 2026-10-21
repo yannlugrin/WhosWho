@@ -610,7 +610,7 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
     local created = sharedPerson == nil
     sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
     people[signedRecord.id] = sharedPerson
-    sharedPerson.signedRecord, sharedPerson.nickname = signedRecord, signedRecord.nickname
+    sharedPerson.signedRecord, sharedPerson.nickname = signedRecord, ns.Record.ShownNickname(signedRecord)
     sharedPerson.main, sharedPerson.updatedAt, sharedPerson.outdated = ns.Record.ShownMain(signedRecord), time(), nil
 
     -- Confirmations of characters this revision now lists, received before it arrived.

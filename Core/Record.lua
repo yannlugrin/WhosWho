@@ -31,6 +31,7 @@ Record.MAX_REVISION = 2 ^ 31 - 1
 ---@field consent boolean the record may be passed on to the members of those guilds: the owner's Guild scope
 ---@field id integer? the club ID of the guild the record was sent to; nil in everyone's record, and the fields below too
 ---@field main string? GUID of the character that guild shows the identity under, one of chars; nil: the record's main
+---@field nickname string? the identity's nickname in that guild; nil: the record's nickname
 ---@field forced table<string, true>? by GUID: the characters in that guild its rule adds, also in chars
 
 ---An identity record with its signature.
@@ -153,9 +154,10 @@ end
 -- The record's guild part: the consent, and, sent to a guild's members, that guild's entry, its characters among chars.
 local function isGuildSharing(guild, chars)
     if type(guild) ~= "table" or type(guild.consent) ~= "boolean" then return false end
-    if guild.id == nil then return guild.main == nil and guild.forced == nil end
+    if guild.id == nil then return guild.main == nil and guild.nickname == nil and guild.forced == nil end
     if not Record.IsPositiveInteger(guild.id) then return false end
     if guild.main ~= nil and not chars[guild.main] then return false end
+    if guild.nickname ~= nil and not Record.IsName(guild.nickname) then return false end
     if guild.forced ~= nil then
         if type(guild.forced) ~= "table" or next(guild.forced) == nil then return false end
         for guid, forced in pairs(guild.forced) do
@@ -214,6 +216,13 @@ end
 ---@return string? guid
 function Record.ShownMain(record)
     return record.guild.main or record.main
+end
+
+---The nickname the record shows the identity under: its guild nickname when it has one, otherwise its nickname.
+---@param record WhosWho.IdentityRecord
+---@return string? nickname nil: the shown main's name
+function Record.ShownNickname(record)
+    return record.guild.nickname or record.nickname
 end
 
 -- Signature --------------------------------------------------------------------------------------

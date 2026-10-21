@@ -2704,6 +2704,49 @@ do
     logout(wes)
 end
 
+-- A guild nickname -----------------------------------------------------------------------------------------
+
+-- Abe sets a nickname in his guild, which doesn't enforce linking: Bia, in it, gets it; Cal, his friend outside it,
+-- doesn't.
+do
+    local GUILD14 = 31000014
+    local abeMain = character("Abe Main", "Player-1-00010001", MAGE, GUILD14)
+    local biaMain = character("Bia Main", "Player-1-00010101", PRIEST, GUILD14)
+    local calMain = character("Cal Main", "Player-1-00010201", WARRIOR)
+    abeMain.friends, calMain.friends = { calMain }, { abeMain }
+    local abe = login(account("Abe"), abeMain)
+    slash(abe, "link")
+    abe.ns.Identity.SetNickname("Abraham")
+    local bia = login(account("Bia"), biaMain)
+    slash(bia, "link")
+    local cal = login(account("Cal"), calMain)
+    slash(cal, "link")
+    run(60)
+    local abeId = abe.ns.Identity.Id()
+    check(bia.ns.People.Nickname(abeId) == "Abraham" and cal.ns.People.Nickname(abeId) == "Abraham",
+        "without a guild nickname, everyone gets the same one")
+
+    clearLog()
+    abe.ns.Identity.SetGuildNickname(GUILD14, "Abe")
+    run(60)
+    check(sent({ from = "Abe Main", type = "ANNOUNCE", distribution = "GUILD" }) == 1
+        and sent({ from = "Abe Main", type = "ANNOUNCE", target = "Cal Main" }) == 0,
+        "a guild nickname set: announced to the guild alone, what everyone else gets didn't change")
+    check(bia.ns.People.Nickname(abeId) == "Abe" and bia.ns.People.Get(abeId).signedRecord.guild.nickname == "Abe",
+        "a guild member shows it")
+
+    clearLog()
+    levelUp(abe)
+    run(60)
+    check(sent({ from = "Abe Main", type = "REC", target = "Cal Main" }) == 1
+        and cal.ns.People.Get(abeId).signedRecord.rev == abe.ns.Identity.Revision()
+        and cal.ns.People.Get(abeId).signedRecord.guild.id == nil and cal.ns.People.Nickname(abeId) == "Abraham",
+        "his friend outside the guild gets the same revision without the guild's entry")
+    logout(abe)
+    logout(bia)
+    logout(cal)
+end
+
 -- Payload limits ----------------------------------------------------------------------------------------
 
 do
