@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-22
+
+This version no longer exchanges with the earlier ones: everyone needs it to keep sharing.
+
 ### Added
 
 - **Characters**: your record now keeps each linked character's race, and when it reached the highest level, for features to come.
@@ -18,7 +22,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Changed
 
 - **Add-on compartment**: clicking Who's Who's entry opens its settings, as other add-ons do; the minimap button still shows the window. The diagnostic mode's lines are now always in English.
-- **Protocol**: Who's Who 1.0 speaks a new version of its protocol and no longer exchanges with the beta versions. It skips the records and guild lists it already holds without unpacking them.
+- **Protocol**: a new version of Who's Who's protocol, which no longer exchanges with the earlier ones. It skips the records and guild lists it already holds without unpacking them.
 - **Guild sharing**: a guild member who is also your friend now gets both your linked characters and what your guild's rule adds. With your Guild scope off, a member of a guild enforcing linking who is not your friend sees only the characters its rule adds, without your nickname.
 
 ### Fixed
@@ -161,7 +165,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.4.3...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/yannlugrin/WhosWho/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/yannlugrin/WhosWho/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/yannlugrin/WhosWho/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/yannlugrin/WhosWho/compare/0.4.0...0.4.1
