@@ -46,7 +46,7 @@ function GuildList.Entries(clubId, ruleset)
     end
     local ownCharacterGuid = UnitGUID("player")
     if Identity.IsLinked(ownCharacterGuid) and Identity.GuildId(ownCharacterGuid) == clubId
-        and (Identity.UnsignedRecord().guild.consent or ns.GuildSettings.EnforcesLinking(clubId)) then
+        and (Identity.UnsignedRecord(true).guild.consent or ns.GuildSettings.EnforcesLinking(clubId)) then
         entries[Identity.Id()] = Identity.Revision()
     end
     return entries

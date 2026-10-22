@@ -97,7 +97,7 @@ do
     I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, nil, 10)
     check(I.Revision() == 5, "a linked character moving ruleset bumps")
     I.Refresh(G1, "Alt Renamed", NORMAL, ROGUE, nil, 10)
-    check(I.Revision() == 5 and I.UnsignedRecord().chars[G1].classID == MAGE, "class kept from the first touch")
+    check(I.Revision() == 5 and I.UnsignedRecord(true).chars[G1].classID == MAGE, "class kept from the first touch")
     clock = 2
     I.Refresh(G1, "Alt Renamed", NORMAL, MAGE, nil, 11)
     check(I.Revision() == 5, "level and last seen do not bump")
@@ -113,42 +113,42 @@ do
     check(not I.SetNickname("x"), "short nickname refused")
     check(I.Nickname() == "Yann", "refused nickname leaves the old one")
     check(I.SetNickname(nil) and I.Nickname() == "Okrãg Sorn" and I.Revision() == 7, "removing the override falls back to the main")
-    check(I.UnsignedRecord().nickname == nil, "the main's name is not copied into the record's nickname")
+    check(I.UnsignedRecord(true).nickname == nil, "the main's name is not copied into the record's nickname")
     I.SetNickname("Yann")
 
     check(not I.SetMain(G4), "an unlinked character cannot be the main")
     check(I.SetMain(G1) and I.Main() == G1 and I.Revision() == 9, "main changed, revision bumped")
     check(I.Nickname() == "Yann", "the override stays when the main changes")
 
-    local unsignedRecord = I.UnsignedRecord()
+    local unsignedRecord = I.UnsignedRecord(true)
     check(ns.Record.Validate(unsignedRecord), "own record is valid: " .. tostring((select(2, ns.Record.Validate(unsignedRecord)))))
     check(count(unsignedRecord.chars) == 2 and unsignedRecord.chars[G1] and unsignedRecord.chars[G2], "linked characters in the record")
 
-    local signed = I.SignedRecord()
+    local signed = I.SignedRecord(true)
     check(ns.Record.Verify(signed), "signed record verifies")
-    local again = I.SignedRecord()
+    local again = I.SignedRecord(true)
     check(again.sig == signed.sig, "signature reused while nothing changed")
     check(signed.guild.consent == true, "the record carries the Guild scope as its guild consent")
     ns.data.identity.signatures = { ["from an older record format"] = again.sig }
-    check(ns.Record.Verify(I.SignedRecord()), "a signature over other bytes is made again")
+    check(ns.Record.Verify(I.SignedRecord(true)), "a signature over other bytes is made again")
 
-    local tampered = I.SignedRecord()
+    local tampered = I.SignedRecord(true)
     tampered.nickname = "Someone"
     check(not ns.Record.Verify(tampered), "changed nickname breaks the signature")
-    tampered = I.SignedRecord()
+    tampered = I.SignedRecord(true)
     tampered.chars[G2].name = "Someone Else"
     check(ns.Record.Validate(tampered) and not ns.Record.Verify(tampered), "changed character breaks the signature")
-    tampered = I.SignedRecord()
+    tampered = I.SignedRecord(true)
     tampered.junk = "added by a relay"
     check(not ns.Record.Verify(tampered), "an added field breaks the signature check")
-    tampered = I.SignedRecord()
+    tampered = I.SignedRecord(true)
     tampered.chars[G2].junk = "added by a relay"
     check(not ns.Record.Verify(tampered), "a field added to a character breaks the signature check")
 
     I.Unlink(G1)
-    check(count(I.UnsignedRecord().chars) == 1 and I.Revision() == 10, "unlinking removes the character and bumps")
+    check(count(I.UnsignedRecord(true).chars) == 1 and I.Revision() == 10, "unlinking removes the character and bumps")
     check(I.Main() == G2, "unlinking the main makes another linked character the main")
-    check(I.SignedRecord().sig ~= signed.sig and ns.Record.Verify(I.SignedRecord()), "new revision signed again")
+    check(I.SignedRecord(true).sig ~= signed.sig and ns.Record.Verify(I.SignedRecord(true)), "new revision signed again")
 
     I.Unlink(G2)
     check(I.Nickname() == nil, "no nickname once nothing is linked, even with an override")
@@ -357,23 +357,23 @@ do
     I.Refresh(G1, "Ann Main", NORMAL, MAGE, 3, 10)
     I.Link(G1)
     local revision = I.Revision()
-    check(I.UnsignedRecord().chars[G1].raceID == 3, "the record gives the character's race")
+    check(I.UnsignedRecord(true).chars[G1].raceID == 3, "the record gives the character's race")
     I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
-    check(I.Revision() == revision and I.UnsignedRecord().chars[G1].raceID == 3, "a race the game doesn't give keeps the saved one")
+    check(I.Revision() == revision and I.UnsignedRecord(true).chars[G1].raceID == 3, "a race the game doesn't give keeps the saved one")
     I.Refresh(G1, "Ann Main", NORMAL, MAGE, 7, 10)
-    check(I.Revision() == revision + 1 and I.UnsignedRecord().chars[G1].raceID == 7, "a race change bumps")
+    check(I.Revision() == revision + 1 and I.UnsignedRecord(true).chars[G1].raceID == 7, "a race change bumps")
     clock = 50
     I.ReachedMaxLevel(G1)
-    check(I.Revision() == revision + 2 and I.UnsignedRecord().chars[G1].maxLevelAt == 50,
+    check(I.Revision() == revision + 2 and I.UnsignedRecord(true).chars[G1].maxLevelAt == 50,
         "reaching the highest level bumps, with when")
 
-    local record = I.UnsignedRecord()
+    local record = I.UnsignedRecord(true)
     record.chars[G1].raceID = 0
     check(select(2, R.Validate(record)) == "character", "a race that isn't a positive integer is refused")
-    record = I.UnsignedRecord()
+    record = I.UnsignedRecord(true)
     record.chars[G1].maxLevelAt = 1.5
     check(select(2, R.Validate(record)) == "character", "a date that isn't a positive integer is refused")
-    record = I.UnsignedRecord()
+    record = I.UnsignedRecord(true)
     record.chars[G1].raceID, record.chars[G1].maxLevelAt = nil, nil
     check(R.Validate(record), "both are optional: an older record has neither")
 end
@@ -395,32 +395,32 @@ do
     I.SetGuild(G2, 7)
     I.SetGuild(G3, 7)
 
-    local everyone = I.UnsignedRecord()
+    local everyone = I.UnsignedRecord(true)
     check(count(everyone.chars) == 2 and not everyone.chars[G3] and everyone.guild.id == nil,
         "everyone else gets my linked characters, without a guild entry")
-    local guild = I.UnsignedRecord(7, NORMAL)
+    local guild = I.UnsignedRecord(true, 7, NORMAL)
     check(ns.Record.Validate(guild) and count(guild.chars) == 3 and guild.main == G1 and guild.guild.id == 7,
         "the guild's members get my linked characters and my characters in the guild, with my main and the guild's entry")
     check(guild.guild.forced[G3] and not guild.chars[G4] and not guild.guild.forced[G2],
         "the characters only the rule adds are listed as forced")
     check(guild.guild.main == G2, "my main outside the guild: the first linked character in it is the guild main")
-    check(count(I.UnsignedRecord(7, ns.Record.RULESET.PvP).chars) == 2, "a guild is its club ID and its ruleset")
+    check(count(I.UnsignedRecord(true, 7, ns.Record.RULESET.PvP).chars) == 2, "a guild is its club ID and its ruleset")
 
     ns.settings.scopes.guild = false
-    guild = I.UnsignedRecord(7, NORMAL)
+    guild = I.UnsignedRecord(false, 7, NORMAL)
     check(ns.Record.Validate(guild) and count(guild.chars) == 2 and guild.main == nil
         and guild.guild.forced[G2] and guild.guild.forced[G3] and guild.guild.main == G2,
         "Guild scope off: only my characters in the guild, all forced, under the guild main")
-    check(count(I.UnsignedRecord().chars) == 2, "everyone else's record doesn't change")
+    check(count(I.UnsignedRecord(true).chars) == 2, "everyone else's record doesn't change")
 
     I.SetGuild(G1, 7)
-    guild = I.UnsignedRecord(7, NORMAL)
+    guild = I.UnsignedRecord(true, 7, NORMAL)
     check(guild.main == G1 and guild.guild.main == nil, "my main in the guild: no guild main")
     ns.settings.scopes.guild = true
 
-    local signed = I.SignedRecord(7, NORMAL)
-    check(ns.Record.Verify(signed) and ns.Record.Verify(I.SignedRecord()), "each record is signed apart")
-    check(I.SignedRecord(7, NORMAL).sig == signed.sig, "and its signature kept while its bytes stay the same")
+    local signed = I.SignedRecord(true, 7, NORMAL)
+    check(ns.Record.Verify(signed) and ns.Record.Verify(I.SignedRecord(true)), "each record is signed apart")
+    check(I.SignedRecord(true, 7, NORMAL).sig == signed.sig, "and its signature kept while its bytes stay the same")
 
     check(not I.AllLinkedInGuild(7, NORMAL) and I.AllLinkedInGuild(8, NORMAL), "a character of mine in the guild isn't linked")
     local revision = I.Revision()
@@ -433,7 +433,7 @@ do
 
     I.SetGuild(G1, nil)
     I.SetGuildMain(G3)
-    guild = I.UnsignedRecord(7, NORMAL)
+    guild = I.UnsignedRecord(true, 7, NORMAL)
     check(guild.guild.main == G3 and not guild.guild.forced[G2], "the guild main I chose comes before a linked character")
 end
 
@@ -454,39 +454,40 @@ do
     I.SetGuild(G3, 8, "Ashen Covenant")
     I.SetGuild(G3, 8)
     check(I.Characters()[G3].guild.name == "Ashen Covenant", "a guild's name is kept until the game gives another")
-    check(not I.HasGuildContent(8) and I.UnsignedRecord(8, NORMAL).guild.id == nil,
+    check(not I.HasGuildContent(8) and I.UnsignedRecord(true, 8, NORMAL).guild.id == nil,
         "a guild where I chose nothing gets everyone's record")
 
     local revision = I.Revision()
     check(I.SetGuildNickname(8, "  Annie ") and I.Revision() == revision + 1 and I.HasGuildContent(8),
         "a guild nickname bumps, and gives the guild a record of its own")
     check(I.SetGuildNickname(8, "Annie") and I.Revision() == revision + 1, "the same nickname again doesn't")
-    local guild = I.UnsignedRecord(8, NORMAL)
+    local guild = I.UnsignedRecord(true, 8, NORMAL)
     check(R.Validate(guild) and guild.guild.id == 8 and guild.guild.nickname == "Annie" and guild.guild.main == nil
         and guild.guild.forced == nil and count(guild.chars) == 2,
         "its entry holds the nickname, no guild main and no forced character: the guild doesn't enforce linking")
-    check(I.UnsignedRecord().guild.id == nil and I.UnsignedRecord(9, NORMAL).guild.id == nil,
+    check(I.UnsignedRecord(true).guild.id == nil and I.UnsignedRecord(true, 9, NORMAL).guild.id == nil,
         "everyone else's record and another guild's hold none")
-    check(R.ShownNickname(guild) == "Annie" and R.ShownNickname(I.UnsignedRecord()) == nil,
-        "the record shows the guild nickname, otherwise its own")
-    check(not I.SetGuildNickname(8, string.rep("a", 40)) and I.UnsignedRecord(8, NORMAL).guild.nickname == "Annie",
+    check(R.ShownNickname(guild, 8) == "Annie" and R.ShownNickname(guild, 9) == nil
+        and R.ShownNickname(I.UnsignedRecord(true), 8) == nil,
+        "the record shows the guild nickname in that guild, otherwise its own")
+    check(not I.SetGuildNickname(8, string.rep("a", 40)) and I.UnsignedRecord(true, 8, NORMAL).guild.nickname == "Annie",
         "a nickname too long is refused")
 
     I.SetGuildMain(G2)
-    check(I.Revision() == revision + 2 and I.UnsignedRecord(8, NORMAL).guild.main == G2,
+    check(I.Revision() == revision + 2 and I.UnsignedRecord(true, 8, NORMAL).guild.main == G2,
         "the guild main I chose, my main being in the guild too")
     I.SetGuildMain(G2)
     check(I.Revision() == revision + 2, "choosing it again doesn't bump")
     I.SetGuildMain(G3)
-    check(I.UnsignedRecord(8, NORMAL).guild.main == nil, "a guild main not in the record isn't shown")
+    check(I.UnsignedRecord(true, 8, NORMAL).guild.main == nil, "a guild main not in the record isn't shown")
     I.SetGuildMain(G1)
-    check(I.UnsignedRecord(8, NORMAL).guild.main == nil, "my main chosen: no guild main")
+    check(I.UnsignedRecord(true, 8, NORMAL).guild.main == nil, "my main chosen: no guild main")
 
     I.SetGuildNickname(8, nil)
-    check(I.HasGuildContent(8) and I.UnsignedRecord(8, NORMAL).guild.id == nil,
+    check(I.HasGuildContent(8) and I.UnsignedRecord(true, 8, NORMAL).guild.id == nil,
         "without a nickname, my main chosen there says nothing: no entry")
 
-    local record = I.UnsignedRecord()
+    local record = I.UnsignedRecord(true)
     record.guild.nickname = "Annie"
     check(select(2, R.Validate(record)) == "guild", "a guild nickname without its guild refused")
     record.guild.id, record.guild.nickname = 8, ""
@@ -1168,14 +1169,20 @@ do
         return record
     end
 
+    P.SetCurrentGuild(7)
     P.Accept(guildRecord("s1"))
     check(P.Get(A).main == G2 and P.IdentityNickname(A) == "N2", "a guild's members show the person under its guild main")
-    local other = makeRecord(A, 2, { G1, G2 })
-    other.sig = "s2"
-    check(P.ReplacesHeld(other, true) and not P.ReplacesHeld(guildRecord("s1"), true),
-        "at the revision I hold, another content from my guild replaces mine, the same one doesn't")
-    check(not P.ReplacesHeld(other, false), "from elsewhere (a group), it doesn't")
-    check(not P.ReplacesHeld(makeRecord(A, 3, { G1 }), true), "a newer revision is no replacement, it is newer")
+    local general = makeRecord(A, 2, { G1, G2 })
+    general.sig = "s2"
+    local guildOnly = guildRecord("s3")
+    guildOnly.main, guildOnly.nickname = nil, nil
+    check(not P.ReplacesHeld(general) and not P.ReplacesHeld(guildOnly),
+        "at the revision I hold, a record covering less doesn't replace mine: without my guild's entry, without the general part")
+    check(not P.ReplacesHeld(makeRecord(A, 3, { G1 })), "a newer revision is no replacement, it is newer")
+    P.SetCurrentGuild(8)
+    check(P.Get(A).main == G1 and P.IdentityNickname(A) == "N1", "in another guild, the person is shown under the record's own main")
+    P.SetCurrentGuild(7)
+    check(P.Get(A).main == G2, "and under the guild main again back in that guild")
 
     P.UpdateGuildMembers(7, { [G1] = true, [G2] = true, [G3] = true })
     check(state(G3) == "listed", "a character the rule adds is kept while my roster lists it")

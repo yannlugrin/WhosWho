@@ -173,22 +173,34 @@ function People.IsWanted(id, rev)
     return People.IsNewer(id, rev)
 end
 
--- Whether a record of the revision I hold could replace mine: mine is outdated, or it holds another content (another
--- signature).
-local function replaceable(signedRecord)
+-- My current character's guild, whose entries in the records are shown (People.SetCurrentGuild); false until set.
+---@type integer|false|nil
+local shownGuild = false
+
+---Whether a record of the revision I hold replaces mine: mine is outdated, or the new one covers more of what I may know
+---and nothing less. More: the general part mine lacks (a record with it has a main), or the entry of my current
+---character's guild where mine has none or another guild's. Nothing less: every character of mine, the general part
+---when mine has it, and my guild's entry when mine has it, unless it shows nothing the new one doesn't (no guild
+---nickname, the same main): a record sent with the general part leaves out an entry that says nothing more.
+---@param signedRecord WhosWho.SignedIdentityRecord
+---@return boolean
+function People.ReplacesHeld(signedRecord)
     local person = ns.data.people[signedRecord.id]
     local held = person and person.signedRecord
     if not (held and held.rev == signedRecord.rev) then return false end
-    return person.outdated == true or held.sig ~= signedRecord.sig
-end
+    if person.outdated then return true end
 
----Whether a record of the revision I hold replaces mine: only one from my guild (its channel, or a guild member's
----whisper), whose content was chosen for me as its member, when mine is outdated or holds another content.
----@param signedRecord WhosWho.SignedIdentityRecord
----@param fromMyGuild boolean
----@return boolean
-function People.ReplacesHeld(signedRecord, fromMyGuild)
-    return fromMyGuild and replaceable(signedRecord)
+    for guid in pairs(held.chars) do
+        if not signedRecord.chars[guid] then return false end
+    end
+    local clubId = shownGuild or nil
+    local hasGeneral, heldHasGeneral = signedRecord.main ~= nil, held.main ~= nil
+    local hasEntry = clubId ~= nil and signedRecord.guild.id == clubId
+    local heldHasEntry = clubId ~= nil and held.guild.id == clubId
+    local heldEntryShowsMore = held.guild.nickname ~= nil or (held.guild.main or signedRecord.main) ~= signedRecord.main
+    if (heldHasGeneral and not hasGeneral) or (heldHasEntry and not hasEntry and heldEntryShowsMore) then return false end
+
+    return (hasGeneral and not heldHasGeneral) or (hasEntry and not heldHasEntry)
 end
 
 ---The nickname the identity itself gives, whatever overrides it: the player's own (shared person), otherwise the
@@ -567,6 +579,25 @@ function People.ApplyGuild(clubId)
     changed()
 end
 
+---My current character's guild: each shared person whose record holds a guild entry is shown under that guild's
+---nickname and main when the entry is that guild's, otherwise under the record's own.
+---@param clubId integer?
+function People.SetCurrentGuild(clubId)
+    if clubId == shownGuild then return end
+    shownGuild = clubId
+    local anyChanged = false
+    for _, person in pairs(ns.data.people) do
+        local signedRecord = person.signedRecord
+        if signedRecord and signedRecord.guild.id then
+            person.nickname = ns.Record.ShownNickname(signedRecord, clubId)
+            person.main = ns.Record.ShownMain(signedRecord, clubId)
+            keepShownMain(person)
+            anyChanged = true
+        end
+    end
+    if anyChanged then changed() end
+end
+
 ---Stores a newer revision of a player's record, or the one replacing the revision I hold. Its characters that declared
 ---no identity are left out, but those my guild vouches for: a record my guild sent, and its roster lists them. A
 ---revision without characters, or with only such ones, means the player unlinked them all: the person is forgotten, my
@@ -579,8 +610,7 @@ end
 ---@return "updated"|"stale"|"forgotten"
 function People.Accept(signedRecord, fromGuild, guildMembers)
     local people, noIdentity = ns.data.people, ns.data.noIdentity
-    -- Replacing the revision I hold: the caller checked where it came from (People.ReplacesHeld).
-    local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or replaceable(signedRecord)
+    local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or People.ReplacesHeld(signedRecord)
     if not wanted then return "stale" end
     local sharedPerson = people[signedRecord.id]
 
@@ -610,8 +640,10 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
     local created = sharedPerson == nil
     sharedPerson = sharedPerson or { id = signedRecord.id, chars = {} }
     people[signedRecord.id] = sharedPerson
-    sharedPerson.signedRecord, sharedPerson.nickname = signedRecord, ns.Record.ShownNickname(signedRecord)
-    sharedPerson.main, sharedPerson.updatedAt, sharedPerson.outdated = ns.Record.ShownMain(signedRecord), time(), nil
+    local currentGuild = shownGuild or nil
+    sharedPerson.signedRecord = signedRecord
+    sharedPerson.nickname = ns.Record.ShownNickname(signedRecord, currentGuild)
+    sharedPerson.main, sharedPerson.updatedAt, sharedPerson.outdated = ns.Record.ShownMain(signedRecord, currentGuild), time(), nil
 
     -- Confirmations of characters this revision now lists, received before it arrived.
     local pending = pendingConfirmations[signedRecord.id] or {}

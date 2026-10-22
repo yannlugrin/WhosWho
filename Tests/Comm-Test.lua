@@ -695,14 +695,14 @@ slash(eve, "link")
 run(10)
 local eveId = eve.ns.Identity.Id()
 local unpackedBefore = unpackedCount
-eve.ns.Protocol:SendCommMessage("WhosWho", eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord()), "WHISPER", "Bob Main")
+eve.ns.Protocol:SendCommMessage("WhosWho", eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord(true)), "WHISPER", "Bob Main")
 run(1)
 check(bob.ns.People.Get(eveId) == nil, "a REC whispered by a stranger is ignored")
 check(unpackedCount == unpackedBefore, "without being unpacked")
 
 ann = login(annAccount, annMain)
 run(10)
-local forged = ann.ns.Identity.SignedRecord()
+local forged = ann.ns.Identity.SignedRecord(true)
 forged.rev, forged.nickname = forged.rev + 1, "Forged"
 cat.ns.Protocol:SendCommMessage("WhosWho", cat.ns.Codec.RecordUpdate(forged), "GUILD")
 run(1)
@@ -773,7 +773,7 @@ end
 do
     local function eveSends(text) eve.ns.Protocol:SendCommMessage("WhosWho", text, "WHISPER", "Bob Main") end
     local function eveAnnouncement() return eve.ns.Codec.Announcement(eveId, eve.ns.Identity.Revision(), eveMain.level, true, false, nil, nil, 0) end
-    local function eveRecord() return eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord()) end
+    local function eveRecord() return eve.ns.Codec.RecordUpdate(eve.ns.Identity.SignedRecord(true)) end
 
     bob.ns.settings.scopes.whispers = true
     clearLog()
@@ -1384,15 +1384,15 @@ ann.ns.settings.scopes.group = false
 -- Dan never linked a character: whatever arrives is ignored.
 danMain.friends = { annMain }
 fire(dan, "FRIENDLIST_UPDATE")
-ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(ann.ns.Identity.SignedRecord()), "WHISPER", "Dan Main")
+ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(ann.ns.Identity.SignedRecord(true)), "WHISPER", "Dan Main")
 run(1)
 check(dan.ns.People.Get(ann.ns.Identity.Id()) == nil, "without any linked character, a REC is not stored")
 -- Dan held Ann's identity from before, as after a Forget me.
-local annBefore = ann.ns.Identity.SignedRecord()
+local annBefore = ann.ns.Identity.SignedRecord(true)
 dan.ns.People.Accept(annBefore)
 slash(ann, "nick Ann For Dan")
 run(30)
-ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(ann.ns.Identity.SignedRecord()), "WHISPER", "Dan Main")
+ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(ann.ns.Identity.SignedRecord(true)), "WHISPER", "Dan Main")
 run(1)
 check(dan.ns.People.Get(ann.ns.Identity.Id()).signedRecord.rev == annBefore.rev,
     "nor a newer revision of an identity held from before")
@@ -1419,7 +1419,7 @@ clearLog()
 slash(ann, "nick Ann Anonymous")
 run(30)
 check(sent({ from = "Bob Alt" }) == 0, "nor for a newer revision of an identity it holds")
-local annSigned = ann.ns.Identity.SignedRecord()
+local annSigned = ann.ns.Identity.SignedRecord(true)
 ann.ns.Protocol:SendCommMessage("WhosWho", ann.ns.Codec.RecordUpdate(annSigned), "GUILD")
 run(1)
 check(bobAltSession.ns.People.Nickname(ann.ns.Identity.Id()) == "Ann Anonymous",
@@ -1429,10 +1429,10 @@ check(bobAltSession.ns.People.Nickname(ann.ns.Identity.Id()) == "Ann Anonymous",
 bobAltSession.ns.People.Forget(fayId)
 world.group = { bobAlt, fayMain }
 bobAltSession.ns.settings.scopes.group = true
-fay.ns.Protocol:SendCommMessage("WhosWho", fay.ns.Codec.RecordUpdate(fay.ns.Identity.SignedRecord()), "PARTY")
+fay.ns.Protocol:SendCommMessage("WhosWho", fay.ns.Codec.RecordUpdate(fay.ns.Identity.SignedRecord(true)), "PARTY")
 run(1)
 check(bobAltSession.ns.People.Get(fayId) == nil, "never a new identity from the group")
-fay.ns.Protocol:SendCommMessage("WhosWho", fay.ns.Codec.RecordUpdate(fay.ns.Identity.SignedRecord()), "GUILD")
+fay.ns.Protocol:SendCommMessage("WhosWho", fay.ns.Codec.RecordUpdate(fay.ns.Identity.SignedRecord(true)), "GUILD")
 run(1)
 check(bobAltSession.ns.People.Get(fayId) ~= nil, "a new identity from the guild where one of my characters is linked")
 world.group = {}
@@ -2387,7 +2387,7 @@ do
     check(decoded and #decoded.ids == 1 and decoded.ids[1] == id and Codec.Decode("2 GET G1234") == nil,
         "tokens that aren't identity IDs are skipped; without any ID, nothing is asked")
 
-    local signedRecord = ann.ns.Identity.SignedRecord()
+    local signedRecord = ann.ns.Identity.SignedRecord(true)
     local text = Codec.RecordUpdate(signedRecord)
     local before = unpackedCount
     local messageType, header = Codec.Header(text)
@@ -2568,7 +2568,7 @@ end
 -- Unwanted payloads ---------------------------------------------------------------------------------------
 
 do
-    local Codec, record = bob.ns.Codec, ann.ns.Identity.SignedRecord()
+    local Codec, record = bob.ns.Codec, ann.ns.Identity.SignedRecord(true)
     local before = unpackedCount
     bob.comm("WhosWho", Codec.RecordUpdate(record), "GUILD", "Ann Main")
     run(1)
@@ -2640,7 +2640,7 @@ do
     local uma = login(umaAccount, umaMain)
     slash(uma, "link")
     run(60)
-    local umaId, umaRecord = uma.ns.Identity.Id(), uma.ns.Identity.SignedRecord()
+    local umaId, umaRecord = uma.ns.Identity.Id(), uma.ns.Identity.SignedRecord(true)
     logout(uma)
     local wes = login(wesAccount, wesMain)
     slash(wes, "link")
@@ -2682,7 +2682,7 @@ do
 
     -- A verification started before combat waits for its end.
     uma.ns.Identity.SetNickname("Umi")
-    wes.comm("WhosWho", uma.ns.Codec.RecordUpdate(uma.ns.Identity.SignedRecord()), "GUILD", "Uma Main")
+    wes.comm("WhosWho", uma.ns.Codec.RecordUpdate(uma.ns.Identity.SignedRecord(true)), "GUILD", "Uma Main")
     inbox.scripts.OnUpdate(inbox, 0.016)
     wesMain.inCombat = true
     run(10)
@@ -2746,6 +2746,81 @@ do
     logout(abe)
     logout(bia)
     logout(cal)
+end
+
+-- Contents per recipient ----------------------------------------------------------------------------------
+
+-- Eli, Guild scope off, opted in to his guild's rule: Fox, a member and his friend, gets his linked characters and the
+-- guild's entry; Gil, a member only, the guild's entry alone; Hob, his friend outside the guild, no guild entry. In one
+-- group with all three, with his Group scope on, both members also get his linked characters, and Hob still nothing of
+-- the guild.
+do
+    local GUILD15 = 31000015
+    local daxMain = character("Dax Main", "Player-1-00020001", MAGE, GUILD15)
+    local eliMain = character("Eli Main", "Player-1-00020101", PRIEST, GUILD15)
+    local eliAlt = character("Eli Alt", "Player-1-00020102", ROGUE, GUILD15)
+    local foxMain = character("Fox Main", "Player-1-00020201", WARRIOR, GUILD15)
+    local gilMain = character("Gil Main", "Player-1-00020301", MAGE, GUILD15)
+    local hobMain = character("Hob Main", "Player-1-00020401", WARRIOR)
+    -- A second member who is his friend: two players asking for the same content, one GUILD message would be cheaper.
+    local katMain = character("Kat Main", "Player-1-00020501", PRIEST, GUILD15)
+    daxMain.rankIndex = 1
+    eliMain.friends, foxMain.friends, hobMain.friends = { foxMain, hobMain, katMain }, { eliMain }, { eliMain }
+    katMain.friends = { eliMain }
+    local eliAccount = account("Eli")
+    -- Eli's account knows its alt and its guild.
+    local eliFirstOnAlt = login(eliAccount, eliAlt)
+    run(5)
+    logout(eliFirstOnAlt)
+    local dax = login(account("Dax"), daxMain)
+    slash(dax, "link")
+    local eli = login(eliAccount, eliMain)
+    eli.ns.settings.scopes.guild = false
+    slash(eli, "link")
+    eli.ns.Identity.SetNickname("Elo")
+    local fox = login(account("Fox"), foxMain)
+    slash(fox, "link")
+    local gil = login(account("Gil"), gilMain)
+    slash(gil, "link")
+    local hob = login(account("Hob"), hobMain)
+    slash(hob, "link")
+    local kat = login(account("Kat"), katMain)
+    slash(kat, "link")
+    run(60)
+    dax.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = true })
+    run(60)
+    eli.ns.Identity.SetEnforcedLinkingOptIn(GUILD15, true)
+    run(120)
+    local eliId = eli.ns.Identity.Id()
+    local function held(session) return session.ns.People.Get(eliId) and session.ns.People.Get(eliId).signedRecord end
+
+    local forFox, forGil, forHob = held(fox), held(gil), held(hob)
+    check(forFox and forFox.main == eliMain.guid and forFox.guild.id == GUILD15 and forFox.guild.forced[eliAlt.guid]
+        and fox.ns.People.Nickname(eliId) == "Elo",
+        "a member who is my friend gets my linked characters and the guild's entry")
+    check(held(kat).main ~= nil and held(kat).guild.id == GUILD15, "and so does the second one")
+    check(forGil and forGil.main == nil and forGil.nickname == nil and forGil.guild.id == GUILD15
+        and forGil.guild.main == eliMain.guid and gil.ns.People.Nickname(eliId) == "Eli Main",
+        "a member only gets the guild's entry alone: no nickname, shown under the guild main")
+    check(forHob and forHob.guild.id == nil and not forHob.chars[eliAlt.guid] and hob.ns.People.Nickname(eliId) == "Elo",
+        "a friend outside the guild gets no guild entry")
+
+    world.group = { eliMain, foxMain, gilMain, hobMain }
+    eli.ns.settings.scopes.group = true
+    run(40)
+    clearLog()
+    eli.ns.Identity.SetNickname("Eliot")
+    run(60)
+    forFox, forGil, forHob = held(fox), held(gil), held(hob)
+    local revision = eli.ns.Identity.Revision()
+    check(forHob.rev == revision and forHob.guild.id == nil and not forHob.chars[eliAlt.guid]
+        and sent({ from = "Eli Main", type = "REC", distribution = "PARTY" }) == 0,
+        "in one group, the friend outside the guild still gets no guild entry: no record on the group channel")
+    check(forFox.rev == revision and forFox.main ~= nil and forFox.guild.id == GUILD15
+        and forGil.rev == revision and forGil.main ~= nil and forGil.guild.id == GUILD15,
+        "and each member gets the general part too, which the Group scope allows, with the guild's entry")
+    world.group = {}
+    for _, session in ipairs({ dax, eli, fox, gil, hob, kat }) do logout(session) end
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

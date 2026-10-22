@@ -108,9 +108,12 @@ end
 -- revision; a guild left needs none, its members forget the characters it added once their roster drops them.
 local function setOwnGuild(clubId, apply)
     local ruleset = Identity.Ruleset(UnitGUID("player"))
-    local bytes = Identity.HasGuildContent(clubId) and Identity.RecordBytesWithoutRevision(clubId, ruleset)
+    local general = Scopes.Get("guild")
+    local bytes = Identity.HasGuildContent(clubId) and Identity.RecordBytesWithoutRevision(general, clubId, ruleset)
     apply()
-    if bytes and Identity.RecordBytesWithoutRevision(clubId, ruleset) ~= bytes then Identity.GuildContentChanged() end
+    if bytes and Identity.RecordBytesWithoutRevision(general, clubId, ruleset) ~= bytes then
+        Identity.GuildContentChanged()
+    end
 end
 
 ---Whether that player is a member of my current guild, whatever I share with it: for the guild's settings.
@@ -413,6 +416,7 @@ function Scopes.GuildRosterChanged()
     end
     local joined = Identity.GuildId(UnitGUID("player")) ~= clubId
     setOwnGuild(clubId, function() Identity.SetGuild(UnitGUID("player"), clubId, (GetGuildInfo("player"))) end)
+    People.SetCurrentGuild(clubId)
     People.UpdateGuildMembers(clubId, memberGuids)
     -- What I held of a guild I joined again dates from before: its settings count as first ones, my list as a first one.
     if joined then
@@ -467,6 +471,7 @@ function Scopes.GuildChanged()
     local guid = UnitGUID("player")
     local clubId = Identity.GuildId(guid)
     Identity.SetGuild(guid, nil)
+    People.SetCurrentGuild(nil)
     if clubId and not Identity.HasCharacterInGuild(clubId, Identity.Ruleset(guid)) then
         People.GuildLeft(clubId)
         GuildRecord.ForgetGuild(clubId)
@@ -599,14 +604,13 @@ function Scopes.OnEnabled(listener)
     enabledListeners[#enabledListeners + 1] = listener
 end
 
----Whether my scopes allow sharing identities with that player, both ways: sending my record, and using or asking
----for theirs.
----@param name string "First Surname"
----@return boolean
-function Scopes.Allows(name)
+-- Whether my scopes allow sharing with that player; withoutGuildRule: not counting a guild enforcing linking, which I
+-- share with whatever my Guild scope.
+local function allows(name, withoutGuildRule)
     local friends = Scopes.Get("friends")
     local whispersOn = Scopes.Get("whispers")
-    if Scopes.SharesWithGuild() and guildMember(name) then return true end
+    local guildOn = Scopes.Get("guild") or not withoutGuildRule
+    if guildOn and Scopes.SharesWithGuild() and guildMember(name) then return true end
     if friends and C_FriendList.GetFriendInfo(name) then return true end
     if Scopes.Get("group") and groupMemberGuid(name) then return true end
     if whispersOn then
@@ -623,7 +627,7 @@ function Scopes.Allows(name)
 
     for _, character in pairs(person.chars) do
         if character.state == "confirmed" then
-            if character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset)
+            if guildOn and character.guild and Identity.HasCharacterInGuild(character.guild, character.ruleset)
                 and sharesWith(character.guild, character.ruleset) then
                 return true
             end
@@ -633,6 +637,14 @@ function Scopes.Allows(name)
     end
 
     return false
+end
+
+---Whether my scopes allow sharing identities with that player, both ways: sending my record, and using or asking
+---for theirs.
+---@param name string "First Surname"
+---@return boolean
+function Scopes.Allows(name)
+    return allows(name, false)
 end
 
 ---Whether my announcement, from the character I play, goes to that player: one my scopes allow; only my guild's members
@@ -680,15 +692,27 @@ function Scopes.GuildContent()
     return clubId, Identity.Ruleset(guid)
 end
 
----The guild whose members' record that player gets: my current guild, when its members get one of their own
----(Scopes.GuildContent) and the player is in it; nil for everyone's record.
+---What my record holds for that player, from the character I play: the general part when the character is linked and a
+---scope other than a guild's rule allows the player; my current guild's entry when its members get one of their own
+---(Scopes.GuildContent) and the player is one of them.
 ---@param name string
+---@return boolean general
 ---@return integer? clubId
 ---@return WhosWho.Ruleset? ruleset
-function Scopes.RecordGuildOf(name)
+function Scopes.RecordContentOf(name)
+    local general = Identity.IsLinked(UnitGUID("player")) and allows(name, true)
     local clubId, ruleset = Scopes.GuildContent()
-    if clubId and Scopes.GuildReaches(name) then return clubId, ruleset end
-    return nil, nil
+    if clubId and Scopes.GuildReaches(name) then return general, clubId, ruleset end
+    return general, nil, nil
+end
+
+---What my record holds for my guild's members, as most of them get it: the general part with my Guild scope on, and
+---the guild's entry when they get one of their own.
+---@return boolean general
+---@return integer? clubId
+---@return WhosWho.Ruleset? ruleset
+function Scopes.GuildMembersContent()
+    return Scopes.Get("guild") and Identity.IsLinked(UnitGUID("player")), Scopes.GuildContent()
 end
 
 ---Whether that player is in my guild and I share with it: the GUILD channel reaches it.

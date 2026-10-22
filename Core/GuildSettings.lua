@@ -151,7 +151,8 @@ end
 
 -- The bytes of the record that guild's members get from me, without its revision.
 local function guildRecordBytes(clubId, ruleset)
-    return Identity.RecordBytesWithoutRevision(Identity.HasGuildContent(clubId) and clubId or nil, ruleset)
+    return Identity.RecordBytesWithoutRevision(ns.Scopes.Get("guild"), Identity.HasGuildContent(clubId) and clubId or nil,
+        ruleset)
 end
 
 -- Holds a guild's record. When it turns enforced linking on or off and what that guild's members get from me changes,

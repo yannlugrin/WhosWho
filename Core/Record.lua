@@ -211,18 +211,26 @@ function Record.HasGuildEntry(record)
     return record.guild.id ~= nil
 end
 
----The character the record shows the identity under: its guild main when it has one, otherwise its main.
+---The character the record shows the identity under in that guild: the guild main of its entry for that guild,
+---otherwise its main; a record without one, its guild main.
 ---@param record WhosWho.IdentityRecord
+---@param clubId integer? my current character's guild
 ---@return string? guid
-function Record.ShownMain(record)
-    return record.guild.main or record.main
+function Record.ShownMain(record, clubId)
+    local guild = record.guild
+    if guild.main and (guild.id == clubId or not record.main) then return guild.main end
+    return record.main
 end
 
----The nickname the record shows the identity under: its guild nickname when it has one, otherwise its nickname.
+---The nickname the record shows the identity under in that guild: the nickname of its entry for that guild, otherwise
+---its nickname.
 ---@param record WhosWho.IdentityRecord
+---@param clubId integer? my current character's guild
 ---@return string? nickname nil: the shown main's name
-function Record.ShownNickname(record)
-    return record.guild.nickname or record.nickname
+function Record.ShownNickname(record, clubId)
+    local guild = record.guild
+    if guild.nickname and guild.id == clubId then return guild.nickname end
+    return record.nickname
 end
 
 -- Signature --------------------------------------------------------------------------------------

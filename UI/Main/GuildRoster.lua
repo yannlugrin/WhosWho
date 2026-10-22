@@ -75,16 +75,18 @@ end
 
 -- My own identity ---------------------------------------------------------------------------------
 
--- My record as my guild's members get it: the guild's content when they get one of their own (Scopes.GuildContent),
--- my linked characters otherwise.
+-- My record as most of my guild's members get it (Scopes.GuildMembersContent); while they get none, my record with its
+-- general part.
 ---@return WhosWho.IdentityRecord
 local function ownGuildRecord()
-    return Identity.UnsignedRecord(ns.Scopes.GuildContent())
+    local general, clubId, ruleset = ns.Scopes.GuildMembersContent()
+    return Identity.UnsignedRecord(general or not clubId, clubId, ruleset)
 end
 
 -- The name my guild's members show me under: my nickname there, otherwise the name of the main they see.
 local function ownNickname(record)
-    return ns.Record.ShownNickname(record) or record.chars[ns.Record.ShownMain(record)].name
+    return ns.Record.ShownNickname(record, record.guild.id)
+        or record.chars[ns.Record.ShownMain(record, record.guild.id)].name
 end
 
 -- My own identity's row: the characters my guild gets, the one I play online.
@@ -111,7 +113,7 @@ end
 ---@return WhosWho.PersonDetail
 local function ownDetail(record)
     local ownCharacterGuid, ownCharacters = UnitGUID("player"), Identity.Characters()
-    local mainGuid = ns.Record.ShownMain(record)
+    local mainGuid = ns.Record.ShownMain(record, record.guild.id)
     local characters = {}
     for guid, character in pairs(record.chars) do
         local ownCharacter = ownCharacters[guid]
@@ -160,7 +162,7 @@ end
 function GuildRoster.Entries(text, members)
     local onlineGuids = ns.Scopes.OnlineGuids()
     local ownRecord = ownGuildRecord()
-    local ownMainGuid = ns.Record.ShownMain(ownRecord)
+    local ownMainGuid = ns.Record.ShownMain(ownRecord, ownRecord.guild.id)
     local entries, counts = {}, { main = 0, alt = 0, unknown = 0 }
     -- The member each identity's row shows: the one online, else its main, else the first met.
     local memberById = {}

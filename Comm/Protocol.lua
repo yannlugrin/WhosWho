@@ -265,13 +265,18 @@ local deliveries = {}
 -- How many holders keep sending locked (Protocol.LockSending).
 local lockCount = 0
 
+-- A record's content, named without building it: whether it holds the general part, and its guild entry's club ID.
+local function contentKey(general, clubId)
+    return (general and "G|" or "-|") .. (clubId or "")
+end
+
 -- Whether a REC of my current revision that reaches that player, with the record it gets, is still queued, or was sent
 -- less than REACHED_DELAY_SECONDS ago: a GET from that player is then answered by that REC.
 local function reachedRecently(name)
-    local clubId = Scopes.RecordGuildOf(name)
-    local function deliveredRecently(key)
-        local delivery = key and deliveries[key]
-        return delivery and delivery.revision == Identity.Revision() and delivery.clubId == clubId
+    local key = contentKey(Scopes.RecordContentOf(name))
+    local function deliveredRecently(target)
+        local delivery = target and deliveries[target]
+        return delivery and delivery.revision == Identity.Revision() and delivery.key == key
             and (not delivery.leftAt or GetTime() - delivery.leftAt < REACHED_DELAY_SECONDS)
     end
     return deliveredRecently(name)
@@ -279,9 +284,9 @@ local function reachedRecently(name)
         or (Scopes.GroupReaches(name) and deliveredRecently(Scopes.GroupChannel()))
 end
 
-local function sendRecord(message, channel, name, clubId)
+local function sendRecord(message, channel, name, key)
     if loggingOut then return end
-    local delivery = { revision = Identity.Revision(), clubId = clubId }
+    local delivery = { revision = Identity.Revision(), key = key }
     deliveries[name or channel] = delivery
     Diagnostic.MessageSent(message, channel, name)
     Protocol:SendCommMessage(PREFIX, message, channel, name, "NORMAL", function(_, sent, total)
@@ -298,16 +303,21 @@ local MEMBER_CHANNEL_CHOICES = {
     { guild = true, group = true },
 }
 
--- The fewest messages reaching every one of those players: a member channel reaching every player on it, and one whisper
--- to each player left.
+-- Both member channels, for a message every player on them may get.
+local ALL_MEMBER_CHANNELS = { guild = true, group = true }
+
+-- The fewest messages reaching every one of those players: an allowed member channel reaching every player on it, and
+-- one whisper to each player left.
 ---@param names string[]
+---@param allowed { guild: boolean?, group: boolean? } the member channels whose every player may get the message
 ---@return { guild: true?, group: true? } memberChannels
 ---@return string[] whispered
-local function fewestMessages(names)
+local function fewestMessages(names, allowed)
     local reachedByGuild, reachedByGroup = {}, {}
     for _, name in ipairs(names) do
-        reachedByGuild[name] = Scopes.CanSendOnGuild() and Scopes.GuildReaches(name)
-        reachedByGroup[name] = Scopes.GroupReaches(name)
+        -- A channel not allowed reaches nobody: a choice using it never beats the one without it.
+        reachedByGuild[name] = allowed.guild and Scopes.CanSendOnGuild() and Scopes.GuildReaches(name)
+        reachedByGroup[name] = allowed.group and Scopes.GroupReaches(name)
     end
 
     local bestChoice, bestWhispered, bestCount
@@ -324,35 +334,40 @@ local function fewestMessages(names)
     return bestChoice, bestWhispered
 end
 
--- Every requester my record still reaches, in the fewest messages for each record they get: my guild's members' one,
--- everyone's. The others ask again at my next announcement. Each record is signed when its first REC goes out, about
--- 110 ms in one frame: when both go out, everyone's waits for the next frame.
+-- Every requester my record still reaches, grouped by the content each gets (Scopes.RecordContentOf), each content in
+-- the fewest messages: on GUILD only the content my guild's members get, on the group channel only one without a guild
+-- entry, which every group member may get. The others ask again at my next announcement. Each content is signed when
+-- its first REC goes out, about 110 ms in one frame: each goes out in its own frame.
 local function answerRequesters(recordUpdate)
-    local guildClubId, guildRuleset = Scopes.GuildContent()
-    local guildNames, names = {}, {}
+    ---@type table<string, { general: boolean, clubId: integer?, ruleset: WhosWho.Ruleset?, names: string[] }>
+    local contents, keys = {}, {}
     for name in pairs(requesters) do
-        if Scopes.RecordReaches(name) then
-            if Scopes.RecordGuildOf(name) then
-                guildNames[#guildNames + 1] = name
-            else
-                names[#names + 1] = name
+        local general, clubId, ruleset = Scopes.RecordContentOf(name)
+        if Scopes.RecordReaches(name) and (general or clubId) then
+            local key = contentKey(general, clubId)
+            if not contents[key] then
+                contents[key] = { general = general, clubId = clubId, ruleset = ruleset, names = {} }
+                keys[#keys + 1] = key
             end
+            table.insert(contents[key].names, name)
         end
     end
     requesters = {}
+    table.sort(keys)
 
-    local function answer(list, clubId, ruleset)
-        local bestChoice, bestWhispered = fewestMessages(list)
-        if bestChoice.guild then sendRecord(recordUpdate(clubId, ruleset), "GUILD", nil, clubId) end
-        if bestChoice.group then sendRecord(recordUpdate(clubId, ruleset), Scopes.GroupChannel(), nil, clubId) end
-        for _, name in ipairs(bestWhispered) do sendRecord(recordUpdate(clubId, ruleset), "WHISPER", name, clubId) end
+    local guildKey = contentKey(Scopes.GuildMembersContent())
+    local function answer(index)
+        local key = keys[index]
+        local content = contents[key]
+        local function message() return recordUpdate(key, content.general, content.clubId, content.ruleset) end
+        local bestChoice, bestWhispered = fewestMessages(content.names,
+            { guild = key == guildKey, group = content.clubId == nil })
+        if bestChoice.guild then sendRecord(message(), "GUILD", nil, key) end
+        if bestChoice.group then sendRecord(message(), Scopes.GroupChannel(), nil, key) end
+        for _, name in ipairs(bestWhispered) do sendRecord(message(), "WHISPER", name, key) end
+        if keys[index + 1] then C_Timer.After(0, function() answer(index + 1) end) end
     end
-    answer(guildNames, guildClubId, guildRuleset)
-    if guildNames[1] and names[1] then
-        C_Timer.After(0, function() answer(names) end)
-    else
-        answer(names)
-    end
+    if keys[1] then answer(1) end
 end
 
 -- Whether the character I play was anonymous at login, until its first announcement.
@@ -390,7 +405,7 @@ end
 local function sendRecords()
     if Identity.Revision() ~= publishedRevision then
         -- Everyone's record unchanged: the change is only in what my guild's members get.
-        local bytes = Identity.RecordBytesWithoutRevision()
+        local bytes = Identity.RecordBytesWithoutRevision(true)
         announceRevision(bytes == publishedBytes)
         publishedBytes = bytes
     end
@@ -398,9 +413,8 @@ local function sendRecords()
 
     -- Each REC text, built once for every REC this wait sends, and only when one goes out.
     local messages = {}
-    answerRequesters(function(clubId, ruleset)
-        local key = clubId or 0
-        messages[key] = messages[key] or Codec.RecordUpdate(Identity.SignedRecord(clubId, ruleset))
+    answerRequesters(function(key, general, clubId, ruleset)
+        messages[key] = messages[key] or Codec.RecordUpdate(Identity.SignedRecord(general, clubId, ruleset))
         return messages[key]
     end)
 end
@@ -436,7 +450,7 @@ local function sendAnnouncements()
     local message = announcementText(UnitLevel("player"), true, false)
     if not (message and names[1]) then return end
 
-    local bestChoice, bestWhispered = fewestMessages(names)
+    local bestChoice, bestWhispered = fewestMessages(names, ALL_MEMBER_CHANNELS)
     if bestChoice.guild then sendQueued(message, "GUILD") end
     if bestChoice.group then sendQueued(message, Scopes.GroupChannel()) end
     for _, name in ipairs(bestWhispered) do sendQueued(message, "WHISPER", name) end
@@ -1008,7 +1022,7 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     local signedRecord = recordUpdate.signedRecord
     if signedRecord.id == Identity.Id() then return end
     local fromMyGuild = distribution == "GUILD" or (distribution == "WHISPER" and Scopes.GuildReaches(sender))
-    local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or People.ReplacesHeld(signedRecord, fromMyGuild)
+    local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or People.ReplacesHeld(signedRecord)
     if not wanted then return end
     -- Relayed by a member of my guild: only with the player's consent; an identity I don't hold yet, only from a trusted
     -- member, and its characters are then listed by the guild.
@@ -1360,7 +1374,7 @@ function Protocol.Start()
     Protocol:RegisterComm(PREFIX, receive)
     -- A change found at login reaches online players through the login announcement and their GETs.
     publishedRevision, publishedSharingWithGuild = Identity.Revision(), Scopes.SharesWithGuild()
-    publishedBytes = Identity.RecordBytesWithoutRevision()
+    publishedBytes = Identity.RecordBytesWithoutRevision(true)
     Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
     Scopes.OnEnabled(scopeEnabled)
     Scopes.OnGuildMembersChanged(tidyGuildRecords)

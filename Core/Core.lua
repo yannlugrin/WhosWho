@@ -146,6 +146,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
             ns.Identity.LoggedIn(UnitGUID("player"))
             -- Removed from its guild, or the guild disbanded, while offline.
             if not IsInGuild() and ns.Identity.GuildId(UnitGUID("player")) then ns.Scopes.GuildChanged() end
+            -- Without a guild, no roster comes to set the guild whose entries the people are shown with.
+            if not IsInGuild() then ns.People.SetCurrentGuild(nil) end
         end
         if isInitialLogin or isReloadingUi then ns.Protocol.AnnounceLogin() end
     elseif event == "PLAYER_LOGOUT" then

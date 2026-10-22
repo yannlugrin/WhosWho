@@ -590,23 +590,26 @@ function Identity.CharactersInGuild(clubId, ruleset)
     return guids
 end
 
----The unsigned record of the current revision: my linked characters. For the members of a guild whose members get a
----record of their own (Identity.HasGuildContent), that guild's entry: when it enforces linking, my characters in that
----guild too, listed as forced, and only those with my Guild scope off; the guild main I chose there, otherwise, when it
----enforces linking and my main is not in it, the first of my characters in it; my nickname there. Past
+---The unsigned record of the current revision. Its general part: my linked characters, my nickname and my main. For the
+---members of a guild whose members get a record of their own (Identity.HasGuildContent), that guild's entry: when it
+---enforces linking, my characters in that guild too, listed as forced when the record has no general part or they
+---aren't linked; the guild main I chose there, otherwise my main when it is in the guild, otherwise, when the guild
+---enforces linking or the record has no general part, the first of my characters in it; my nickname there. Past
 ---Record.MAX_CHARACTERS, the main, the guild main and the lowest GUIDs are kept.
----@param clubId integer? the guild whose members get the record; nil for everyone else
+---@param general boolean whether the record holds the general part
+---@param clubId integer? the guild whose members get the record; nil for no guild's entry
 ---@param ruleset WhosWho.Ruleset? that guild's ruleset
 ---@return WhosWho.IdentityRecord
-function Identity.UnsignedRecord(clubId, ruleset)
+function Identity.UnsignedRecord(general, clubId, ruleset)
     local identity = data()
     ---@type table<string, boolean> by GUID: the characters in the record, true for the ones that guild's rule adds
     local included = {}
-    if not clubId or ns.Scopes.Get("guild") then
+    if general then
         for guid, character in pairs(identity.chars) do
             if character.linked then included[guid] = false end
         end
     end
+    local main = general and identity.main or nil
     local guildMain
     local entry = clubId and identity.guilds and identity.guilds[clubId] or {}
     if clubId then
@@ -619,11 +622,10 @@ function Identity.UnsignedRecord(clubId, ruleset)
                 if guid == identity.main then mainInGuild = true end
             end
         end
-        if inGuild[1] and (inGuild[1] == entry.main or enforced and not mainInGuild) and inGuild[1] ~= identity.main then
-            guildMain = inGuild[1]
-        end
+        local chosen = inGuild[1] ~= nil and inGuild[1] == entry.main and inGuild[1] or nil
+        guildMain = chosen or mainInGuild and identity.main or (enforced or not general) and inGuild[1] or nil
+        if guildMain == main then guildMain = nil end
     end
-    local main = included[identity.main] ~= nil and identity.main or nil
 
     local others = {}
     for guid in pairs(included) do
@@ -653,26 +655,28 @@ function Identity.UnsignedRecord(clubId, ruleset)
         guild.id, guild.main, guild.nickname, guild.forced = clubId, guildMain, entry.nickname, forced
     end
     return {
-        v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = identity.nickname,
+        v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = general and identity.nickname or nil,
         main = main, chars = chars, guild = guild,
     }
 end
 
 ---The signed bytes of my record without its revision: equal while it says the same.
----@param clubId integer? the guild enforcing linking whose members get the record; nil for everyone else
----@param ruleset WhosWho.Ruleset? that guild's ruleset
+---@param general boolean
+---@param clubId integer?
+---@param ruleset WhosWho.Ruleset?
 ---@return string
-function Identity.RecordBytesWithoutRevision(clubId, ruleset)
-    return ns.Record.CanonicalWithoutRevision(Identity.UnsignedRecord(clubId, ruleset))
+function Identity.RecordBytesWithoutRevision(general, clubId, ruleset)
+    return ns.Record.CanonicalWithoutRevision(Identity.UnsignedRecord(general, clubId, ruleset))
 end
 
 ---Signing takes about 120 ms in game, so each record's signature is kept while it covers the same bytes.
----@param clubId integer? the guild enforcing linking whose members get the record; nil for everyone else
----@param ruleset WhosWho.Ruleset? that guild's ruleset
+---@param general boolean
+---@param clubId integer?
+---@param ruleset WhosWho.Ruleset?
 ---@return WhosWho.SignedIdentityRecord
-function Identity.SignedRecord(clubId, ruleset)
+function Identity.SignedRecord(general, clubId, ruleset)
     local identity = data()
-    local record = Identity.UnsignedRecord(clubId, ruleset)
+    local record = Identity.UnsignedRecord(general, clubId, ruleset)
     ---@cast record WhosWho.SignedIdentityRecord
     local digest = ns.Crypto.ToHex(ns.Crypto.SHA512(ns.Record.Canonical(record)))
     local signatures = identity.signatures or {}

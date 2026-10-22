@@ -13,10 +13,12 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Changed
 
 - **Protocol**: Who's Who 1.0 speaks a new version of its protocol and no longer exchanges with the beta versions. It skips the records and guild lists it already holds without unpacking them.
+- **Guild sharing**: a guild member who is also your friend now gets both your linked characters and what your guild's rule adds. With your Guild scope off, a member of a guild enforcing linking who is not your friend sees only the characters its rule adds, without your nickname.
 
 ### Fixed
 
 - **People**: a player's old identity, whose characters now show under their new one, no longer stays in your saved data without any character.
+- **Guild sharing**: in a group, the characters a guild enforcing linking adds to your record are no longer sent to group members outside that guild.
 
 ## [0.4.3] - 2026-10-19
 
