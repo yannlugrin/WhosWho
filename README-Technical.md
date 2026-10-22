@@ -45,7 +45,7 @@ WhosWho/
 │   ├── GuildRecord.lua            What a guild says about one person: guild record format (validation, signed bytes, verify)
 │   └── GuildList.lua              My list of a guild's identities, its revision, and what another member's list has newer
 ├── Comm/
-│   ├── Diagnostic.lua             Diagnostic mode: the message log, and the messages printed in chat
+│   ├── Diagnostic.lua             Diagnostic mode: the message log, and the messages printed in chat (in English)
 │   ├── Codec.lua                  Message text: version, type, fields; REC serialized, compressed, encoded
 │   ├── Scopes.lua                 Who may receive what, channels, audiences, senders' GUIDs, guild and friendOf
 │   └── Protocol.lua               Announcements, GET, REC: waits, lock, requesters, own messages
@@ -53,7 +53,7 @@ WhosWho/
 │   ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
 │   ├── Settings.xml               Settings list row templates: a section's information text, the Diagnostic page's stats and message log
 │   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Display, Minimap, Data; Diagnostic subcategory
-│   ├── Launcher.lua               Minimap button and add-on compartment entry (LibDBIcon)
+│   ├── Launcher.lua               Minimap button (shows the window) and add-on compartment entry (opens the settings), with LibDBIcon
 │   ├── Glyphs.lua                 Glyph images, colours, labels and tooltips
 │   ├── Main/                      The main window
 │   │   ├── Window.lua             Window and tab bar

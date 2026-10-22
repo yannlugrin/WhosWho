@@ -2,7 +2,6 @@ local L = LibStub("AceLocale-3.0"):NewLocale("WhosWho", "frFR")
 if not L then return end
 
 L["%s scope: %s"] = "Partage %s : %s"
-L["%s (%d bytes)"] = "%s (%d octets)"
 L["(no linked character)"] = "(aucun personnage lié)"
 L["- %s: %s, level %s"] = "- %s : %s, niveau %s"
 L["added by you"] = "ajouté par vous"
@@ -27,11 +26,6 @@ L["No one known with a character named %s."] = "Personne de connu avec un person
 L["No one known yet."] = "Personne de connu pour l'instant."
 L["off"] = "désactivé"
 L["on"] = "activé"
-L["Received, %s: %s"] = "Reçu, %s : %s"
-L["Guild settings %d: %s"] = "Paramètres de guilde %d : %s"
-L["%s from %s not unpacked: not taken from that sender"] = "%s de %s non décompressé : pas accepté de cet expéditeur"
-L["%s from %s not unpacked: nothing I would take"] = "%s de %s non décompressé : rien que je prendrais"
-L["Sent, %s: %s"] = "Envoyé, %s : %s"
 L["shared, revision %d"] = "partagé, révision %d"
 L["This character is now your main."] = "Ce personnage est maintenant votre main."
 L["Nickname: %s"] = "Surnom : %s"
@@ -156,13 +150,14 @@ L["Adds the nickname after the name, for every player you know."] = "Ajoute le s
 L["Show nicknames in chat"] = "Afficher les surnoms dans la discussion"
 L["A button on the edge of the minimap: click to show or hide the window, right-click for a menu."] = "Un bouton au bord de la minicarte : clic pour afficher ou masquer la fenêtre, clic droit pour un menu."
 L["Click: show or hide the window"] = "Clic : afficher ou masquer la fenêtre"
+L["Click: open the settings"] = "Clic : ouvrir les paramètres"
+L["Who's Who in the add-on compartment next to the minimap: click to open the settings, right-click for a menu."] = "Who's Who dans le compartiment d'AddOns à côté de la minicarte : clic pour ouvrir les paramètres, clic droit pour un menu."
 L["Display"] = "Affichage"
 L["Right-click: menu"] = "Clic droit : menu"
 L["Settings"] = "Paramètres"
 L["Show in the add-on compartment"] = "Afficher dans le compartiment d'AddOns"
 L["Minimap"] = "Minicarte"
 L["Show minimap button"] = "Afficher le bouton de la minicarte"
-L["Who's Who in the add-on compartment next to the minimap: click to show or hide the window, right-click for a menu."] = "Who's Who dans le compartiment d'AddOns à côté de la minicarte : clic pour afficher ou masquer la fenêtre, clic droit pour un menu."
 
 -- Glyphs and People
 L["Confirmed"] = "Confirmé"

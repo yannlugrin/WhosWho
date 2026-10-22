@@ -1,13 +1,12 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
 
--- The diagnostic mode: the Who's Who messages sent and received, kept in a log and printed in chat.
+-- The diagnostic mode: the Who's Who messages sent and received, kept in a log and printed in chat. Its lines are in
+-- English whatever the game's language, like the messages themselves.
 
 ---@class WhosWho.Diagnostic
 local Diagnostic = {}
 ns.Diagnostic = Diagnostic
-
-local L = ns.L
 
 Diagnostic.KEPT_MESSAGES = 1000
 
@@ -46,7 +45,7 @@ end
 ---@return string
 function Diagnostic.Describe(message)
     if message.size == #message.text then return message.text end
-    return L["%s (%d bytes)"]:format(message.text, message.size)
+    return ("%s (%d bytes)"):format(message.text, message.size)
 end
 
 ---Prints a line in chat while the diagnostic mode and its chat output are on.
@@ -62,7 +61,7 @@ end
 function Diagnostic.MessageSent(text, distribution, name)
     local message = log(true, text, distribution, name)
     if not message then return end
-    Diagnostic.Print(L["Sent, %s: %s"]:format(name and (distribution .. " " .. name) or distribution,
+    Diagnostic.Print(("Sent, %s: %s"):format(name and (distribution .. " " .. name) or distribution,
         Diagnostic.Describe(message)))
 end
 
@@ -72,7 +71,7 @@ end
 function Diagnostic.MessageReceived(text, distribution, sender)
     local message = log(false, text, distribution, sender)
     if not message then return end
-    Diagnostic.Print(L["Received, %s: %s"]:format(distribution .. " " .. sender, Diagnostic.Describe(message)))
+    Diagnostic.Print(("Received, %s: %s"):format(distribution .. " " .. sender, Diagnostic.Describe(message)))
 end
 
 ---The logged messages, most recent first. Read only.

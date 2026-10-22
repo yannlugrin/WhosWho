@@ -16,6 +16,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ### Changed
 
+- **Add-on compartment**: clicking Who's Who's entry opens its settings, as other add-ons do; the minimap button still shows the window. The diagnostic mode's lines are now always in English.
 - **Protocol**: Who's Who 1.0 speaks a new version of its protocol and no longer exchanges with the beta versions. It skips the records and guild lists it already holds without unpacking them.
 - **Guild sharing**: a guild member who is also your friend now gets both your linked characters and what your guild's rule adds. With your Guild scope off, a member of a guild enforcing linking who is not your friend sees only the characters its rule adds, without your nickname.
 

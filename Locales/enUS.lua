@@ -2,7 +2,6 @@ local L = LibStub("AceLocale-3.0"):NewLocale("WhosWho", "enUS", true)
 if not L then return end
 
 L["%s scope: %s"] = true
-L["%s (%d bytes)"] = true
 L["(no linked character)"] = true
 L["- %s: %s, level %s"] = true
 L["added by you"] = true
@@ -27,11 +26,6 @@ L["No one known with a character named %s."] = true
 L["No one known yet."] = true
 L["off"] = true
 L["on"] = true
-L["Received, %s: %s"] = true
-L["Guild settings %d: %s"] = true
-L["%s from %s not unpacked: not taken from that sender"] = true
-L["%s from %s not unpacked: nothing I would take"] = true
-L["Sent, %s: %s"] = true
 L["shared, revision %d"] = true
 L["This character is now your main."] = true
 L["Nickname: %s"] = true
@@ -156,13 +150,14 @@ L["Adds the nickname after the name, for every player you know."] = true
 L["Show nicknames in chat"] = true
 L["A button on the edge of the minimap: click to show or hide the window, right-click for a menu."] = true
 L["Click: show or hide the window"] = true
+L["Click: open the settings"] = true
+L["Who's Who in the add-on compartment next to the minimap: click to open the settings, right-click for a menu."] = true
 L["Display"] = true
 L["Right-click: menu"] = true
 L["Settings"] = true
 L["Show in the add-on compartment"] = true
 L["Minimap"] = true
 L["Show minimap button"] = true
-L["Who's Who in the add-on compartment next to the minimap: click to show or hide the window, right-click for a menu."] = true
 
 -- Glyphs and People
 L["Confirmed"] = true

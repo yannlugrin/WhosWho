@@ -12,9 +12,10 @@ local dataObject = LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
     type = "launcher",
     label = L["Who's Who"],
     icon = C_AddOns.GetAddOnMetadata(addonName, "IconTexture"),
-    OnClick = function(_, button)
+    -- The minimap button shows the window, the add-on compartment entry the settings, as other add-ons' entries do.
+    OnClick = function(frame, button)
         if button ~= "RightButton" then
-            ns.Commands.open("")
+            if frame == LibDBIcon:GetMinimapButton(addonName) then ns.Commands.open("") else ns.Commands.settings("") end
             return
         end
         -- Not owned by the clicked button: a menu closes with its owner, and EllesmereUI's minimap button bar hides
@@ -25,8 +26,9 @@ local dataObject = LibStub("LibDataBroker-1.1"):NewDataObject(addonName, {
         end)
     end,
     OnTooltipShow = function(tooltip)
+        local onMinimap = tooltip:GetOwner() == LibDBIcon:GetMinimapButton(addonName)
         tooltip:AddLine(L["Who's Who"])
-        tooltip:AddLine(L["Click: show or hide the window"], 1, 1, 1)
+        tooltip:AddLine(onMinimap and L["Click: show or hide the window"] or L["Click: open the settings"], 1, 1, 1)
         tooltip:AddLine(L["Right-click: menu"], 1, 1, 1)
     end,
 })

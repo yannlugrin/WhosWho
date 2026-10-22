@@ -76,11 +76,9 @@ end
 
 -- Debug -----------------------------------------------------------------------------------------
 
-local L = ns.L
-
 -- What became of a guild settings record received: dropped, checked, then accepted, held back, refused or stale.
 local function traceGuildSettings(signedRecord, outcome)
-    Diagnostic.Print(L["Guild settings %d: %s"]:format(signedRecord.rev, outcome))
+    Diagnostic.Print(("Guild settings %d: %s"):format(signedRecord.rev, outcome))
 end
 
 -- Sending ----------------------------------------------------------------------------------------
@@ -1292,11 +1290,11 @@ local function receive(_, text, distribution, sender)
 
     local allowedSender = PAYLOAD_SENDERS[messageType]
     if allowedSender and not allowedSender(distribution, sender) then
-        return Diagnostic.Print(L["%s from %s not unpacked: not taken from that sender"]:format(messageType, sender))
+        return Diagnostic.Print(("%s from %s not unpacked: not taken from that sender"):format(messageType, sender))
     end
     local wanted = PAYLOAD_WANTED[messageType]
     if wanted and not wanted(header) then
-        return Diagnostic.Print(L["%s from %s not unpacked: nothing I would take"]:format(messageType, sender))
+        return Diagnostic.Print(("%s from %s not unpacked: nothing I would take"):format(messageType, sender))
     end
 
     inbox[#inbox + 1] = { text = text, distribution = distribution, sender = sender, messageType = messageType }
