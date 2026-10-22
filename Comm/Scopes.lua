@@ -300,14 +300,15 @@ local function saveWhisper(name, guid)
     return whisper
 end
 
--- Guild invite requests: a player whispers one of these words to an officer to have the character invited into a guild
--- where another character of their identity is. For a while after it, the two share identities whatever their scopes,
--- so the officer can check who asks.
+-- Guild invite requests: a player whispers one of these words to an officer, or sends GINV (Protocol.AskGuildInvite), to
+-- have the character invited into a guild where another character of their identity is. For a while after it, the two
+-- share identities whatever their scopes, so the officer can check who asks.
 local GUILD_INVITE_WORDS = { ginv = true, guildinv = true }
 local GUILD_INVITE_SECONDS = 60
 ---@type table<string, number> by name: when I asked that player to invite me (GetTime())
 local guildInvitesAsked = {}
----@type table<string, { guid: string, at: number }> by name: who asked me to invite them, when I may invite
+---@type table<string, { guid: string, at: number }> by name: who asked me to invite them, with their character's GUID
+---(given by the game for a whisper, by the player for GINV), when I may invite
 local guildInviteRequests = {}
 local guildInviteListeners = {}
 
@@ -324,7 +325,7 @@ local function inGuildInviteExchange(name)
 end
 
 ---A whisper received (CHAT_MSG_WHISPER: arguments 1, 2 and 12): the sender's GUID, for confirmations; a guild invite
----request when I may invite.
+---request when I may invite and my guild accepts them.
 ---@param name any
 ---@param guid any
 ---@param text any
@@ -333,10 +334,7 @@ function Scopes.WhisperReceived(name, guid, text)
     local now = time()
     saveWhisper(name, guid).receivedAt = now
     People.Activity({ [guid] = { lastSeen = now } })
-    if isGuildInviteRequest(text) and IsInGuild() and CanGuildInvite() then
-        guildInviteRequests[name] = { guid = guid, at = GetTime() }
-        for _, listener in ipairs(guildInviteListeners) do listener() end
-    end
+    if isGuildInviteRequest(text) then Scopes.GuildInviteRequested(name, guid) end
 end
 
 ---A whisper sent (CHAT_MSG_WHISPER_INFORM: arguments 1, 2 and 12): the receiver's GUID, and the Whispers scope; a guild
@@ -350,7 +348,35 @@ function Scopes.WhisperSent(name, guid, text)
     saveWhisper(name, guid).sentAt = now
     People.SetWhisperedAt(guid, now)
     People.Activity({ [guid] = { lastSeen = now } })
-    if isGuildInviteRequest(text) then guildInvitesAsked[name] = GetTime() end
+    if isGuildInviteRequest(text) then Scopes.GuildInviteAsked(name) end
+end
+
+---A player asks me to invite their character into my guild: kept for GUILD_INVITE_SECONDS when I may invite and my
+---guild accepts invite requests.
+---@param name string
+---@param guid string the character's
+function Scopes.GuildInviteRequested(name, guid)
+    if not (IsInGuild() and CanGuildInvite()
+        and GuildSettings.AcceptsInviteRequests(Identity.GuildId(UnitGUID("player")))) then
+        return
+    end
+    guildInviteRequests[name] = { guid = guid, at = GetTime() }
+    for _, listener in ipairs(guildInviteListeners) do listener() end
+end
+
+---I ask that player to invite the character I play into their guild.
+---@param name string
+function Scopes.GuildInviteAsked(name)
+    guildInvitesAsked[name] = GetTime()
+end
+
+---The GUID a player asking me for an invite gave with the request, within GUILD_INVITE_SECONDS; the game vouches for the
+---name only.
+---@param name string
+---@return string? guid
+function Scopes.GuildInviteGuid(name)
+    local request = guildInviteRequests[name]
+    return request and GetTime() - request.at < GUILD_INVITE_SECONDS and request.guid or nil
 end
 
 ---Whether I asked that player to invite me into their guild, within GUILD_INVITE_SECONDS: my whisper sends my
@@ -458,12 +484,12 @@ function Scopes.GuildRosterChanged()
     -- The roster is empty until the game has loaded it.
     if count == 0 or not clubId then return end
 
-    local memberGuids, activities, now = {}, {}, time()
+    local memberGuids, rankIndexes, activities, now = {}, {}, {}, time()
     for i = 1, count do
-        local _, _, _, level, _, _, _, _, online = GetGuildRosterInfo(i)
+        local _, _, rankIndex, level, _, _, _, _, online = GetGuildRosterInfo(i)
         local guid = select(17, GetGuildRosterInfo(i))
-        if guid and notSecret(guid, level, online) then
-            memberGuids[guid] = true
+        if guid and notSecret(guid, rankIndex, level, online) then
+            memberGuids[guid], rankIndexes[guid] = true, rankIndex
             activities[guid] = { level = level, lastSeen = online and now or nil }
         end
     end
@@ -474,7 +500,7 @@ function Scopes.GuildRosterChanged()
     local joined = Identity.GuildId(UnitGUID("player")) ~= clubId
     setOwnGuild(clubId, function() Identity.SetGuild(UnitGUID("player"), clubId, (GetGuildInfo("player"))) end)
     People.SetCurrentGuild(clubId)
-    People.UpdateGuildMembers(clubId, memberGuids)
+    People.UpdateGuildMembers(clubId, memberGuids, rankIndexes)
     -- What I held of a guild I joined again dates from before: its settings count as first ones, my list as a first one.
     if joined then
         GuildSettings.Joined(clubId)
@@ -537,7 +563,7 @@ function Scopes.GuildChanged()
     end
 end
 
----After a record is stored: the guild and the level of its characters my roster lists, as an announcement from them
+---After a record is stored: the guild, rank and level of its characters my roster lists, as an announcement from them
 ---would have set them had it come before the record; not a last seen time, the record says nothing of when I saw them.
 ---@param signedRecord WhosWho.SignedIdentityRecord
 function Scopes.KeepGuildMembers(signedRecord)
@@ -545,10 +571,10 @@ function Scopes.KeepGuildMembers(signedRecord)
     if not clubId then return end
     local activities = {}
     for i = 1, GetNumGuildMembers() do
-        local _, _, _, level = GetGuildRosterInfo(i)
+        local _, _, rankIndex, level = GetGuildRosterInfo(i)
         local guid = select(17, GetGuildRosterInfo(i))
-        if guid and notSecret(guid, level) and signedRecord.chars[guid] then
-            People.SetGuild(guid, clubId)
+        if guid and notSecret(guid, rankIndex, level) and signedRecord.chars[guid] then
+            People.SetGuild(guid, clubId, rankIndex)
             activities[guid] = { level = level }
         end
     end

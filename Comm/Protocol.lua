@@ -969,10 +969,12 @@ local function receiveAnnouncement(announcement, sender)
     local sharing = Scopes.RecordReaches(sender)
     if not (sharing or (People.Get(id) and Identity.LinkedCount() > 0)) then return end
 
+    -- A player asking me for an invite, whom nothing else shows me, gave their character's GUID.
     local senderGuid = Scopes.SenderGuid(sender)
-    if senderGuid then
-        People.Confirm(id, senderGuid, announcement.level)
-        Scopes.SetRelationships(senderGuid, sender)
+    local claimedGuid = not senderGuid and Scopes.GuildInviteGuid(sender) or nil
+    if senderGuid or claimedGuid then
+        People.Confirm(id, senderGuid or claimedGuid, announcement.level, claimedGuid and sender or nil)
+        Scopes.SetRelationships(senderGuid or claimedGuid, sender)
     end
 
     if not announcement.acceptsGet then
@@ -1190,6 +1192,8 @@ local function handle(text, distribution, sender)
         receiveGuildRecordRequest(message, sender)
     elseif message.type == "GIREC" then
         receiveGuildRecordUpdate(message, sender)
+    elseif message.type == "GINV" and distribution == "WHISPER" then
+        Scopes.GuildInviteRequested(sender, message.guid)
     end
 end
 
@@ -1507,22 +1511,39 @@ function Protocol.FriendListChanged()
     if Scopes.Get("friends") then announceToFriends(added) end
 end
 
+---Asks those characters, the officer's I chose, to invite the character I play into their guild: to each, GINV with my
+---GUID, then my announcement, which their Who's Who takes once it holds the request; the one playing gets them.
+---@param names string[]
+function Protocol.AskGuildInvite(names)
+    local message = announcementText(UnitLevel("player"), true, true)
+    for _, name in ipairs(names) do
+        Scopes.GuildInviteAsked(name)
+        greet("WHISPER", name)
+        sendQueued(Codec.GuildInviteRequest(UnitGUID("player")), "WHISPER", name)
+        if message then
+            sendAnnouncement(message, "WHISPER", name)
+            rememberAnnouncement(name, Identity.AnnouncedRevision(UnitGUID("player")))
+        end
+    end
+end
+
 ---CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, sent right away, when
 ---none reached them this session, the last one carried an older revision, or it left the whisperAnnouncementSeconds setting ago.
 ---A player my guild, group or friends announcements reach gets none. The player answers with theirs if they allow me.
----A guild invite request I sent announces whatever my Whispers scope: the player checks who asks.
+---A guild invite request I sent announces whatever my Whispers scope and my last announcement: the player checks who
+---asks, and may have ignored my last one.
 ---@param name any
 function Protocol.Whispered(name)
     if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
-    local whispersAnnounce = Scopes.Get("whispers") or Scopes.AskedGuildInvite(name)
-    if not (whispersAnnounce and Scopes.AnnouncementReaches(name)) then return end
+    local askedGuildInvite = Scopes.AskedGuildInvite(name)
+    if not ((Scopes.Get("whispers") or askedGuildInvite) and Scopes.AnnouncementReaches(name)) then return end
     if Scopes.GuildReaches(name) or Scopes.GroupReaches(name) or Scopes.FriendReaches(name) then return end
     local message = announcementText(UnitLevel("player"), true, true)
     if not message then return end
     local revision = Identity.AnnouncedRevision(UnitGUID("player"))
     local last = announcements[name]
     local announcedRecently = last and GetTime() - last.sentAt < Store.Advanced("whisperAnnouncementSeconds")
-    if announcedRecently and last.revision == revision then return end
+    if announcedRecently and last.revision == revision and not askedGuildInvite then return end
 
     sendAnnouncement(message, "WHISPER", name)
     rememberAnnouncement(name, revision)

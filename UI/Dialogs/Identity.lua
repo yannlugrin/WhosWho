@@ -10,6 +10,7 @@ local L = ns.L
 ---@field GuildEntry WhosWho.GuildEntryDialog my nickname and main in one guild
 ---@field NicknameRequest WhosWho.GuildRequestDialog my guild asks me for a nickname
 ---@field MainRequest WhosWho.GuildRequestDialog my guild asks me for a main
+---@field GuildInvite WhosWho.GuildInviteDialog the character I play asks an officer of one of my guilds for an invite
 local IdentityDialogs = {}
 ns.IdentityDialogs = IdentityDialogs
 
@@ -514,6 +515,76 @@ local function createGuildRequestDialog(buttons)
     return dialog
 end
 
+-- Guild invite -----------------------------------------------------------------------------------
+
+-- The officers' characters just asked: the game's line for each one not playing is hidden.
+local NOT_PLAYING_SECONDS = 10
+---@type table<string, number> by name: when it was asked (GetTime())
+local askedOfficers = {}
+
+local function hideNotPlaying(_, _, message)
+    for name, at in pairs(askedOfficers) do
+        if GetTime() - at < NOT_PLAYING_SECONDS and message == ERR_CHAT_PLAYER_NOT_FOUND_S:format(name) then return true end
+    end
+    return false
+end
+local addMessageEventFilter = ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter or ChatFrame_AddMessageEventFilter
+addMessageEventFilter("CHAT_MSG_SYSTEM", hideNotPlaying)
+
+local function createGuildInviteDialog()
+    ---@class WhosWho.GuildInviteDialog: WhosWho.PromptDialog
+    ---@field AskButton Button
+    ---@field CancelButton Button
+    local dialog = createDialog(WIDTH)
+    dialog.GuildName = addText(dialog, "GameFontNormalLarge")
+    dialog.Question = addText(dialog, "GameFontHighlight")
+    dialog.OfficerLabel = addLabel(dialog, L["Officer"])
+    dialog.OfficerDropdown = CreateFrame("DropdownButton", nil, dialog, "WowStyle1DropdownTemplate")
+    dialog.OfficerDropdown:SetWidth(WIDTH - 2 * SIDE_PADDING)
+    dialog.rows[#dialog.rows + 1] = { region = dialog.OfficerDropdown }
+    dialog.Hint = addHint(dialog)
+    addButtons(dialog, { { "AskButton", L["Ask"] }, { "CancelButton", CANCEL } })
+
+    -- To each of the officer's characters: the one playing gets it, and its Who's Who checks who asks.
+    dialog.AskButton:SetScript("OnClick", function()
+        for _, name in ipairs(dialog.officer.names) do askedOfficers[name] = GetTime() end
+        ns.Protocol.AskGuildInvite(dialog.officer.names)
+        dialog:Hide()
+    end)
+    dialog.CancelButton:SetScript("OnClick", function() dialog:Hide() end)
+
+    ---@param guildName string? nil while unknown
+    ---@param characterName string the character I play
+    ---@param officers WhosWho.KnownOfficer[]
+    function dialog:SetGuild(guildName, characterName, officers)
+        self.GuildName:SetText(guildName and ("<%s>"):format(guildName) or L["Unknown guild"])
+        self.Question:SetText(L["Ask an officer to invite %s into the guild."]:format(characterName))
+        local known = officers[1] ~= nil
+        self.OfficerLabel:SetShown(known)
+        self.OfficerDropdown:SetShown(known)
+        self.AskButton:SetEnabled(known)
+        self.Hint:SetText(known and L["Sent to each of their officer characters: the one playing gets it."]
+            or L["You know no officer of this guild."])
+        self.officer = officers[1]
+        self.OfficerDropdown:SetupMenu(function(_, root)
+            for _, officer in ipairs(officers) do
+                root:CreateRadio(officer.nickname, function() return self.officer == officer end,
+                    function() self.officer = officer end)
+            end
+        end)
+        layOut(self)
+    end
+
+    ns.Skin.Apply(function(S)
+        S.Shell(dialog)
+        S.CloseButton(dialog.CloseButton)
+        S.Dropdown(dialog.OfficerDropdown)
+        S.Button(dialog.AskButton)
+        S.Button(dialog.CancelButton)
+    end)
+    return dialog
+end
+
 IdentityDialogs.NewIdentity = createNewIdentityDialog()
 IdentityDialogs.LinkCharacter = createLinkCharacterDialog()
 IdentityDialogs.GuildRule = createGuildRuleDialog()
@@ -522,6 +593,7 @@ IdentityDialogs.NicknameRequest = createGuildRequestDialog({
     { "AcceptButton", L["Accept"] }, { "EditButton", L["Edit…"] }, { "RefuseButton", L["Refuse"] },
 })
 IdentityDialogs.MainRequest = createGuildRequestDialog({ { "AcceptButton", L["Accept"] }, { "RefuseButton", L["Refuse"] } })
+IdentityDialogs.GuildInvite = createGuildInviteDialog()
 
 ---Closes both first-login dialogs, leaving the character unanswered.
 function IdentityDialogs.HideLinkPrompts()

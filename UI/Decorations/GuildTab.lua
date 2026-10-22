@@ -132,8 +132,10 @@ local function addTab(frame)
     end)
     enableCheckbox:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -4, -20)
     enableCheckbox:SetScript("OnClick", function(self)
+        local settings = currentSettings()
         ns.Protocol.ChangeGuildSettings({
-            enable = self:GetChecked(), enforceLinking = currentSettings().enforceLinking,
+            enable = self:GetChecked(), enforceLinking = settings.enforceLinking,
+            inviteRequests = settings.inviteRequests == true,
         })
     end)
 
@@ -146,7 +148,25 @@ local function addTab(frame)
     end)
     enforceCheckbox:SetPoint("TOPLEFT", enableCheckbox, "BOTTOMLEFT", 0, -4)
     enforceCheckbox:SetScript("OnClick", function(self)
-        ns.Protocol.ChangeGuildSettings({ enable = currentSettings().enable, enforceLinking = self:GetChecked() })
+        local settings = currentSettings()
+        ns.Protocol.ChangeGuildSettings({
+            enable = settings.enable, enforceLinking = self:GetChecked(), inviteRequests = settings.inviteRequests == true,
+        })
+    end)
+
+    -- Only with Who's Who enabled for the guild.
+    local inviteCheckbox = createCheckbox(L["Members may ask officers to invite their other characters"], function()
+        if not canChangeSettings() then
+            return L["Link this character and share with your guild to change the guild's settings."]
+        end
+        return L["Enable Who's Who for the guild first."]
+    end)
+    inviteCheckbox:SetPoint("TOPLEFT", enforceCheckbox, "BOTTOMLEFT", 0, -4)
+    inviteCheckbox:SetScript("OnClick", function(self)
+        local settings = currentSettings()
+        ns.Protocol.ChangeGuildSettings({
+            enable = settings.enable, enforceLinking = settings.enforceLinking, inviteRequests = self:GetChecked(),
+        })
     end)
 
     local function refreshSettings()
@@ -155,6 +175,8 @@ local function addTab(frame)
         enableCheckbox:SetEnabled(canChangeSettings())
         enforceCheckbox:SetChecked(settings.enforceLinking == true)
         enforceCheckbox:SetEnabled(canChangeSettings() and settings.enable)
+        inviteCheckbox:SetChecked(settings.inviteRequests == true)
+        inviteCheckbox:SetEnabled(canChangeSettings() and settings.enable)
     end
 
     -- List view: list ----------------------------------------------------------------------------
@@ -814,7 +836,7 @@ local function addTab(frame)
     end)
 
     ns.Skin.Apply(function(S)
-        for _, checkbox in ipairs({ enableCheckbox, enforceCheckbox, offlineCheckbox }) do
+        for _, checkbox in ipairs({ enableCheckbox, enforceCheckbox, inviteCheckbox, offlineCheckbox }) do
             S.Checkbox(checkbox)
             checkbox.Text:SetPoint("LEFT", checkbox, "RIGHT", SKINNED_CHECKBOX_LABEL_GAP, 0)
         end

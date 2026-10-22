@@ -245,9 +245,13 @@ Built 2026-10-21, before 1.0 (beta data is reset at the release, so the format c
 
 ### Guild Invite Requests
 
-A player has one of their characters invited into a guild where another character of their identity is by whispering `ginv` or `guildinv` (any case, spaces around ignored) to a member who may invite (`CanGuildInvite`). No button and no add-on message yet: the whisper is the request.
+A player has one of their characters invited into a guild where another character of their identity is by asking a member who may invite (`CanGuildInvite`), in a guild that accepts it: the guild setting `inviteRequests`, off by default, needs `enable` (`GuildSettings.AcceptsInviteRequests`); a member whose guild doesn't accept requests ignores them. The request is a `GINV` add-on message from the button below, or a chat whisper `ginv` or `guildinv` (any case, spaces around ignored) typed by the player (`Scopes.GuildInviteRequested`).
 
-- **For a minute** (`GUILD_INVITE_SECONDS`, in memory) after the whisper, the two share identities whatever their scopes (`Scopes.Allows`): the requester's whisper sends their announcement to that member whatever their Whispers scope (`Protocol.Whispered`, `Scopes.AskedGuildInvite`), and the member answers it and asks for the record as for any announcement, so a character the member never met is confirmed under its identity.
+- **`GINV`** carries the asking character's GUID, which the officer has no other way to know (it isn't in the officer's guild, group or friend list; a chat whisper gives it, an add-on message doesn't). The game vouches for the sender's name only, so a confirmation by that GUID (`Scopes.GuildInviteGuid`, in `receiveAnnouncement`) holds only when the record lists the character under the sender's name and no other identity holds the character (`People.Confirm`'s `claimedBy`, `claimHolds`, also for a confirmation waiting for its record): a player can't take someone else's character by giving its GUID, even under their own name in their own record. The reverse is accepted: a character planted that way, under the cheater's identity, goes back to its owner only through a message whose GUID the game gives (its own guild, group, friend list or chat whisper), not through `GINV`. It goes first, then the announcement: the officer takes the announcement once it holds the request, and the receive queue keeps their order.
+
+- **The button**: My identity's "In my guilds" line of a guild the character I play isn't in, on that guild's ruleset, while the guild's settings I hold accept invite requests, has **Invitation…**. Its dialog lists the guild's officers I know of, by nickname: the player identities I hold with characters of rank index `GuildList.TRUSTED_RANK_INDEX` or lower in that guild, as my other characters' roster left them (`knownOfficers`, `rankIndex`). Ask sends `GINV` then my announcement to each of those characters of the chosen officer (`Protocol.AskGuildInvite`): the one playing gets them; the game's "No player named … is currently playing" line for the others, if an add-on whisper gives one (*to verify in game*), is hidden for 10 seconds (a `CHAT_MSG_SYSTEM` filter).
+
+- **For a minute** (`GUILD_INVITE_SECONDS`, in memory) after the whisper, the two share identities whatever their scopes (`Scopes.Allows`): the requester's whisper sends their announcement to that member whatever their Whispers scope and whatever announcement they last sent them (`Protocol.Whispered`, `Scopes.AskedGuildInvite`), and the member answers it and asks for the record as for any announcement, so a character the member never met is confirmed under its identity.
 - **The member is asked** (`PeopleDialogs`, `askGuildInvite`) once the character is confirmed under a player's identity with another character in the member's guild, and isn't in it itself; checked at the whisper and at each change of the people while the request lasts, one dialog at a time, once per request. Invite calls `C_GuildInfo.Invite` (the game invites only on a click); Decline does nothing. A request that can't be checked within the minute is dropped silently.
 
 ### Character Confirmations
@@ -299,6 +303,7 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 | `GLIST` | header: club ID, the list's revision (`at` and hash); its identities with their revisions, and its guild records with their revisions (`guildEntries`) | In answer to `GLGET`s: on `GUILD` for several, by whisper for one |
 | `GIGET` | 1 to 3 identity IDs, player or guild ones, my guild's record about each asked for | To members of my guild whose list has a newer guild record (see Guild Lists) |
 | `GIREC` | header: club ID, identity ID, revision; one signed guild record | When the guild master or an officer changes it, on `GUILD`; in answer to `GIGET`s (see Guild Lists) |
+| `GINV` | the asking character's GUID | To each character of the officer I ask to invite the character I play, by whisper, followed by my announcement (see Guild Invite Requests) |
 
 The 30 and 60 second values below are starting values, to adjust in game.
 
@@ -386,6 +391,7 @@ Two separate questions, for each player asking for my record:
 The relationships behind the first question are stored, since a character only sees its own guild roster and friend list. They are what my characters saw themselves, never sent by the other player, so they are kept on any character I hold, and move with it to another identity. Only **confirmed characters** count for sharing, so a record listing a character never makes it count:
 
 - `guild`: the guild in which one of my characters saw this character, written from that character's roster: set for each character in it, cleared for a character with that `guild` no longer in it, also set when an announcement comes from a character found in the roster. It counts only while one of my characters of the same ruleset is in that guild; `Identity` keeps each of my characters' guild. The guild is its club ID (`C_Club.GetGuildClubId()`, a number on Forever although the API documentation says a string; checked in game; that two characters of one guild get the same value is *to verify in game*). Nothing says club IDs are unique across rulesets, so a guild is its club ID and the ruleset of the characters in it.
+- `rankIndex`: this character's rank index in that `guild`, from the same roster (also when a stored record brings a character the roster lists, `Scopes.KeepGuildMembers`), cleared with the guild. Not used for sharing: it tells my other characters who the guild's officers are (Guild Invite Requests).
 - `friendOf`: which of my characters has this character as a WoW friend, each of my characters writing only its own entry from its friend list, also set when an announcement comes from a character found in that list. Battle.net friends are account-wide and checked live.
 - `bnetFriend`: the BattleTag of my Battle.net friend seen playing this character (`gameAccountInfo.playerGuid`), from the whole friend list each time it changes (`People.UpdateBnetFriends`); cleared once that BattleTag is no longer in the list. An empty list (Battle.net disconnected, or not loaded yet) changes nothing. It is not used for sharing, only by the People tab: its Friends filter, and the BattleTag in the detail panel (*to verify in game*: no Battle.net friend seen in Forever yet).
 - `whisperedAt`: when one of my characters last whispered this character (`time()`), set on each whisper I send to a character I hold, and, for a character I did not hold yet, when a stored record brings it (`Scopes.KeepSentWhispers`, from the saved whispers). It counts only within the whisper window, and is cleared once older at logout.
@@ -476,10 +482,10 @@ Built: the consent, the guild settings, enforced linking with its opt-in, the gu
 
 ### Guild Settings
 
-A guild's settings (`GuildSettings`: `enable`, and `enforceLinking`, which needs it; see Enforced linking) are one record per guild, signed with the identity key of its guild master or one of its officers (rank index 0 or 1: `GuildSettings.LOWEST_RANK_INDEX`), and changed only from the settings view of the guild panel's Who's Who tab, whose **Who's Who settings** button those ranks alone see (`Protocol.ChangeGuildSettings`).
+A guild's settings (`GuildSettings`: `enable`, then `enforceLinking` and `inviteRequests`, which need it; see Enforced linking, Guild Invite Requests) are one record per guild, signed with the identity key of its guild master or one of its officers (rank index 0 or 1: `GuildSettings.LOWEST_RANK_INDEX`), and changed only from the settings view of the guild panel's Who's Who tab, whose **Who's Who settings** button those ranks alone see (`Protocol.ChangeGuildSettings`).
 
 ```
-v (GuildSettings.VERSION, 2), guild (club ID), settings = { enable, enforceLinking }, signer (identity ID),
+v (GuildSettings.VERSION, 2), guild (club ID), settings = { enable, enforceLinking, inviteRequests (optional: off when absent) }, signer (identity ID),
 signerGuid (the character it was signed from), rev (server time when signed, or one more than the record held when that
 is not later), sig (see Records, Signed bytes)
 ```
@@ -550,7 +556,7 @@ identity    id (public key, hex), seed (private key, hex), rev, nickname (overri
 people      { [identityID or "M<n>" or "G<hex>"] = { id (the same as the key), signedRecord (shared only), nickname (the player's own, or the guild's),
                                    customNickname, note, main,
                                    chars = { [guid] = { name, ruleset, classID, state (confirmed | listed | relayed | added | guild), level, lastSeen,
-                                                        guild, friendOf = { [my character's GUID] = true }, bnetFriend (BattleTag),
+                                                        guild, rankIndex, friendOf = { [my character's GUID] = true }, bnetFriend (BattleTag),
                                                         whisperedAt } },
                                    madeByGuild (for a guild identity, the guild (club ID) whose record makes it), updatedAt, outdated (true: fetched again, see Enforced linking) } }
             a character's guild (club ID), friendOf and whisperedAt: what my characters saw; only confirmed characters count (see Scopes);

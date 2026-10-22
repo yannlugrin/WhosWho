@@ -2842,6 +2842,8 @@ do
     slash(nedOnMain, "link")
     run(60)
     local nedId = nedOnMain.ns.Identity.Id()
+    check(select(2, nedOnMain.ns.People.Find(moxMain.guid)).rankIndex == 1,
+        "a guild member's rank is kept, from my roster: the officers to ask for an invite")
     logout(nedOnMain)
     local nedOnAlt = login(nedAccount, nedAlt)
     slash(nedOnAlt, "link")
@@ -2856,10 +2858,19 @@ do
     check(sent({ from = "Ned Alt", type = "ANNOUNCE" }) == 0, "a plain whisper sends no announcement, Whispers scope off")
 
     clearLog()
+    whisper(nedOnAlt, moxMain, "ginv")
+    run(30)
+    check(sent({ from = "Ned Alt", type = "ANNOUNCE", target = "Mox Main" }) == 1
+        and sent({ from = "Mox Main", target = "Ned Alt" }) == 0 and mox.ns.People.Find(nedAlt.guid) == nil,
+        "a guild that doesn't accept invite requests: the officer ignores it")
+
+    mox.ns.Protocol.ChangeGuildSettings({ enable = true, enforceLinking = false, inviteRequests = true })
+    run(60)
+    clearLog()
     whisper(nedOnAlt, moxMain, " GINV ")
     run(30)
     check(sent({ from = "Ned Alt", type = "ANNOUNCE", target = "Mox Main" }) == 1,
-        "a guild invite request announces to the officer, whatever the Whispers scope")
+        "once the guild accepts them, a request announces to the officer again, whatever the Whispers scope")
     check(sent({ from = "Mox Main", type = "GET", target = "Ned Alt" }) == 1
         and sent({ from = "Mox Main", type = "ANNOUNCE", target = "Ned Alt" }) == 1,
         "the officer answers with an announcement, and asks for the record that lists the alt")
@@ -2868,8 +2879,28 @@ do
         "the alt is confirmed under the identity whose main is in the guild: the officer can be asked")
     run(90)
     check(next(mox.ns.Scopes.GuildInviteRequests()) == nil, "the request lasts a minute")
-    logout(mox)
+
+    -- From the button: GINV to each of the officer's characters, the one offline lost, then the announcement. The
+    -- officer meets a character it never saw, which nothing else shows it: the GUID GINV gives confirms it.
     logout(nedOnAlt)
+    local nedThird = character("Ned Third", "Player-1-00030103", WARRIOR)
+    local nedOnThird = login(nedAccount, nedThird)
+    slash(nedOnThird, "link")
+    nedOnThird.ns.settings.scopes.whispers = false
+    run(60)
+    check(mox.ns.People.Find(nedThird.guid) == nil, "the officer doesn't know this one either")
+    clearLog()
+    nedOnThird.ns.Protocol.AskGuildInvite({ "Mox Main", "Mox Elsewhere" })
+    run(30)
+    check(sent({ from = "Ned Third", type = "GINV", target = "Mox Main" }) == 1
+        and sent({ from = "Ned Third", type = "GINV", target = "Mox Elsewhere" }) == 1
+        and sent({ from = "Ned Third", type = "ANNOUNCE", target = "Mox Main" }) == 1,
+        "the request goes to each of the officer's characters, with the announcement")
+    check(state(mox, nedThird.guid) == "confirmed" and holderId(mox, nedThird.guid) == nedId
+        and mox.ns.Scopes.GuildInviteRequests()["Ned Third"] == nedThird.guid,
+        "the officer confirms the character by the GUID it gave, and can be asked")
+    logout(mox)
+    logout(nedOnThird)
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

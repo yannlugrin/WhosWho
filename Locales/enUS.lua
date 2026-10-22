@@ -309,6 +309,12 @@ L["%s, %s ago"] = true
 
 -- Guild invites
 L["%s asks you to invite %s into the guild."] = true
+L["Members may ask officers to invite their other characters"] = true
+L["Invitation…"] = true
+L["Ask an officer to invite %s into the guild."] = true
+L["Officer"] = true
+L["Sent to each of their officer characters: the one playing gets it."] = true
+L["You know no officer of this guild."] = true
 
 -- Guild tab
 L["Requires linking:"] = true

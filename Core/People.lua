@@ -36,6 +36,7 @@ ns.People = People
 ---@field level integer?
 ---@field lastSeen number? seconds, from time()
 ---@field guild integer? club ID of the guild in which one of my characters saw it; for the state "guild", the guild whose record links it
+---@field rankIndex integer? its rank index in that guild, as the roster of one of my characters last showed it
 ---@field friendOf table<string, true>? GUIDs of my characters that have it as a WoW friend
 ---@field bnetFriend string? BattleTag of my Battle.net friend seen playing it; kept locally, never sent
 ---@field whisperedAt number? seconds, from time(): when one of my characters last whispered it
@@ -77,8 +78,24 @@ local function unindexCharacter(guid, id)
 end
 
 -- Confirmations that arrived before the record listing their character; kept for the session only.
----@type table<string, table<string, integer>> identity ID -> GUID -> level
+---@type table<string, table<string, { level: integer, claimedBy: string? }>> identity ID -> GUID -> confirmation
 local pendingConfirmations = {}
+
+-- Whether a confirmation by a GUID that is only the sender's word holds: the record lists the character under the
+-- sender's name, and no other identity holds it (such a confirmation never takes a character from another identity: its
+-- owner confirms it again by a message whose GUID comes from the game).
+local function claimHolds(claimedBy, recordCharacter, guid, id)
+    local holderId = index()[guid]
+    return recordCharacter.name == claimedBy and (holderId == nil or holderId == id)
+end
+
+-- The level a confirmation gives that character of a record: none when its GUID is the sender's word and it doesn't
+-- hold (claimHolds).
+local function pendingLevel(confirmation, recordCharacter, guid, id)
+    if not confirmation then return nil end
+    if confirmation.claimedBy and not claimHolds(confirmation.claimedBy, recordCharacter, guid, id) then return nil end
+    return confirmation.level
+end
 
 ---Drops the GUID index (the next lookup rebuilds it from the saved data) and the pending confirmations. Call after
 ---replacing ns.data.
@@ -652,7 +669,8 @@ function People.Accept(signedRecord, fromGuild, guildMembers)
     -- Update or add the characters this revision lists.
     AutomaticChanges.BeginOperation(sharedPerson)
     for guid, recordCharacter in pairs(recordCharacters) do
-        storeCharacter(sharedPerson, guid, recordCharacter, fromGuild and "relayed" or "listed", pending[guid])
+        storeCharacter(sharedPerson, guid, recordCharacter, fromGuild and "relayed" or "listed",
+            pendingLevel(pending[guid], recordCharacter, guid, signedRecord.id))
     end
     AutomaticChanges.EndOperation()
     -- What my guilds link to this identity, held until it arrived.
@@ -676,17 +694,20 @@ end
 ---@param id string
 ---@param guid string
 ---@param level integer
+---@param claimedBy string? the sender's name, when the GUID is only the sender's word (a guild invite request): it
+---confirms the character only if the record lists it under that name and no other identity holds it
 ---@return boolean confirmed false while it waits
-function People.Confirm(id, guid, level)
+function People.Confirm(id, guid, level, claimedBy)
     local person = ns.data.people[id]
+    local recordCharacter = person and person.signedRecord and person.signedRecord.chars[guid]
+    if claimedBy and recordCharacter and not claimHolds(claimedBy, recordCharacter, guid, id) then return false end
     -- The character declares an identity again.
     ns.data.noIdentity[guid] = nil
 
     -- The player's record must list the character; otherwise the confirmation waits for the revision that does.
-    local recordCharacter = person and person.signedRecord and person.signedRecord.chars[guid]
     if not recordCharacter then
         pendingConfirmations[id] = pendingConfirmations[id] or {}
-        pendingConfirmations[id][guid] = level
+        pendingConfirmations[id][guid] = { level = level, claimedBy = claimedBy }
         return false
     end
 
@@ -758,12 +779,16 @@ end
 -- What my characters saw themselves, kept on any character I hold. Only confirmed characters count for sharing
 -- (Scopes), so a record listing a character never makes it count.
 
----A character seen in the guild roster of one of my characters.
+---A character seen in the guild roster of one of my characters, with its rank there when the roster gives it; a rank
+---from another guild goes.
 ---@param guid string
 ---@param clubId integer
-function People.SetGuild(guid, clubId)
+---@param rankIndex integer?
+function People.SetGuild(guid, clubId, rankIndex)
     local _, character = People.Find(guid)
-    if character then character.guild = clubId end
+    if not character then return end
+    if character.guild ~= clubId then character.rankIndex = nil end
+    character.guild, character.rankIndex = clubId, rankIndex or character.rankIndex
 end
 
 -- Whether the record holds the character only because its guild enforces linking.
@@ -833,19 +858,20 @@ local function forgetFormerMembers(clubId, memberGuids)
     return removed
 end
 
----Applies a whole guild roster: its characters get the guild, the others lose it. What I hold only through that guild,
----a player or what its records linked, is forgotten once the roster no longer lists them; another guild's links, once it
----lists them.
+---Applies a whole guild roster: its characters get the guild and their rank in it, the others lose them. What I hold only
+---through that guild, a player or what its records linked, is forgotten once the roster no longer lists them; another
+---guild's links, once it lists them.
 ---@param clubId integer
 ---@param memberGuids table<string, true>
-function People.UpdateGuildMembers(clubId, memberGuids)
+---@param rankIndexes table<string, integer>? by GUID, the members' rank index
+function People.UpdateGuildMembers(clubId, memberGuids, rankIndexes)
     local removed = forgetFormerMembers(clubId, memberGuids)
     for _, person in pairs(ns.data.people) do
         for guid, character in pairs(person.chars) do
             if memberGuids[guid] then
-                character.guild = clubId
+                character.guild, character.rankIndex = clubId, rankIndexes and rankIndexes[guid]
             elseif character.guild == clubId then
-                character.guild = nil
+                character.guild, character.rankIndex = nil, nil
             end
         end
     end

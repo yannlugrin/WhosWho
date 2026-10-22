@@ -4,7 +4,7 @@ local GuildRecord, GuildSettings, Record = ns.GuildRecord, ns.GuildSettings, ns.
 local LibSerialize, LibDeflate = LibStub("LibSerialize"), LibStub("LibDeflate")
 
 -- Message text: "<version> <type> <fields>". Hellos, announcements, GETs and GIGETs are plain text that fits in one
--- message; a REC, a GSET, a GLIST and a GIREC carry a header in clear, " : ", then their record or list serialized,
+-- message (GINV too); a REC, a GSET, a GLIST and a GIREC carry a header in clear, " : ", then their record or list serialized,
 -- compressed and encoded for the add-on channel; NOID, GSGET and GLGET have no fields. Fields a later version adds after
 -- the known ones, and header fields before the " : ", are ignored.
 
@@ -62,6 +62,11 @@ local VERSION = "2"
 ---@field hash string the hash of its content
 ---@field entries table<string, integer> revision by identity ID
 ---@field guildEntries table<string, integer> revision by identity ID of the guild's records
+
+---A character asking the receiver to invite it into the receiver's guild (Guild Invite Requests).
+---@class WhosWho.GuildInviteRequest
+---@field type "GINV"
+---@field guid string the asking character's, as it gives it: the game vouches for the sender's name only
 
 ---A request for what the guild says about some identities.
 ---@class WhosWho.GuildRecordRequest
@@ -151,6 +156,12 @@ end
 ---@return string
 function Codec.GuildSettingsUpdate(signedRecord)
     return payloadMessage("GSET", ("%d %d"):format(signedRecord.guild, signedRecord.rev), signedRecord)
+end
+
+---@param guid string the character asking
+---@return string
+function Codec.GuildInviteRequest(guid)
+    return ("%s GINV %s"):format(VERSION, guid)
 end
 
 ---@return string
@@ -269,6 +280,11 @@ local function decodeGuildListRequest()
     return { type = "GLGET" }
 end
 
+local function decodeGuildInviteRequest(fields)
+    local guid = fields:match("^(%S+)")
+    return Record.IsGuid(guid) and { type = "GINV", guid = guid } or nil
+end
+
 -- A payload no longer than maxLength, decoded, unpacked and deserialized; nil when it isn't.
 local function unpackPayload(payload, maxLength)
     if #payload > maxLength then return nil end
@@ -337,6 +353,7 @@ end
 local PLAIN_DECODERS = {
     HELLO = decodeHello, ANNOUNCE = decodeAnnouncement, GET = decodeRecordRequest, NOID = decodeNoIdentity,
     GSGET = decodeGuildSettingsRequest, GLGET = decodeGuildListRequest, GIGET = decodeGuildRecordRequest,
+    GINV = decodeGuildInviteRequest,
 }
 
 -- The header of each type with a payload, from its fields before " : "; fields a later version adds after them are

@@ -1154,6 +1154,39 @@ do
     check(ns.data.forgotten[A].rev == 1 and ns.data.forgotten[A].at == 1500, "a forgotten identity keeps when it was forgotten")
 end
 
+-- A confirmation by a GUID the sender gave (a guild invite request): only for the character of that name.
+fresh()
+do
+    local P = ns.People
+    local A = string.rep("a", 64)
+    P.Accept(makeRecord(A, 1, { G1, G2 }))
+    check(not P.Confirm(A, G2, 10, "Someone Else") and state(G2) == "listed",
+        "a GUID given under another name than the record's confirms nothing")
+    check(P.Confirm(A, G2, 10, "N2") and state(G2) == "confirmed", "under the record's name, it confirms")
+    P.Confirm(A, G3, 12, "Someone Else")
+    P.Confirm(A, G4, 12, "N4")
+    P.Accept(makeRecord(A, 2, { G1, G2, G3, G4 }))
+    check(state(G3) == "listed" and state(G4) == "confirmed",
+        "waiting for the record that lists it, the same: confirmed only under the record's name")
+
+    -- Another player's record lists G1, one of A's characters, under its own sender's name.
+    local B = string.rep("b", 64)
+    local cheat = makeRecord(B, 1, { G5, G1 })
+    cheat.chars[G1].name = "Cheat Name"
+    P.Accept(cheat)
+    P.Confirm(A, G1, 10)
+    check(not P.Confirm(B, G1, 10, "Cheat Name") and holderId(G1) == A,
+        "a GUID given never takes a character another identity holds, whatever the record lists")
+    local G6 = "Player-70-0000000F"
+    P.Confirm(B, G6, 10, "N3")
+    local cheatAgain = makeRecord(B, 2, { G5, G6 })
+    cheatAgain.chars[G6].name = "N3"
+    P.Confirm(A, G6, 12)
+    P.Accept(makeRecord(A, 3, { G1, G2, G3, G4, G6 }))
+    P.Accept(cheatAgain)
+    check(holderId(G6) == A, "nor once the record that lists it arrives")
+end
+
 -- Records of a guild's members --------------------------------------------------------------------------
 
 fresh()
@@ -1259,6 +1292,16 @@ do
         "a later change is always newer, even with an earlier clock")
     local enforcing = GS.Change(7, { enable = true, enforceLinking = true }, G1, 1100)
     check(GS.Verify(enforcing) and GS.Get(7).enforceLinking, "the setting enforcing linking is signed with the others")
+    check(not GS.AcceptsInviteRequests(7) and GS.Get(7).inviteRequests == nil,
+        "a record without the invite requests setting: they are off")
+    local inviting = GS.Change(7, { enable = true, enforceLinking = true, inviteRequests = true }, G1, 1150)
+    check(GS.Verify(inviting) and GS.AcceptsInviteRequests(7), "invite requests turned on are signed with the others")
+    local wrongSetting = {}
+    for k, v in pairs(inviting) do wrongSetting[k] = v end
+    wrongSetting.settings = { enable = true, enforceLinking = true, inviteRequests = "yes" }
+    check(not GS.Validate(wrongSetting), "an invite requests setting that isn't a boolean is refused")
+    GS.Change(7, { enable = false, enforceLinking = false, inviteRequests = true }, G1, 1160)
+    check(not GS.AcceptsInviteRequests(7), "only with Who's Who enabled for the guild")
 
     local changed = {}
     for k, v in pairs(record) do changed[k] = v end

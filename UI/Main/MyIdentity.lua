@@ -258,8 +258,9 @@ panel.GuildsHeading:Hide()
 
 local GUILD_COLUMNS = {
     { key = "Edit", width = 30, label = "", justify = "CENTER" },
-    { key = "Main", width = 220, label = L["Main"] },
-    { key = "Nickname", width = 220, label = L["Nickname"] },
+    { key = "Invite", width = 110, label = "" },
+    { key = "Main", width = 195, label = L["Main"] },
+    { key = "Nickname", width = 185, label = L["Nickname"] },
 }
 local guildColumnsWidth = Lists.LayOut(GUILD_COLUMNS)
 local GUILD_NAME_LEFT = 6
@@ -278,6 +279,7 @@ for _, column in ipairs(GUILD_COLUMNS) do guildColumnByKey[column.key] = column 
 ---@field Nickname FontString
 ---@field MainCrown Texture
 ---@field MainName FontString
+---@field InviteButton Button
 ---@field EditButton Button
 
 ---@type WhosWho.MyIdentityGuildRow[]
@@ -313,6 +315,14 @@ local function guildRow(index)
     row.MainName:SetPoint("RIGHT", row, "RIGHT", main.right, 0)
     row.MainName:SetJustifyH("LEFT")
     row.MainName:SetWordWrap(false)
+
+    -- In a guild the character I play isn't in, which accepts invite requests.
+    local invite = guildColumnByKey.Invite
+    row.InviteButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.InviteButton:SetText(L["Invitation…"])
+    row.InviteButton:SetSize(invite.width - 8, 20)
+    row.InviteButton:SetPoint("RIGHT", row, "RIGHT", invite.right - 4, 0)
+    if skin then skin.Button(row.InviteButton) end
 
     row.EditButton = CreateFrame("Button", nil, row)
     row.EditButton:SetSize(GLYPH_SIZE, GLYPH_SIZE)
@@ -421,6 +431,8 @@ end
 ---@field mainName string
 ---@field mainClassID integer
 ---@field characters { guid: string, name: string, classID: integer }[] my characters in that guild that its members see
+---@field officers WhosWho.KnownOfficer[]? when the character I play may ask that guild for an invite: its officers I
+---know of
 
 ---Shows a line per guild under My characters, or hides the section when the list is empty.
 ---@param guilds WhosWho.MyIdentityGuild[] in the order shown
@@ -442,6 +454,12 @@ function panel:SetGuilds(guilds)
         row.MainName:SetText(Lists.ClassColoredName(guild.mainName, guild.mainClassID))
         row.EditButton.tooltipTitle = L["Edit for %s"]:format(guildName)
         row.EditButton:SetScript("OnClick", function() panel:EditGuild(guild.clubId) end)
+        row.InviteButton:SetShown(guild.officers ~= nil)
+        row.InviteButton:SetScript("OnClick", function()
+            local dialog = ns.IdentityDialogs.GuildInvite
+            dialog:SetGuild(guild.name, ns.UnitWholeName("player"), guild.officers)
+            dialog:Show()
+        end)
         row:Show()
     end
     for i = #guilds + 1, #guildRows do guildRows[i]:Hide() end
@@ -474,6 +492,33 @@ local function sortCharacters(characters)
     end)
 end
 
+---An officer of a guild I know of: a player's identity with characters of the guild master's or an officer's rank in
+---it, as the roster of one of my characters last showed them.
+---@class WhosWho.KnownOfficer
+---@field nickname string
+---@field names string[] those characters
+
+-- The officers of that guild I know of, by nickname.
+---@return WhosWho.KnownOfficer[]
+local function knownOfficers(clubId)
+    local officers = {}
+    for id, person in pairs(ns.People.All()) do
+        local names = {}
+        for _, character in pairs(person.signedRecord and person.chars or {}) do
+            if character.guild == clubId and character.rankIndex
+                and character.rankIndex <= ns.GuildList.TRUSTED_RANK_INDEX then
+                names[#names + 1] = character.name
+            end
+        end
+        if names[1] then
+            table.sort(names)
+            officers[#officers + 1] = { nickname = ns.People.Nickname(id), names = names }
+        end
+    end
+    table.sort(officers, function(a, b) return a.nickname < b.nickname end)
+    return officers
+end
+
 -- The guilds my characters are in, unknown names last, each with what its members see of me: my record as they get it,
 -- with its general part unless the guild enforces linking with my Guild scope off.
 ---@return WhosWho.MyIdentityGuild[]
@@ -500,6 +545,11 @@ local function ownGuilds()
         guild.mainName, guild.mainClassID = main.name, main.classID
         guild.nicknameSet = Identity.GuildNickname(guild.clubId) ~= nil
         guild.nickname = ns.Record.ShownNickname(record, guild.clubId) or main.name
+        local playing = UnitGUID("player")
+        if Identity.GuildId(playing) ~= guild.clubId and Identity.Ruleset(playing) == guild.ruleset
+            and ns.GuildSettings.AcceptsInviteRequests(guild.clubId) then
+            guild.officers = knownOfficers(guild.clubId)
+        end
         guild.characters = {}
         for _, guid in ipairs(Identity.CharactersInGuild(guild.clubId, guild.ruleset)) do
             if record.chars[guid] then

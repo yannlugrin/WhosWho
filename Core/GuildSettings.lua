@@ -17,6 +17,8 @@ GuildSettings.LOWEST_RANK_INDEX = 1
 ---@class WhosWho.GuildSettingsValues
 ---@field enable boolean Who's Who enabled for the guild
 ---@field enforceLinking boolean members' characters in the guild known under their identity; only with enable
+---@field inviteRequests boolean? members may ask officers to invite their other characters (Guild Invite Requests); only
+---with enable; nil in a record signed before it existed: off
 
 ---A guild's settings as its members share them; data, kept as received.
 ---@class WhosWho.GuildSettingsRecord
@@ -29,7 +31,7 @@ GuildSettings.LOWEST_RANK_INDEX = 1
 ---@field sig string signature over the other fields, 128 hex characters
 
 ---@type WhosWho.GuildSettingsValues
-local DEFAULTS = { enable = false, enforceLinking = false }
+local DEFAULTS = { enable = false, enforceLinking = false, inviteRequests = false }
 
 -- Records ----------------------------------------------------------------------------------------
 
@@ -103,6 +105,14 @@ function GuildSettings.EnforcesLinking(clubId)
     return settings.enable and settings.enforceLinking == true
 end
 
+---Whether that guild's members may ask its officers to invite their other characters.
+---@param clubId integer?
+---@return boolean
+function GuildSettings.AcceptsInviteRequests(clubId)
+    local settings = GuildSettings.Get(clubId)
+    return settings.enable and settings.inviteRequests == true
+end
+
 ---That guild's settings: its record's, otherwise the defaults. Read only.
 ---@param clubId integer?
 ---@return WhosWho.GuildSettingsValues
@@ -124,6 +134,7 @@ function GuildSettings.Validate(record)
         and type(record.settings) == "table"
         and type(record.settings.enable) == "boolean"
         and type(record.settings.enforceLinking) == "boolean"
+        and (record.settings.inviteRequests == nil or type(record.settings.inviteRequests) == "boolean")
         and Record.IsId(record.signer)
         and Record.IsGuid(record.signerGuid)
         and Record.IsPositiveInteger(record.rev)
@@ -182,7 +193,10 @@ end
 function GuildSettings.Change(clubId, settings, signerGuid, serverTime)
     local record = {
         v = GuildSettings.VERSION, guild = clubId,
-        settings = { enable = settings.enable, enforceLinking = settings.enforceLinking }, signer = Identity.Id(),
+        settings = {
+            enable = settings.enable, enforceLinking = settings.enforceLinking, inviteRequests = settings.inviteRequests,
+        },
+        signer = Identity.Id(),
         signerGuid = signerGuid, rev = math.max(serverTime, GuildSettings.Revision(clubId) + 1),
     }
     record.sig = Identity.Sign(GuildSettings.Canonical(record))

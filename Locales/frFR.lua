@@ -309,6 +309,12 @@ L["%s, %s ago"] = "%s, il y a %s"
 
 -- Guild invites
 L["%s asks you to invite %s into the guild."] = "%s vous demande d'inviter %s dans la guilde."
+L["Members may ask officers to invite their other characters"] = "Les membres peuvent demander aux officiers d'inviter leurs autres personnages"
+L["Invitation…"] = "Invitation…"
+L["Ask an officer to invite %s into the guild."] = "Demander à un officier d'inviter %s dans la guilde."
+L["Officer"] = "Officier"
+L["Sent to each of their officer characters: the one playing gets it."] = "Envoyée à chacun de ses personnages officiers : celui qui joue la reçoit."
+L["You know no officer of this guild."] = "Vous ne connaissez aucun officier de cette guilde."
 
 -- Guild tab
 L["Requires linking:"] = "Demande la liaison :"
