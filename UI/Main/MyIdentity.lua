@@ -413,11 +413,14 @@ end
 
 ---@class WhosWho.MyIdentityGuild
 ---@field clubId integer
+---@field ruleset WhosWho.Ruleset
 ---@field name string? nil while none of my characters in it was played since its name is saved
----@field nickname string my nickname in that guild, otherwise my identity's
+---@field nickname string the name that guild shows me under: my nickname there, otherwise the one its members see
 ---@field nicknameSet boolean I set a nickname in that guild
----@field mainName string the character that guild shows me under
+---@field mainGuid string the character that guild shows me under
+---@field mainName string
 ---@field mainClassID integer
+---@field characters { guid: string, name: string, classID: integer }[] my characters in that guild that its members see
 
 ---Shows a line per guild under My characters, or hides the section when the list is empty.
 ---@param guilds WhosWho.MyIdentityGuild[] in the order shown
@@ -438,6 +441,12 @@ function panel:SetGuilds(guilds)
         row.Nickname:SetFontObject(guild.nicknameSet and "GameFontHighlight" or "GameFontDisable")
         row.MainName:SetText(Lists.ClassColoredName(guild.mainName, guild.mainClassID))
         row.EditButton.tooltipTitle = L["Edit for %s"]:format(guildName)
+        row.EditButton:SetScript("OnClick", function()
+            local dialog = ns.IdentityDialogs.GuildEntry
+            dialog:SetGuild(guild.clubId, guild.name, ns.Identity.GuildNickname(guild.clubId), ns.Identity.Nickname(),
+                guild.characters, guild.mainGuid)
+            dialog:Show()
+        end)
         row:Show()
     end
     for i = #guilds + 1, #guildRows do guildRows[i]:Hide() end
@@ -470,12 +479,57 @@ local function sortCharacters(characters)
     end)
 end
 
+-- The guilds my characters are in, unknown names last, each with what its members see of me: my record as they get it,
+-- with its general part unless the guild enforces linking with my Guild scope off.
+---@return WhosWho.MyIdentityGuild[]
+local function ownGuilds()
+    local Identity = ns.Identity
+    local characters = Identity.Characters()
+    local guilds, byClub = {}, {}
+    for _, character in pairs(characters) do
+        local clubId = character.guild and character.guild.id
+        if clubId then
+            if not byClub[clubId] then
+                byClub[clubId] = { clubId = clubId, ruleset = character.ruleset }
+                guilds[#guilds + 1] = byClub[clubId]
+            end
+            byClub[clubId].name = byClub[clubId].name or character.guild.name
+        end
+    end
+
+    for _, guild in ipairs(guilds) do
+        local general = ns.Scopes.Get("guild") or not ns.GuildSettings.EnforcesLinking(guild.clubId)
+        local record = Identity.UnsignedRecord(general, guild.clubId, guild.ruleset)
+        guild.mainGuid = ns.Record.ShownMain(record, guild.clubId)
+        local main = characters[guild.mainGuid]
+        guild.mainName, guild.mainClassID = main.name, main.classID
+        guild.nicknameSet = Identity.GuildNickname(guild.clubId) ~= nil
+        guild.nickname = ns.Record.ShownNickname(record, guild.clubId) or main.name
+        guild.characters = {}
+        for _, guid in ipairs(Identity.CharactersInGuild(guild.clubId, guild.ruleset)) do
+            if record.chars[guid] then
+                guild.characters[#guild.characters + 1] = {
+                    guid = guid, name = characters[guid].name, classID = characters[guid].classID,
+                }
+            end
+        end
+    end
+
+    table.sort(guilds, function(a, b)
+        if (a.name == nil) ~= (b.name == nil) then return a.name ~= nil end
+        if a.name ~= b.name then return a.name:lower() < b.name:lower() end
+        return a.clubId < b.clubId
+    end)
+    return guilds
+end
+
 ---Fills the panel from the identity, or shows the empty state while no character is linked.
 function panel:Refresh()
     local Identity = ns.Identity
     local empty = Identity.LinkedCount() == 0
     self.Empty:SetShown(empty)
     for _, region in ipairs(identityRegions) do region:SetShown(not empty) end
+    self:SetGuilds(empty and {} or ownGuilds())
     if empty then return end
 
     self:SetIdentityName(Identity.Nickname(), not Identity.HasNickname())

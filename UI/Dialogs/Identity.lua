@@ -374,6 +374,19 @@ local function createGuildEntryDialog()
 
     addButtons(dialog, { { "SaveButton", L["Save"] }, { "CancelButton", CANCEL } })
 
+    -- The guild main is set only when another character is chosen: the one shown by default stays a default.
+    dialog.SaveButton:SetScript("OnClick", function()
+        local nickname = dialog.NicknameInput:GetText()
+        local ok, err = ns.Identity.SetGuildNickname(dialog.clubId, nickname ~= "" and nickname or nil)
+        if not ok then
+            dialog:SetError(ns.NameErrorMessages[err] or err)
+            return
+        end
+        if dialog.mainGuid ~= dialog.shownMainGuid then ns.Identity.SetGuildMain(dialog.mainGuid) end
+        dialog:Hide()
+    end)
+    dialog.CancelButton:SetScript("OnClick", function() dialog:Hide() end)
+
     ---@param clubId integer
     ---@param guildName string? nil while unknown
     ---@param nickname string? my nickname in that guild, nil when not set
@@ -394,7 +407,7 @@ local function createGuildEntryDialog()
         self.MainLabel:SetShown(hasCharacters)
         self.MainDropdown:SetShown(hasCharacters)
         self.MainHint:SetShown(hasCharacters)
-        self.mainGuid = mainGuid
+        self.mainGuid, self.shownMainGuid = mainGuid, mainGuid
         self.MainDropdown:SetupMenu(function(_, root)
             for _, character in ipairs(characters) do
                 root:CreateRadio(Lists.ClassColoredName(character.name, character.classID),

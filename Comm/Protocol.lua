@@ -251,7 +251,7 @@ end
 ---A REC sent: the revision it carried, and when its last part left (nil while queued).
 ---@class WhosWho.Delivery
 ---@field revision integer
----@field clubId integer? the guild enforcing linking whose members' record it was; nil for everyone's
+---@field key string the content key of the record it carried (contentKey)
 ---@field leftAt number?
 
 -- Last revision published to every audience this session, and whether I shared with my guild then.

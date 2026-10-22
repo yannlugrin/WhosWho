@@ -396,6 +396,14 @@ function Identity.SetGuildNickname(clubId, nickname)
     return true
 end
 
+---My nickname in that guild, nil when I set none.
+---@param clubId integer
+---@return string?
+function Identity.GuildNickname(clubId)
+    local entry = data().guilds and data().guilds[clubId]
+    return entry and entry.nickname
+end
+
 ---Whether that guild's members get a record of their own from me: the guild enforces linking, or I chose my main or my
 ---nickname in it.
 ---@param clubId integer
