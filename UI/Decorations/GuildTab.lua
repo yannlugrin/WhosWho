@@ -220,6 +220,19 @@ local function addTab(frame)
     settingsButton:SetSize(math.max(130, settingsButton:GetTextWidth() + 30), 20)
     settingsButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -5, 5)
 
+    -- Next to it, for the trusted ranks while the guild has requests: the view of all of them.
+    local requestsButton = CreateFrame("Button", nil, listView, "UIPanelButtonTemplate")
+    requestsButton:SetHeight(20)
+    requestsButton:SetPoint("RIGHT", settingsButton, "LEFT", -6, 0)
+    requestsButton:Hide()
+
+    -- Requests view ------------------------------------------------------------------------------
+
+    local requestsView = ns.GuildRequests.CreateView(panel)
+    requestsView:SetPoint("TOPLEFT", 10, -12)
+    requestsView:SetPoint("BOTTOMRIGHT", -8, 4)
+    requestsView:Hide()
+
     -- Member panel -------------------------------------------------------------------------------
 
     -- Next to the window, where the game puts its member panel.
@@ -244,6 +257,71 @@ local function addTab(frame)
     memberPanel.Claims:SetPoint("TOPLEFT", memberPanel.ScrollBox, "BOTTOMLEFT", 0, -ACTIONS_TOP)
     memberPanel.MoveButton:SetPoint("TOPLEFT", memberPanel.Claims, "BOTTOMLEFT", 0, -6)
     local claimRegions = { memberPanel.Claims, memberPanel.MoveButton, memberPanel.KeepApartButton }
+
+    -- My guild's requests to the person, for the trusted ranks, under the characters: what was asked, who asked, and
+    -- Dismiss under them.
+    ---@type Frame[]
+    local requestBlocks = {}
+    local function requestBlock(index)
+        if requestBlocks[index] then return requestBlocks[index] end
+        local block = CreateFrame("Frame", nil, memberPanel)
+        block:SetWidth(183)
+        block.Glyph = CreateFrame("Frame", nil, block)
+        block.Glyph:SetSize(12, 12)
+        block.Glyph:SetPoint("TOPLEFT")
+        block.Glyph.Texture = block.Glyph:CreateTexture(nil, "ARTWORK")
+        block.Glyph.Texture:SetAllPoints()
+        block.Glyph:SetScript("OnEnter", showGlyphTooltip)
+        block.Glyph:SetScript("OnLeave", GameTooltip_Hide)
+        block.What = block:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        block.What:SetPoint("TOPLEFT", block.Glyph, "TOPRIGHT", 4, 0)
+        block.What:SetPoint("RIGHT")
+        block.What:SetJustifyH("LEFT")
+        block.AskedBy = block:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        block.AskedBy:SetPoint("TOPLEFT", block.What, "BOTTOMLEFT", 0, -3)
+        block.AskedBy:SetPoint("RIGHT")
+        block.AskedBy:SetJustifyH("LEFT")
+        block.DismissButton = CreateFrame("Button", nil, block, "UIPanelButtonTemplate")
+        block.DismissButton:SetText(L["Dismiss"])
+        block.DismissButton:SetSize(block.DismissButton:GetTextWidth() + 30, 20)
+        block.DismissButton:SetPoint("TOPLEFT", block.AskedBy, "BOTTOMLEFT", 0, -4)
+        ns.Skin.Apply(function(S) S.Button(block.DismissButton) end)
+        requestBlocks[index] = block
+        return block
+    end
+
+    memberPanel.RequestsHeading = memberPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    memberPanel.RequestsHeading:SetText(L["Requests"])
+
+    -- Lays the requests out under what is above them; their height.
+    ---@param requests WhosWho.ShownGuildRequest[]
+    ---@param above Region
+    ---@return number
+    local function layOutRequests(requests, above)
+        memberPanel.RequestsHeading:SetShown(requests[1] ~= nil)
+        for i = #requests + 1, #requestBlocks do requestBlocks[i]:Hide() end
+        if not requests[1] then return 0 end
+        memberPanel.RequestsHeading:ClearAllPoints()
+        memberPanel.RequestsHeading:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -ACTIONS_TOP)
+        local height = ACTIONS_TOP + memberPanel.RequestsHeading:GetStringHeight()
+        local previous = memberPanel.RequestsHeading
+        for i, request in ipairs(requests) do
+            local block = requestBlock(i)
+            block.Glyph.glyph = ns.GuildRequests.Glyph(request)
+            Glyphs.Set(block.Glyph.Texture, block.Glyph.glyph)
+            block.What:SetText(ns.GuildRequests.What(request))
+            block.AskedBy:SetText(ns.GuildRequests.AskedBy(request))
+            block.DismissButton:SetScript("OnClick", function() ns.GuildRequests.Dismiss(request) end)
+            local blockHeight = block.What:GetStringHeight() + 3 + block.AskedBy:GetStringHeight() + 4 + 20
+            block:SetHeight(blockHeight)
+            block:ClearAllPoints()
+            block:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -6)
+            block:Show()
+            height = height + 6 + blockHeight
+            previous = block
+        end
+        return height
+    end
 
     ---A line of the member panel's list: a character, with its member when it is in the guild; or the separator before
     ---those not in the guild.
@@ -312,6 +390,8 @@ local function addTab(frame)
                 actionsHeight = ACTIONS_TOP + BUTTON_EXTENT - 6
             end
         end
+        -- A guild identity has no requests: they always come right under the characters.
+        actionsHeight = actionsHeight + layOutRequests(detailData.requests or {}, memberPanel.ScrollBox)
 
         local openInGuild = false
         for _, character in ipairs(detailData.characters) do
@@ -523,6 +603,17 @@ local function addTab(frame)
         sharingButton:SetShown(button ~= nil)
         sharingAction = action
         settingsButton:SetShown(hasSettingsRank())
+
+        local requests = GuildRoster.AllRequests()
+        requestsButton:SetShown(requests ~= nil and requests[1] ~= nil)
+        if requests and requests[1] then
+            requestsButton:SetText(ns.GuildRequests.ButtonLabel(requests))
+            requestsButton:SetWidth(requestsButton:GetTextWidth() + 30)
+        end
+    end
+
+    local function refreshRequests()
+        ns.GuildRequests.SetRequests(requestsView, GuildRoster.AllRequests() or {})
     end
 
     -- A click on the active column reverses it; another column starts A to Z for names, in class order for classes,
@@ -587,7 +678,8 @@ local function addTab(frame)
         -- As the game's roster: online rows in white with the name in class colour, the others grey.
         local color = entry.online and HIGHLIGHT_FONT_COLOR or DISABLED_FONT_COLOR
         local member = entry.member
-        row.Nickname:SetText(entry.nickname)
+        row.Nickname:SetText(entry.openRequest and entry.nickname .. " " .. Glyphs.Markup(Glyphs.Request)
+            or entry.nickname)
         row.Class:SetShown(member ~= nil and member.classID ~= nil)
         if member and member.classID then Lists.SetClassIcon(row.Class, member.classID) end
         row.Level:SetText(member and tostring(member.level) or "")
@@ -616,6 +708,7 @@ local function addTab(frame)
 
     local function showList()
         settingsView:Hide()
+        requestsView:Hide()
         listView:Show()
         refreshList()
     end
@@ -627,12 +720,22 @@ local function addTab(frame)
         refreshSettings()
     end
 
+    local function showRequests()
+        selectRow(nil)
+        listView:Hide()
+        requestsView:Show()
+        refreshRequests()
+    end
+
     settingsButton:SetScript("OnClick", showSettings)
     closeButton:SetScript("OnClick", showList)
+    requestsButton:SetScript("OnClick", showRequests)
+    requestsView.CloseButton:SetScript("OnClick", showList)
 
     local function refreshShown()
         if listView:IsVisible() then refreshList() end
         if settingsView:IsVisible() then refreshSettings() end
+        if requestsView:IsVisible() then refreshRequests() end
     end
     ns.GuildSettings.OnChanged(refreshShown)
     ns.People.OnChanged(refreshShown)
@@ -734,6 +837,7 @@ local function addTab(frame)
         S.ScrollBar(memberPanel.ScrollBar)
         S.Button(sharingButton)
         S.Button(settingsButton)
+        S.Button(requestsButton)
         S.Button(closeButton)
         S.FadeRegions(memberPanel.Border)
         S.Panel(memberPanel)

@@ -346,6 +346,18 @@ function GuildRecord.Ask(clubId, id, kind, value)
     end)
 end
 
+---Removes my guild's request of that kind to the player of a shared identity.
+---@param clubId integer
+---@param id string
+---@param kind string
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.Dismiss(clubId, id, kind)
+    return sign(clubId, id, function(record)
+        record.requests[kind] = nil
+        if not next(record.requests) then record.requests = nil end
+    end)
+end
+
 ---Sets or removes a guild identity's nickname.
 ---@param clubId integer
 ---@param id string

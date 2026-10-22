@@ -1625,6 +1625,10 @@ do
     check(again.requests.nickname.value == "Oz" and again.rev > asked.rev, "a new request of the same kind replaces it")
     local both = GR.Ask(CLUB, A, "main", G2)
     check(both.requests.nickname.value == "Oz" and both.requests.main.value == G2, "and keeps the other kind")
+    local dismissed = GR.Dismiss(CLUB, A, "nickname")
+    check(GR.Validate(dismissed) and dismissed.requests.nickname == nil and dismissed.requests.main.value == G2,
+        "dismissing a request removes it, and only it")
+    check(GR.Dismiss(CLUB, A, "main").requests == nil, "the last one dismissed leaves no requests")
 
     check(I.AnsweredRequestAt(CLUB, "nickname") == nil, "no request answered yet")
     local revision = I.Revision()

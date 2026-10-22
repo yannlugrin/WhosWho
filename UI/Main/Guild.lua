@@ -33,6 +33,13 @@ panel.SearchBox:SetSize(SEARCH_WIDTH, 20)
 panel.SearchBox:SetPoint("LEFT", panel.Rank, "RIGHT", 18, 0)
 panel.SearchBox.Instructions:SetText(L["Search names or characters"])
 
+-- For the trusted ranks, while the guild has requests: the view of all of them.
+panel.RequestsButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+panel.RequestsButton:SetHeight(22)
+-- At the height of the guild's name, whose line starts 36 below the top.
+panel.RequestsButton:SetPoint("RIGHT", panel, "TOPRIGHT", -10, -44)
+panel.RequestsButton:Hide()
+
 panel.Counts = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 panel.Counts:SetPoint("LEFT", panel.SearchBox, "RIGHT", 12, 0)
 panel.Counts:SetPoint("RIGHT", -12, 0)
@@ -65,6 +72,22 @@ sharing.Text:SetWordWrap(false)
 
 local browser = PersonBrowser.Create(panel, LIST_TOP, Lists.FOOTER_SPACE, "guild")
 panel.Browser = browser
+
+-- Requests view ----------------------------------------------------------------------------------
+
+-- In place of the list and the detail panel.
+local requestsView = ns.GuildRequests.CreateView(panel)
+requestsView:SetPoint("TOPLEFT", 8, LIST_TOP + 30)
+requestsView:SetPoint("BOTTOMRIGHT", -6, Lists.FOOTER_SPACE + 4)
+requestsView:SetFrameLevel(browser.DetailInset:GetFrameLevel() + 10)
+requestsView:Hide()
+panel.RequestsView = requestsView
+
+local function showRequests(shown)
+    requestsView:SetShown(shown)
+    browser.ListInset:SetShown(not shown)
+    browser.DetailInset:SetShown(not shown)
+end
 
 -- Data -------------------------------------------------------------------------------------------
 
@@ -117,7 +140,28 @@ function panel:Refresh()
     browser:SetEntries(entries)
     self:Select(selectedShown and browser.selectedId or nil)
     refreshSharing()
+
+    local requests = GuildRoster.AllRequests()
+    local hasRequests = requests ~= nil and requests[1] ~= nil
+    self.RequestsButton:SetShown(hasRequests)
+    if hasRequests then
+        self.RequestsButton:SetText(ns.GuildRequests.ButtonLabel(requests))
+        self.RequestsButton:SetWidth(self.RequestsButton:GetTextWidth() + 30)
+    end
+    self.Counts:SetPoint("RIGHT", hasRequests and self.RequestsButton or self, hasRequests and "LEFT" or "RIGHT", -12, 0)
+    if not requests then showRequests(false) end
+    if requestsView:IsShown() then ns.GuildRequests.SetRequests(requestsView, requests) end
 end
+
+panel.RequestsButton:SetScript("OnClick", function()
+    showRequests(true)
+    panel:Refresh()
+end)
+requestsView.CloseButton:SetScript("OnClick", function()
+    showRequests(false)
+    panel:Refresh()
+end)
+panel:HookScript("OnHide", function() showRequests(false) end)
 
 -- A click on the active column reverses it; another column starts A to Z for names, most recent first for last seen.
 local function sortBy(key)
@@ -170,4 +214,5 @@ end)
 ns.Skin.Apply(function(S)
     S.EditBox(panel.SearchBox)
     S.Button(sharing.Button)
+    S.Button(panel.RequestsButton)
 end)

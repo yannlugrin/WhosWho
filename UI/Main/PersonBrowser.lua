@@ -57,6 +57,7 @@ end
 ---@field nickname string the name the row shows: the person's nickname, or the character's name
 ---@field source "confirmed"|"renamed"|"guild"|"unconfirmed"
 ---@field nicknameAside string? small text right after the nickname, with its colour codes
+---@field openRequest boolean? my guild asked the person something not done yet (Guild tab, trusted ranks)
 ---@field characterCount integer
 ---@field lastSeen number? seconds, from time()
 ---@field online boolean
@@ -109,6 +110,7 @@ end
 ---@field id string
 ---@field note string? my note about the person
 ---@field claims WhosWho.PlayerClaim[]? players declaring characters of my guild's identity, for an officer to answer (Guild tab)
+---@field requests WhosWho.ShownGuildRequest[]? my guild's requests to the person (Guild tab, trusted ranks)
 ---@field changes "mine"|"guild"|nil what the panel changes: my nickname, note and Forget (People tab), the guild's nickname and Unlink (Guild tab, an officer on my guild's identity), or nothing
 ---@field characters WhosWho.PersonDetailCharacter[] in the order shown
 
@@ -185,11 +187,34 @@ function Browser:SetPerson(person)
         detail.MoveButton:SetWidth(detail.MoveButton:GetTextWidth() + 40)
     end
 
-    -- Without the note or the answer, the characters take the panel down to its bottom.
+    -- The guild's requests, at the bottom from the last one up.
+    local requests = person.requests or {}
+    detail.RequestsHeading:SetShown(requests[1] ~= nil)
+    local above
+    for i = #requests, 1, -1 do
+        local line = self.requestLine(i)
+        line:ClearAllPoints()
+        if above then
+            line:SetPoint("BOTTOMLEFT", above, "TOPLEFT", 0, 4)
+            line:SetPoint("BOTTOMRIGHT", above, "TOPRIGHT", 0, 4)
+        else
+            line:SetPoint("BOTTOMLEFT", DETAIL_PADDING, DETAIL_PADDING)
+            line:SetPoint("BOTTOMRIGHT", -8, DETAIL_PADDING)
+        end
+        line:SetRequest(requests[i])
+        line:Show()
+        above = line
+    end
+    for i = #requests + 1, #self.requestLines do self.requestLines[i]:Hide() end
+    if above then detail.RequestsHeading:SetPoint("BOTTOMLEFT", above, "TOPLEFT", 0, 4) end
+
+    -- Without the note, the answer or the requests, the characters take the panel down to its bottom.
     if mine then
         self.charactersBox:SetPoint("BOTTOM", detail.NoteHeading, "TOP", 0, 16)
     elseif claims then
         self.charactersBox:SetPoint("BOTTOM", detail.Claims, "TOP", 0, 16)
+    elseif above then
+        self.charactersBox:SetPoint("BOTTOM", detail.RequestsHeading, "TOP", 0, 16)
     else
         self.charactersBox:SetPoint("BOTTOM", detail, "BOTTOM", 0, DETAIL_PADDING)
     end
@@ -292,7 +317,9 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
         -- The nickname keeps its width; the text after it takes what is left before the columns.
         local nameSpace = listBox:GetWidth() - NAME_LEFT - columnsWidth - 4
         row.Nickname:SetWidth(math.min(row.Nickname:GetUnboundedStringWidth(), nameSpace))
-        row.NicknameAside:SetText(entry.nicknameAside or "")
+        local requestMarkup = entry.openRequest and Glyphs.Markup(Glyphs.Request) or nil
+        row.NicknameAside:SetText(requestMarkup and entry.nicknameAside and requestMarkup .. " " .. entry.nicknameAside
+            or requestMarkup or entry.nicknameAside or "")
 
         row.Characters:SetText(tostring(entry.characterCount))
         if entry.online then
@@ -396,6 +423,46 @@ function PersonBrowser.Create(panel, listTop, listBottom, tab)
     detail.Claims:SetPoint("BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING + 30)
     detail.Claims:SetJustifyH("LEFT")
     detail.claimRegions = { detail.Claims, detail.MoveButton, detail.KeepApartButton }
+
+    -- My guild's requests to the person, for the trusted ranks, where the note is in the People tab: each with what was
+    -- asked, who asked and Dismiss.
+    detail.RequestsHeading = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    detail.RequestsHeading:SetText(L["Requests"])
+    browser.requestLines = {}
+
+    ---@param index integer
+    ---@return Frame
+    function browser.requestLine(index)
+        if browser.requestLines[index] then return browser.requestLines[index] end
+        local line = CreateFrame("Frame", nil, detail)
+        line:SetHeight(30)
+        line.Glyph = createGlyph(line, SMALL_GLYPH_SIZE)
+        line.Glyph:SetPoint("TOPLEFT", 0, -2)
+        line.DismissButton = CreateFrame("Button", nil, line, "UIPanelButtonTemplate")
+        line.DismissButton:SetText(L["Dismiss"])
+        line.DismissButton:SetSize(line.DismissButton:GetTextWidth() + 30, 20)
+        line.DismissButton:SetPoint("RIGHT")
+        line.What = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        line.What:SetPoint("TOPLEFT", line.Glyph, "TOPRIGHT", 4, 0)
+        line.What:SetPoint("RIGHT", line.DismissButton, "LEFT", -6, 0)
+        line.What:SetJustifyH("LEFT")
+        line.What:SetWordWrap(false)
+        line.AskedBy = line:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        line.AskedBy:SetPoint("TOPLEFT", line.What, "BOTTOMLEFT", 0, -3)
+        line.AskedBy:SetPoint("RIGHT", line.DismissButton, "LEFT", -6, 0)
+        line.AskedBy:SetJustifyH("LEFT")
+        line.AskedBy:SetWordWrap(false)
+        ---@param request WhosWho.ShownGuildRequest
+        function line:SetRequest(request)
+            setGlyph(self.Glyph, ns.GuildRequests.Glyph(request))
+            self.What:SetText(ns.GuildRequests.What(request))
+            self.AskedBy:SetText(ns.GuildRequests.AskedBy(request))
+            self.DismissButton:SetScript("OnClick", function() ns.GuildRequests.Dismiss(request) end)
+        end
+        if skin then skin.Button(line.DismissButton) end
+        browser.requestLines[index] = line
+        return line
+    end
 
     local charactersBox = CreateFrame("Frame", nil, detail, "WowScrollBoxList")
     charactersBox:SetPoint("TOPLEFT", detail.CharactersHeading, "BOTTOMLEFT", 0, -4)

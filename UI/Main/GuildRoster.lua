@@ -140,6 +140,84 @@ local function ownMatchesSearch(record, text)
     return false
 end
 
+-- Requests ---------------------------------------------------------------------------------------
+
+---A request of my guild to a member, as the trusted ranks see it.
+---@class WhosWho.ShownGuildRequest
+---@field clubId integer
+---@field id string the member's identity ID
+---@field kind "nickname"|"main"
+---@field member string the member's nickname
+---@field asked string what was asked, with its colour codes
+---@field now string? what the member shows now, with its colour codes; nil once done
+---@field by string the nickname of the officer who asked
+---@field at integer server time when it was asked
+---@field done boolean
+
+-- The kinds this version shows, in their order.
+local REQUEST_KINDS = { "nickname", "main" }
+
+-- A character of the person in its class colour: as I hold it, otherwise as its record lists it.
+local function characterName(person, guid)
+    local character = person.chars[guid] or person.signedRecord.chars[guid]
+    return character and Lists.ClassColoredName(character.name, character.classID) or ""
+end
+
+-- The requests of my guild's record about a member whose record I hold, done when the member shows what was asked.
+---@return WhosWho.ShownGuildRequest[]
+local function requestsOf(clubId, id)
+    local guildRecord, person = ns.GuildRecord.Held(clubId, id), People.Get(id)
+    local requests = {}
+    if not (guildRecord and guildRecord.requests and person and person.signedRecord) then return requests end
+    for _, kind in ipairs(REQUEST_KINDS) do
+        local request = guildRecord.requests[kind]
+        if request then
+            local by = request.by == Identity.Id() and Identity.Nickname() or People.Nickname(request.by)
+            local shown = {
+                clubId = clubId, id = id, kind = kind, member = People.Nickname(id), at = request.at,
+                by = by or L["An officer"],
+            }
+            if kind == "nickname" then
+                local nickname = People.IdentityNickname(id)
+                shown.done = nickname == request.value
+                shown.asked = L["Nickname %s"]:format(HIGHLIGHT_FONT_COLOR:WrapTextInColorCode(request.value))
+                shown.now = not shown.done and nickname or nil
+            else
+                shown.done = person.main == request.value
+                shown.asked = L["Main %s"]:format(characterName(person, request.value))
+                shown.now = not shown.done and characterName(person, person.main) or nil
+            end
+            requests[#requests + 1] = shown
+        end
+    end
+    return requests
+end
+
+---Every request of my guild, the ones not done first, then the most recent first; nil outside the trusted ranks.
+---@return WhosWho.ShownGuildRequest[]?
+function GuildRoster.AllRequests()
+    if not ns.Protocol.CanChangeGuildRecords() then return nil end
+    local clubId = Identity.GuildId(UnitGUID("player"))
+    local requests = {}
+    for id in pairs(ns.data.guildRecords[clubId] or {}) do
+        for _, request in ipairs(requestsOf(clubId, id)) do requests[#requests + 1] = request end
+    end
+    table.sort(requests, function(a, b)
+        if a.done ~= b.done then return not a.done end
+        if a.at ~= b.at then return a.at > b.at end
+        return a.id .. a.kind < b.id .. b.kind
+    end)
+    return requests
+end
+
+-- Whether a member has a request not done yet, for the trusted ranks.
+local function hasOpenRequest(clubId, id)
+    for _, request in ipairs(requestsOf(clubId, id)) do
+        if not request.done then return true end
+    end
+    return false
+end
+
 -- Rows -------------------------------------------------------------------------------------------
 
 ---A row of my guild's list: a person's row, with the member it shows in the game's guild window.
@@ -161,6 +239,7 @@ end
 ---@return WhosWho.GuildCounts counts over the whole roster, the search left aside
 function GuildRoster.Entries(text, members)
     local onlineGuids = ns.Scopes.OnlineGuids()
+    local trusted, clubId = ns.Protocol.CanChangeGuildRecords(), Identity.GuildId(UnitGUID("player"))
     local ownRecord = ownGuildRecord()
     local ownMainGuid = ns.Record.ShownMain(ownRecord, ownRecord.guild.id)
     local entries, counts = {}, { main = 0, alt = 0, unknown = 0 }
@@ -192,6 +271,7 @@ function GuildRoster.Entries(text, members)
                 counts.main = counts.main + 1
                 if Lists.MatchesSearch(person, text) then
                     entry = PersonBrowser.ListEntry(person, onlineGuids)
+                    entry.openRequest = trusted and hasOpenRequest(clubId, person.id)
                     -- The nickname mine replaces, after mine.
                     local baseNickname = PersonBrowser.BaseNickname(person)
                     entry.nicknameAside = baseNickname and GRAY_FONT_COLOR:WrapTextInColorCode(baseNickname)
@@ -262,6 +342,10 @@ function GuildRoster.Detail(id)
     local guildIdentity = person.madeByGuild ~= nil and person.madeByGuild == clubId
     detail.changes = guildIdentity and ns.Protocol.CanChangeGuildRecords() and "guild" or nil
     if detail.changes == "guild" then detail.claims = playerClaims(clubId, id) end
+    if ns.Protocol.CanChangeGuildRecords() then
+        local requests = requestsOf(clubId, id)
+        detail.requests = requests[1] and requests or nil
+    end
     return detail
 end
 

@@ -288,6 +288,24 @@ L["%s asks you to make %s your main in the guild."] = true
 L["Now: %s. Only this guild's members see it."] = true
 L["Accept"] = true
 L["Edit…"] = true
+L["Request"] = true
+L["The guild asked this member for a nickname or a main, not done yet."] = true
+L["Done"] = true
+L["The member did what the guild asked."] = true
+L["Requests"] = true
+L["Requests (%d)"] = true
+L["No requests."] = true
+L["Dismiss"] = true
+L["Member"] = true
+L["Asked"] = true
+L["Now"] = true
+L["Asked by"] = true
+L["Nickname %s"] = true
+L["Main %s"] = true
+L["now %s"] = true
+L["done"] = true
+L["Asked by %s, %s ago"] = true
+L["%s, %s ago"] = true
 
 -- Guild tab
 L["Requires linking:"] = true

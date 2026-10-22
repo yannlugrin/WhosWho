@@ -52,6 +52,12 @@ Glyphs.Character = {
 
 Glyphs.Main = { texture = Glyphs.CROWN_TEXTURE, label = L["Main"] }
 
+---A request of my guild to a member, not done yet, then done (for the trusted ranks).
+Glyphs.Request = { texture = PATH .. "Speech", color = ORANGE_FONT_COLOR, label = L["Request"],
+    text = L["The guild asked this member for a nickname or a main, not done yet."] }
+Glyphs.RequestDone = { texture = "Interface\\RaidFrame\\ReadyCheck-Ready", label = L["Done"],
+    text = L["The member did what the guild asked."] }
+
 ---The key under the People and Guild lists, in its order.
 ---@type WhosWho.Glyph[]
 Glyphs.Key = {

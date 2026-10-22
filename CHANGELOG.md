@@ -10,7 +10,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Updates**: once a session, Who's Who tells you in chat when another player's is a newer release than yours (any newer version while yours is a pre-release). You can turn it off in the settings, under Updates.
 - **`/ww status`** and the Diagnostic page show the newest Who's Who version another player's add-on announced this session.
 - **Guilds**: in My identity, "In my guilds" sets a nickname and a main for each guild your characters are in; only that guild's members see them.
-- **Guild requests**: the guild master and officers can suggest a nickname or a main to a member, from the right-click menu in the Guild tab; the member accepts, edits or refuses it.
+- **Guild requests**: the guild master and officers can suggest a nickname or a main to a member, from the right-click menu in the Guild tab; the member accepts, edits or refuses it. Officers see each request, and whether it's done, in the member's panel and in a Requests list, and dismiss it there.
 
 ### Changed
 
