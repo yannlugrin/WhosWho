@@ -13,6 +13,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **Guild requests**: the guild master and officers can suggest a nickname or a main to a member, from the right-click menu in the Guild tab; the member accepts, edits or refuses it. Officers see each request, and whether it's done, in the member's panel and in a Requests list, and dismiss it there.
 - **Guild invites**: from a character outside your guild, "Invitation…" on its line in My identity's "In my guilds" asks the guild's officers you know of to invite it (or whisper `ginv` to one); the officer is asked whether to invite it when another character of your identity is in the guild. The guild master or an officer turns it on in the guild's Who's Who settings.
 - **Nameplates**: a new setting shows the nickname above or below the name on friendly players' nameplates, outside dungeons and raids. It's off by default, and may not work with nameplate add-ons.
+- **Battle.net friends**: with the Friends scope, your Battle.net friends playing WoW: Forever share identities with you as your WoW friends do, whatever character or server they play.
 
 ### Changed
 

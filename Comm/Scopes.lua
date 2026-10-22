@@ -250,7 +250,78 @@ function Scopes.Friends()
     return friends
 end
 
+-- A Battle.net friend's character is addressed by a key of its own, "BN:<game account ID>", valid for the session: its
+-- name alone could be another character's on my ruleset.
+local BNET_KEY_PREFIX = "BN:"
+
+---A Battle.net friend playing my game (Forever) now, with the character the game gives for them.
+---@class WhosWho.BnetFriend
+---@field key string "BN:<game account ID>": how messages address them, in place of a name
+---@field gameAccountID integer
+---@field name string the character's
+---@field guid string the character's
+
+---My Battle.net friends playing Forever now. Empty while Battle.net is disconnected.
+---@return WhosWho.BnetFriend[]
+function Scopes.BnetFriends()
+    local friends = {}
+    if not BNConnected() then return friends end
+    for i = 1, BNGetNumFriends() do
+        local account = C_BattleNet.GetFriendAccountInfo(i)
+        local game = account and account.gameAccountInfo
+        local id, name, guid = game and game.gameAccountID, game and game.characterName, game and game.playerGuid
+        if id and name and guid and notSecret(id, name, guid, game.isOnline, game.clientProgram, game.wowProjectID)
+            and game.isOnline and game.clientProgram == BNET_CLIENT_WOW and game.wowProjectID == WOW_PROJECT_ID then
+            friends[#friends + 1] = { key = BNET_KEY_PREFIX .. id, gameAccountID = id, name = name, guid = guid }
+        end
+    end
+
+    return friends
+end
+
+-- The Battle.net friend a key addresses, playing Forever now; nil for a name, or a friend gone.
+---@return WhosWho.BnetFriend?
+local function bnetFriend(key)
+    if type(key) ~= "string" or key:sub(1, #BNET_KEY_PREFIX) ~= BNET_KEY_PREFIX then return nil end
+    for _, friend in ipairs(Scopes.BnetFriends()) do
+        if friend.key == key then return friend end
+    end
+    return nil
+end
+
+---The game account a message to that player goes to over Battle.net: one of my Battle.net friends' keys; nil for a
+---name.
+---@param name string
+---@return integer?
+function Scopes.BnetGameAccount(name)
+    local friend = bnetFriend(name)
+    return friend and friend.gameAccountID
+end
+
+---The key a message from that game account comes from (BN_CHAT_MSG_ADDON): one of my Battle.net friends playing Forever;
+---nil for another.
+---@param gameAccountID integer
+---@return string?
+function Scopes.BnetSender(gameAccountID)
+    for _, friend in ipairs(Scopes.BnetFriends()) do
+        if friend.gameAccountID == gameAccountID then return friend.key end
+    end
+    return nil
+end
+
+---The name of the character that sent a message: the sender's name, or, for a Battle.net friend's key, their
+---character's.
+---@param sender string
+---@return string
+function Scopes.SenderName(sender)
+    local friend = bnetFriend(sender)
+    return friend and friend.name or sender
+end
+
+-- The GUID of a WoW friend, or of the character a Battle.net friend's key addresses.
 local function friendGuid(name)
+    local friend = bnetFriend(name)
+    if friend then return friend.guid end
     local info = C_FriendList.GetFriendInfo(name)
     local guid = info and info.guid
     return guid and notSecret(guid) and guid or nil
@@ -423,7 +494,8 @@ function Scopes.ForgetWhispers()
 end
 
 ---The GUID of an add-on message's sender, whatever channel it came on, from what that player is to me: the guild
----roster, the group units, my friend list, then the saved whispers within the whisper window. Names match exactly.
+---roster, the group units, my friend list (a Battle.net friend's key: their character), then the saved whispers within
+---the whisper window. Names match exactly.
 ---@param name string "First Surname", as the add-on message gives it
 ---@return string? guid
 function Scopes.SenderGuid(name)
@@ -695,7 +767,7 @@ local function allows(name, withoutGuildRule)
     local guildOn = Scopes.Get("guild") or not withoutGuildRule
     if guildOn and Scopes.SharesWithGuild() and guildMember(name) then return true end
     if inGuildInviteExchange(name) then return true end
-    if friends and C_FriendList.GetFriendInfo(name) then return true end
+    if friends and (C_FriendList.GetFriendInfo(name) or bnetFriend(name)) then return true end
     if Scopes.Get("group") and groupMemberGuid(name) then return true end
     if whispersOn then
         local _, whisper = findWhisper(name)
@@ -845,7 +917,8 @@ function Scopes.GroupChannel()
     return IsInRaid() and "RAID" or "PARTY"
 end
 
----Whether that player is my WoW friend and the Friends scope is on: my announcements to my friends reach it.
+---Whether that player is my WoW friend, or a Battle.net friend's key, and the Friends scope is on: my announcements to
+---my friends reach it.
 ---@param name string
 ---@return boolean
 function Scopes.FriendReaches(name)
@@ -894,7 +967,8 @@ end
 
 -- The member channels (GUILD, PARTY or RAID); in place of GUILD while my messages on it reach no one, one message to
 -- each online guild member that the group channel does not reach; then one message to each online friend that no
--- member channel reaches.
+-- member channel reaches, and one over Battle.net to each Battle.net friend playing Forever that nothing else reaches
+-- (the same character in my guild, group or friend list).
 ---@return WhosWho.Audience
 local function membersAndFriends()
     local memberChannels, guildMembers, names = {}, {}, {}
@@ -908,10 +982,17 @@ local function membersAndFriends()
     end
 
     if Scopes.Get("friends") and not guildOnly() then
+        local reached = {}
         for _, friend in ipairs(Scopes.Friends()) do
+            if friend.connected then reached[friend.guid] = true end
             if friend.connected and not Scopes.GuildReaches(friend.name) and not Scopes.GroupReaches(friend.name) then
                 names[#names + 1] = friend.name
             end
+        end
+        for _, friend in ipairs(Scopes.BnetFriends()) do
+            local inGuild = Scopes.GuildReaches(friend.name) and guildMemberGuid(friend.name) == friend.guid
+            local inGroup = Scopes.GroupReaches(friend.name) and groupMemberGuid(friend.name) == friend.guid
+            if not (reached[friend.guid] or inGuild or inGroup) then names[#names + 1] = friend.key end
         end
     end
 

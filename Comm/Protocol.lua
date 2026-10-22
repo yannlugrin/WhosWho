@@ -87,14 +87,42 @@ end
 -- last message the other players get from me.
 local loggingOut = false
 
+-- Battle.net carries a message whole, up to this many bytes: no splitting as on the add-on channel.
+local BNET_MAX_BYTES = 4078
+
+-- A message to a Battle.net friend's game account (Scopes.BnetGameAccount), not throttled: whole, or not at all when too
+-- long. Whether it left.
+local function sendOverBnet(message, gameAccountID)
+    if #message > BNET_MAX_BYTES then
+        Diagnostic.Print(("Not sent over Battle.net: %d bytes"):format(#message))
+        return false
+    end
+
+    C_BattleNet.SendGameData(gameAccountID, PREFIX, message)
+    return true
+end
+
+-- A whisper to a Battle.net friend's key goes over Battle.net.
 local function sendQueued(message, channel, name)
     if loggingOut then return end
     Diagnostic.MessageSent(message, channel, name)
+    local gameAccountID = channel == "WHISPER" and Scopes.BnetGameAccount(name)
+    if gameAccountID then
+        sendOverBnet(message, gameAccountID)
+        return
+    end
+
     Protocol:SendCommMessage(PREFIX, message, channel, name)
 end
 
 local function sendNow(message, channel, name)
     Diagnostic.MessageSent(message, channel, name)
+    local gameAccountID = channel == "WHISPER" and Scopes.BnetGameAccount(name)
+    if gameAccountID then
+        sendOverBnet(message, gameAccountID)
+        return
+    end
+
     C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
 end
 
@@ -287,6 +315,11 @@ local function sendRecord(message, channel, name, key)
     local delivery = { revision = Identity.Revision(), key = key }
     deliveries[name or channel] = delivery
     Diagnostic.MessageSent(message, channel, name)
+    local gameAccountID = channel == "WHISPER" and Scopes.BnetGameAccount(name)
+    if gameAccountID then
+        if sendOverBnet(message, gameAccountID) then delivery.leftAt = GetTime() end
+        return
+    end
     Protocol:SendCommMessage(PREFIX, message, channel, name, "NORMAL", function(_, sent, total)
         if sent >= total then delivery.leftAt = GetTime() end
     end)
@@ -512,9 +545,7 @@ local RECORDS = { requests = recordRequests, encode = Codec.RecordRequest }
 local GUILD_RECORDS = { requests = guildRecordRequests, encode = Codec.GuildRecordRequest }
 
 local function sendRequest(message, name)
-    if loggingOut then return end
-    Diagnostic.MessageSent(message, "WHISPER", name)
-    Protocol:SendCommMessage(PREFIX, message, "WHISPER", name)
+    sendQueued(message, "WHISPER", name)
 end
 
 local function requestRecord(id, name)
@@ -1011,8 +1042,9 @@ end
 
 -- Whether the player sent its record from one of its own characters: the sender's name is one the record lists.
 local function sentByOwner(signedRecord, sender)
+    local name = Scopes.SenderName(sender)
     for _, character in pairs(signedRecord.chars) do
-        if character.name == sender then return true end
+        if character.name == name then return true end
     end
     return false
 end
@@ -1354,6 +1386,17 @@ local function guidsOf(friends)
     local guids = {}
     for _, friend in ipairs(friends) do guids[friend.guid] = true end
     return guids
+end
+
+---BN_CHAT_MSG_ADDON: a message from a Battle.net friend's game account, taken as a whisper from their key
+---(Scopes.BnetSender); one from a game account no friend of mine plays Forever on is dropped.
+---@param prefix string
+---@param text string
+---@param gameAccountID integer
+function Protocol.BnetMessageReceived(prefix, text, gameAccountID)
+    if prefix ~= PREFIX or issecretvalue(gameAccountID) then return end
+    local key = Scopes.BnetSender(gameAccountID)
+    if key then receive(prefix, text, "WHISPER", key) end
 end
 
 ---Calls the listener once a session, at the first HELLO whose version is an update for mine: newer, and a release

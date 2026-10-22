@@ -113,6 +113,20 @@ local function deliver(message)
     elseif message.distribution == "WHISPER" then
         -- Offline: lost without a word.
         receivers[1] = online(message.target)
+    elseif message.distribution == "BNET" then
+        -- To a game account: the character its account plays now, which gets BN_CHAT_MSG_ADDON with the sender's.
+        for _, c in pairs(world.characters) do
+            local session = c.session
+            if session and session.online and session.account.gameAccountID == message.target then
+                for _, frame in ipairs(session.frames) do
+                    if frame.events.BN_CHAT_MSG_ADDON and frame.scripts.OnEvent then
+                        frame.scripts.OnEvent(frame, "BN_CHAT_MSG_ADDON", "WhosWho", message.text, "WHISPER",
+                            message.from.account.gameAccountID)
+                    end
+                end
+            end
+        end
+        return
     end
     for _, session in ipairs(receivers) do
         if session.comm then session.comm("WhosWho", message.text, message.distribution, sender.name) end
@@ -276,6 +290,31 @@ local function newEnvironment(session)
     end
 
     env.IsInGuild = function() return c.guild ~= nil end
+    -- Battle.net: the accounts in this account's bnetFriends, each with the character it plays now, if any.
+    env.BNET_CLIENT_WOW, env.WOW_PROJECT_ID = "WoW", 18
+    env.BNConnected = function() return true end
+    env.BNGetNumFriends = function() return #(account.bnetFriends or {}) end
+    env.C_BattleNet = {
+        GetFriendAccountInfo = function(i)
+            local friend = (account.bnetFriends or {})[i]
+            if not friend then return nil end
+            local playing
+            for _, other in pairs(world.characters) do
+                if other.session and other.session.online and other.session.account == friend then playing = other end
+            end
+            return {
+                battleTag = friend.name .. "#1234",
+                gameAccountInfo = playing and {
+                    isOnline = true, clientProgram = "WoW", wowProjectID = 18, characterName = playing.name,
+                    playerGuid = playing.guid, gameAccountID = friend.gameAccountID,
+                } or { isOnline = false },
+            }
+        end,
+        SendGameData = function(gameAccountID, _, text)
+            send(session, text, "BNET", gameAccountID)
+            return 0
+        end,
+    }
     env.CanGuildInvite = function() return c.guild ~= nil and (c.rankIndex or 5) <= 1 end
     env.GetGuildInfo = function() return c.guild and "Guild " .. c.guild or nil end
     env.C_EventUtils = { IsEventValid = function() return true end }
@@ -371,8 +410,10 @@ local function newEnvironment(session)
     return env
 end
 
+local nextGameAccountID = 0
 local function account(name)
-    return { name = name }
+    nextGameAccountID = nextGameAccountID + 1
+    return { name = name, gameAccountID = nextGameAccountID }
 end
 
 -- how: nil for a login long after the account's last logout, which is then forgotten (the world's clock does not move
@@ -2901,6 +2942,49 @@ do
         "the officer confirms the character by the GUID it gave, and can be asked")
     logout(mox)
     logout(nedOnThird)
+end
+
+-- Battle.net friends ------------------------------------------------------------------------------------
+
+-- Quin and Rae are Battle.net friends, nothing else: no guild, group or WoW friend list in common, and their characters
+-- live on servers that whispers don't cross. Battle.net carries their messages, and each confirms the other's character
+-- by the GUID the game gives for a Battle.net friend.
+do
+    local quinAccount, raeAccount = account("Quin"), account("Rae")
+    quinAccount.bnetFriends, raeAccount.bnetFriends = { raeAccount }, { quinAccount }
+    local quinMain = character("Quin Main", "Player-2-00040001", MAGE)
+    local raeMain = character("Rae Main", "Player-3-00040101", PRIEST)
+    local quin = login(quinAccount, quinMain)
+    slash(quin, "link")
+    quin.ns.Identity.SetNickname("Quinny")
+    clearLog()
+    local rae = login(raeAccount, raeMain)
+    slash(rae, "link")
+    run(60)
+    local quinId = quin.ns.Identity.Id()
+    check(sent({ from = "Rae Main", type = "ANNOUNCE", distribution = "BNET" }) >= 1
+        and sent({ from = "Quin Main", type = "GET", distribution = "BNET" }) >= 1
+        and sent({ from = "Quin Main", type = "REC", distribution = "BNET" }) >= 1
+        and sent({ distribution = "WHISPER" }) == 0,
+        "Battle.net friends exchange announcements, GETs and RECs over Battle.net, never by whisper")
+    check(state(rae, quinMain.guid) == "confirmed" and state(quin, raeMain.guid) == "confirmed"
+        and rae.ns.People.Nickname(quinId) == "Quinny",
+        "each confirms the other's character, by the GUID the game gives for a Battle.net friend")
+
+    -- Quin turns the Friends scope off: a change of revision no longer goes to Rae.
+    quin.ns.settings.scopes.friends = false
+    clearLog()
+    quin.ns.Identity.SetNickname("Quin")
+    run(60)
+    check(sent({ from = "Quin Main", distribution = "BNET" }) == 0, "without the Friends scope, nothing over Battle.net")
+    quin.ns.settings.scopes.friends = true
+
+    -- A Battle.net game account that isn't a friend's: its message is dropped.
+    clearLog()
+    rae.ns.Protocol.BnetMessageReceived("WhosWho", "2 HELLO -", 9999)
+    check(rae.ns.Scopes.BnetSender(9999) == nil, "a message from a game account no friend plays on is dropped")
+    logout(quin)
+    logout(rae)
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

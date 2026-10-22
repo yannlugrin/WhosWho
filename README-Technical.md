@@ -2,7 +2,7 @@
 
 Architecture notes and contribution guidance for developers working on Who's Who. For end-user documentation, see [README.md](README.md).
 
-> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC), the guild settings (GSGET, GSET), enforced linking, the guild lists (GLGET, GLIST, relayed records), the guild records (GIGET, GIREC) and the UI are built, all but the UI tested offline; Battle.net and the Review tab are planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
+> **Status: in development.** The model layer (Core/), the signature verification queue, the comm protocol (announcements, GET, REC), the guild settings (GSGET, GSET), enforced linking, the guild lists (GLGET, GLIST, relayed records), the guild records (GIGET, GIREC) and the UI are built, all but the UI tested offline, and Battle.net friends share over Battle.net; the Review tab is planned. Parts marked *to verify in game* still need an in-game check. Update this file as each part is built.
 
 ## File Map
 
@@ -138,7 +138,7 @@ Implemented:
 Planned:
 
 - `PLAYER_ENTERING_WORLD`: pruning, throttled.
-- `BN_CHAT_MSG_ADDON`: protocol over Battle.net.
+- `BN_CHAT_MSG_ADDON`: a message from a Battle.net friend (`Protocol.BnetMessageReceived`), with the sender's game account in argument 4.
 
 ### Secret Values
 
@@ -287,7 +287,7 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 - Own `GUILD`, `PARTY` and self-`WHISPER` messages come back to the sender, so handlers must recognise and skip their own messages by content.
 
 - One prefix, `WhosWho`. AceComm handles splitting messages over 255 characters; ChatThrottleLib is the single throttled outgoing queue. Each client may send about 10 messages per prefix, then about 1 per second (whispers outside instances are exempt); sending too much data at once, even over several prefixes, can disconnect the client.
-- Battle.net is not built yet: AceComm cannot send over `BNSendGameData`, and no Battle.net friend has been seen in Forever yet. Every Battle.net path below (friends audience, sender lookup, `GET` and `REC`) waits for an in-game round trip.
+- **Battle.net**: a message to a Battle.net friend playing Forever goes through `C_BattleNet.SendGameData` (`BNSendGameData` no longer exists in Forever: the call fails silently) to their current game account, and arrives with `BN_CHAT_MSG_ADDON`; checked in game between two characters on different servers, which whispers don't cross. AceComm can't send over it, so `Protocol` sends it whole (`sendOverBnet`), not throttled, up to 4 078 bytes: every message to a friend fits (a `REC` is 2.5 KB at most for a real record); a longer one is not sent, and the diagnostic mode says so. Such a friend's character is addressed by a key of its own, `BN:<game account ID>`, valid for the session, wherever a name would be (requesters, deliveries, announcements answered): its name alone could be another character's on my ruleset. A message from a game account no Battle.net friend of mine plays Forever on is dropped. The protocol over Battle.net is *to verify in game* with a friend running this version.
 - Payloads: LibSerialize then LibDeflate, encoded for the add-on channel. Announcements and `GET`s stay short plain text so they fit in one message.
 - Unpacking a payload costs about 41 ms per KB received at worst in game (LibDeflate unpacks without limit: 2.6 KB became 1 MB in 106 ms, 10.4 KB 4 MB in 423 ms). So `Protocol` reads the type and the header first (`Codec.Header`) and unpacks only a `REC`, `GSET`, `GLIST` or `GIREC` from a sender it takes that type from (`PAYLOAD_SENDERS`: a `REC` from a channel I share on, settings from a member of my guild, a list or a guild record from a member while I exchange lists), and only when its header says it is worth it (`PAYLOAD_WANTED`): a `REC` of an identity revision I would take, settings, a list or a guild record of my current guild, settings or a guild record newer than the one I hold, a list whose hash I haven't taken and isn't mine; the diagnostic mode prints the others. `Codec` then refuses, before unpacking, a payload longer than its limit: 34 KB for a `REC` or a `GSET`: the limit of their signed bytes (see Records) and 6% more, since a payload may be slightly larger than its signed bytes (0.4% for incompressible content); 128 KB for a `GLIST`. The largest legitimate ones, measured with the libraries: a `REC` of 50 characters with long multi-byte names and guild markers, 2 470 bytes; a `GSET`, 232; a `GLIST` of 2 000 identities, 90 731. A limit raised later is refused by every older client. AceComm still puts together a message of any length before it reaches `Protocol`.
 - **The message queue**: AceComm hands each message over as it arrives, several in one frame when several senders' messages land together. `Protocol` makes the checks above at arrival, then queues the message; a frame's `OnUpdate` handles the queue in arrival order, each message unpacked and handled in its own coroutine, so a long hash inside one (a received guild list's: about 250 ms for 1 000 entries) yields along the way (see Signatures). In each frame it handles the messages up to the first payload (a type `PAYLOAD_SENDERS` lists): unpacking one can't be spread over frames (a `GLIST` of 1 000 entries, about 30 ms in game), so payloads go one per frame, and the messages after one wait their turn, their order kept. While I am in combat (`UnitAffectingCombat`) the queue waits, a message paused in a hash too, and starts again at `PLAYER_REGEN_ENABLED`. A message waiting through a fight longer than a request's delay (`REQUEST_DELAY_SECONDS`) may be asked for again; the copy is not newer and is dropped. The queue is not saved: what is left at logout is lost.
@@ -298,7 +298,7 @@ Measured on build 1.60.1. Forever has no group finder, so every group is a home 
 |---|---|---|
 | `HELLO` | the sender's add-on version | Before the first message on each channel in a session; alone from a character sharing nothing with its guild, to that guild; back to the sender of a `HELLO` with an older version (see Hello) |
 | `ANNOUNCE` | identity ID, revision, the sending character's level, whether the sender answers a `GET` now, whether the sender wants the receiver's announcement, the revision of the guild list the sender holds, the revision of the guild settings the sender holds | At login, level-up and logout, and after a change of revision, from a linked character, to the audiences of the enabled scopes; to the players a scope turned on, a group or guild joined or a friend added brings into them; to a player I whisper; in answer to an announcement or a `HELLO` that wants one (see Announcements) |
-| `GET` | 1 to 3 identity IDs | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (`BNSendGameData` to a Battle.net friend); to members holding a guild list, for the identities it has newer (see Guild Lists) |
+| `GET` | 1 to 3 identity IDs | To the sender of an announcement with a newer revision that accepts a `GET`, by whisper (over Battle.net to a Battle.net friend's key); to members holding a guild list, for the identities it has newer (see Guild Lists) |
 | `REC` | header: identity ID, revision; the signed identity record | In answer to `GET`s (see Sending a Record) |
 | `NOID` | nothing | From a character unlinked from my identity, in place of each of its announcements (see Removals) |
 | `GSGET` | nothing | To one member of my guild who announced newer guild settings, by whisper (see Guild Settings) |
@@ -313,7 +313,7 @@ The 30 and 60 second values below are starting values, to adjust in game.
 
 ### Channels
 
-A message for several players goes out on the cheapest channel that reaches them, in this order: `GUILD`, then `PARTY` or `RAID`, then one message each (`WHISPER`, or `BNSendGameData` to a Battle.net friend). A member channel (`GUILD`, `PARTY`, `RAID`: one message reaches every member) is used only when its scope is enabled, since it reaches every member of that audience: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope. A player reached by a member channel gets no individual copy: a friend who is also a guild member counts as a guild member. Until its next login, a character that joined its guild sends nothing on `GUILD`: one message to each online member takes its place (see Workarounds).
+A message for several players goes out on the cheapest channel that reaches them, in this order: `GUILD`, then `PARTY` or `RAID`, then one message each (`WHISPER`, or over Battle.net to a Battle.net friend's key). A member channel (`GUILD`, `PARTY`, `RAID`: one message reaches every member) is used only when its scope is enabled, since it reaches every member of that audience: `GUILD` with the Guild scope, `PARTY` or `RAID` with the Group scope. A player reached by a member channel gets no individual copy: a friend who is also a guild member counts as a guild member. Until its next login, a character that joined its guild sends nothing on `GUILD`: one message to each online member takes its place (see Workarounds).
 
 ### Linked and Anonymous Characters
 
@@ -377,7 +377,7 @@ The sender of an add-on message is its whole name, authenticated by the server; 
 | Group | the group's units: whole name from `UnitFullName`, GUID from `UnitGUID` (checked in game) |
 | Friends | `C_FriendList.GetFriendInfo(name).guid` (*to verify in game*) |
 | Whispers | the saved whispers within the whisper window, sent or received, of the ruleset I play (other player's name and GUID from the whisper chat events, arguments 2 and 12; see Scopes) |
-| Battle.net friends | `C_BattleNet.GetGameAccountInfoByID(id).playerGuid` (*to verify in game*) |
+| Battle.net friends | the `playerGuid` of the friend's `gameAccountInfo` (`C_BattleNet.GetFriendAccountInfo`), for a sender's key (checked in game: readable in Forever) |
 
 Names match exactly, never by spelling variants; the roster spells them exactly like the add-on sender (checked in game). Without a match there is no confirmation; the record is still fetched.
 
@@ -409,7 +409,7 @@ A requesting character found only through a person is recognised by its whole na
 Audiences per scope:
 
 - **Guild**: `GUILD` channel.
-- **Friends**: `WHISPER` to online WoW friends; `BNSendGameData` to Battle.net friends in Forever (*to verify in game*). Battle.net IDs are used only locally to address the message and are never part of a payload.
+- **Friends**: `WHISPER` to online WoW friends; over Battle.net to each Battle.net friend playing Forever (`Scopes.BnetFriends`: `clientProgram` WoW, `wowProjectID` equal to mine) that my guild, group or WoW friend list doesn't reach with the same character. Battle.net IDs are used only locally to address the message and are never part of a payload.
 - **Whispers**: one announcement to the player I whisper, and the broadcasts to one character of each person I whispered this session, or, at login, in the 30 minutes before the previous logout (see Announcements). A player is allowed while whispered within the whisper window.
 - **Group**: `PARTY` or `RAID` channel, whichever the player is in (checked in game).
 - **Selected** (planned, not a priority): `WHISPER` to players I choose one by one; an alternative to Whispers and Group.
