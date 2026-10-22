@@ -150,10 +150,29 @@ local function addGuildSection(root, guid, character, tab)
             entries[#entries + 1] = { L["Unlink"], function() dialogs.ConfirmGuildUnlink(clubId, id, guid) end }
         end
     end
+    -- A player who shares an identity: the guild asks for a nickname, or for one of their other characters in it as main.
+    local mains = {}
+    if person and person.signedRecord then
+        local id = person.id
+        entries[#entries + 1] = { L["Ask for a nickname…"], function() dialogs.AskGuildNickname(clubId, id) end }
+        for otherGuid, other in pairs(person.chars) do
+            if other.guild == clubId and otherGuid ~= person.main then
+                mains[#mains + 1] = { name = other.name, classID = other.classID, guid = otherGuid }
+            end
+        end
+        table.sort(mains, function(a, b) return a.name < b.name end)
+    end
     if not entries[1] then return end
     root:CreateDivider()
     root:CreateTitle(L["For the guild"])
     for _, entry in ipairs(entries) do root:CreateButton(entry[1], entry[2]) end
+    if mains[1] then
+        local askMain = root:CreateButton(L["Ask for a main"])
+        for _, main in ipairs(mains) do
+            askMain:CreateButton(ns.Lists.ClassColoredName(main.name, main.classID),
+                function() dialogs.AskGuildMain(clubId, person.id, main.guid) end)
+        end
+    end
 end
 
 -- Opens a whisper to that player in the chat box, as the game's player menu does.

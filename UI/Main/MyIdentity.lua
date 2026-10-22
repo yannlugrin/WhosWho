@@ -441,12 +441,7 @@ function panel:SetGuilds(guilds)
         row.Nickname:SetFontObject(guild.nicknameSet and "GameFontHighlight" or "GameFontDisable")
         row.MainName:SetText(Lists.ClassColoredName(guild.mainName, guild.mainClassID))
         row.EditButton.tooltipTitle = L["Edit for %s"]:format(guildName)
-        row.EditButton:SetScript("OnClick", function()
-            local dialog = ns.IdentityDialogs.GuildEntry
-            dialog:SetGuild(guild.clubId, guild.name, ns.Identity.GuildNickname(guild.clubId), ns.Identity.Nickname(),
-                guild.characters, guild.mainGuid)
-            dialog:Show()
-        end)
+        row.EditButton:SetScript("OnClick", function() panel:EditGuild(guild.clubId) end)
         row:Show()
     end
     for i = #guilds + 1, #guildRows do guildRows[i]:Hide() end
@@ -521,6 +516,21 @@ local function ownGuilds()
         return a.clubId < b.clubId
     end)
     return guilds
+end
+
+---Opens the dialog setting my nickname and main in one of my characters' guilds.
+---@param clubId integer
+---@param nickname string? the nickname filled in; nil: mine there
+function panel:EditGuild(clubId, nickname)
+    for _, guild in ipairs(ownGuilds()) do
+        if guild.clubId == clubId then
+            local dialog = ns.IdentityDialogs.GuildEntry
+            dialog:SetGuild(guild.clubId, guild.name, nickname or ns.Identity.GuildNickname(clubId), ns.Identity.Nickname(),
+                guild.characters, guild.mainGuid)
+            dialog:Show()
+            return
+        end
+    end
 end
 
 ---Fills the panel from the identity, or shows the empty state while no character is linked.

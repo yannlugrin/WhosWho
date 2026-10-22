@@ -8,6 +8,8 @@ local L = ns.L
 ---@field LinkCharacter WhosWho.LinkCharacterDialog the first-login dialog once an identity exists
 ---@field GuildRule WhosWho.GuildRuleDialog my answer to a guild enforcing linking
 ---@field GuildEntry WhosWho.GuildEntryDialog my nickname and main in one guild
+---@field NicknameRequest WhosWho.GuildRequestDialog my guild asks me for a nickname
+---@field MainRequest WhosWho.GuildRequestDialog my guild asks me for a main
 local IdentityDialogs = {}
 ns.IdentityDialogs = IdentityDialogs
 
@@ -436,10 +438,90 @@ local function createGuildEntryDialog()
     return dialog
 end
 
+-- Guild requests -------------------------------------------------------------------------------
+
+-- What the members of my current guild see of me: my nickname there, and my main there.
+local function shownInGuild(clubId, ruleset)
+    local record = ns.Identity.UnsignedRecord(true, clubId, ruleset)
+    local mainGuid = ns.Record.ShownMain(record, clubId)
+    local main = ns.Identity.Characters()[mainGuid]
+    return ns.Record.ShownNickname(record, clubId) or main.name, mainGuid
+end
+
+---@param buttons { [1]: string, [2]: string }[] key and label, in order
+local function createGuildRequestDialog(buttons)
+    ---@class WhosWho.GuildRequestDialog: WhosWho.PromptDialog
+    ---@field AcceptButton Button
+    ---@field EditButton Button? the nickname's only
+    ---@field RefuseButton Button
+    local dialog = createDialog(WIDTH)
+    dialog.GuildName = addText(dialog, "GameFontNormalLarge")
+    dialog.Question = addText(dialog, "GameFontHighlight")
+    dialog.Now = addText(dialog, "GameFontDisableSmall")
+    addButtons(dialog, buttons)
+
+    -- Each answer is kept, so the request isn't asked again until an officer makes a newer one.
+    local function answered()
+        ns.Identity.AnswerRequest(dialog.clubId, dialog.kind, dialog.request.at)
+        dialog:Hide()
+    end
+    dialog.AcceptButton:SetScript("OnClick", function()
+        if dialog.kind == "nickname" then
+            ns.Identity.SetGuildNickname(dialog.clubId, dialog.request.value)
+        else
+            ns.Identity.SetGuildMain(dialog.request.value)
+        end
+        answered()
+    end)
+    dialog.RefuseButton:SetScript("OnClick", answered)
+    if dialog.EditButton then
+        -- The guild's dialog opens first: the next request waits until it is closed.
+        dialog.EditButton:SetScript("OnClick", function()
+            ns.Main.MyIdentity:EditGuild(dialog.clubId, dialog.request.value)
+            answered()
+        end)
+    end
+
+    ---@param clubId integer my current guild
+    ---@param ruleset WhosWho.Ruleset
+    ---@param kind "nickname"|"main"
+    ---@param request WhosWho.GuildRequest
+    function dialog:SetRequest(clubId, ruleset, kind, request)
+        self.clubId, self.kind, self.request = clubId, kind, request
+        local asker = NORMAL_FONT_COLOR:WrapTextInColorCode(ns.People.Nickname(request.by) or L["An officer"])
+        local nickname, mainGuid = shownInGuild(clubId, ruleset)
+        self.GuildName:SetText(("<%s>"):format(GetGuildInfo("player") or ""))
+        if kind == "nickname" then
+            self.Question:SetText(L["%s asks you to be shown as %s to the guild's members."]
+                :format(asker, NORMAL_FONT_COLOR:WrapTextInColorCode(request.value)))
+            self.Now:SetText(L["Now: %s. Only this guild's members see it."]:format(nickname))
+        else
+            local characters = ns.Identity.Characters()
+            local asked, main = characters[request.value], characters[mainGuid]
+            self.Question:SetText(L["%s asks you to make %s your main in the guild."]
+                :format(asker, ns.Lists.ClassColoredName(asked.name, asked.classID)))
+            self.Now:SetText(L["Now: %s. Only this guild's members see it."]
+                :format(ns.Lists.ClassColoredName(main.name, main.classID)))
+        end
+        layOut(self)
+    end
+
+    ns.Skin.Apply(function(S)
+        S.Shell(dialog)
+        S.CloseButton(dialog.CloseButton)
+        for _, button in ipairs(buttons) do S.Button(dialog[button[1]]) end
+    end)
+    return dialog
+end
+
 IdentityDialogs.NewIdentity = createNewIdentityDialog()
 IdentityDialogs.LinkCharacter = createLinkCharacterDialog()
 IdentityDialogs.GuildRule = createGuildRuleDialog()
 IdentityDialogs.GuildEntry = createGuildEntryDialog()
+IdentityDialogs.NicknameRequest = createGuildRequestDialog({
+    { "AcceptButton", L["Accept"] }, { "EditButton", L["Edit…"] }, { "RefuseButton", L["Refuse"] },
+})
+IdentityDialogs.MainRequest = createGuildRequestDialog({ { "AcceptButton", L["Accept"] }, { "RefuseButton", L["Refuse"] } })
 
 ---Closes both first-login dialogs, leaving the character unanswered.
 function IdentityDialogs.HideLinkPrompts()
@@ -509,6 +591,71 @@ guildRuleEvents:SetScript("OnEvent", function(_, event)
     end
 end)
 ns.GuildSettings.OnChanged(function() askGuildRule() end)
+
+-- My current guild's requests, asked one after the other, out of combat: at login, and when one arrives. Each is shown
+-- once a session; an answer keeps it from being asked again until a newer one.
+local REQUEST_KINDS = { "nickname", "main" }
+local shownRequests, requestWaitingForCombatEnd = {}, false
+
+-- Whether my guild's members already see what the request asks.
+local function requestMet(clubId, ruleset, kind, request)
+    local nickname, mainGuid = shownInGuild(clubId, ruleset)
+    if kind == "nickname" then return ns.Identity.GuildNickname(clubId) == request.value or nickname == request.value end
+    return mainGuid == request.value
+end
+
+-- The first request of my current guild I haven't answered, not shown this session, not met; a main asked must be one
+-- of my characters in the guild.
+local function pendingRequest()
+    local guid, id = UnitGUID("player"), ns.Identity.Id()
+    local clubId = IsInGuild() and ns.Identity.GuildId(guid)
+    local held = clubId and id and ns.GuildRecord.Held(clubId, id)
+    if not (held and held.requests and ns.Identity.LinkedCount() > 0) then return nil end
+    local ruleset = ns.Identity.Ruleset(guid)
+    for _, kind in ipairs(REQUEST_KINDS) do
+        local request = held.requests[kind]
+        local key = ("%d:%s:%d"):format(clubId, kind, request and request.at or 0)
+        if request and not shownRequests[key] and request.at > (ns.Identity.AnsweredRequestAt(clubId, kind) or 0)
+            and (kind ~= "main" or ns.Identity.GuildId(request.value) == clubId)
+            and not requestMet(clubId, ruleset, kind, request) then
+            return clubId, ruleset, kind, request, key
+        end
+    end
+    return nil
+end
+
+-- Shows the next request, unless another of my dialogs is open.
+local function askGuildRequest()
+    for _, dialog in ipairs({ IdentityDialogs.NicknameRequest, IdentityDialogs.MainRequest, IdentityDialogs.GuildRule,
+        IdentityDialogs.GuildEntry, IdentityDialogs.NewIdentity, IdentityDialogs.LinkCharacter }) do
+        if dialog:IsShown() then return end
+    end
+    local clubId, ruleset, kind, request, key = pendingRequest()
+    if not clubId then return end
+    if UnitAffectingCombat("player") then
+        requestWaitingForCombatEnd = true
+        return
+    end
+    requestWaitingForCombatEnd = false
+    shownRequests[key] = true
+    local dialog = kind == "nickname" and IdentityDialogs.NicknameRequest or IdentityDialogs.MainRequest
+    dialog:SetRequest(clubId, ruleset, kind, request)
+    dialog:Show()
+end
+
+local requestEvents = CreateFrame("Frame")
+-- My guild known, once the roster arrives.
+requestEvents:RegisterEvent("GUILD_ROSTER_UPDATE")
+requestEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+requestEvents:SetScript("OnEvent", function(_, event)
+    if event ~= "PLAYER_REGEN_ENABLED" or requestWaitingForCombatEnd then askGuildRequest() end
+end)
+-- A guild's record arriving changes the people.
+ns.People.OnChanged(askGuildRequest)
+for _, dialog in ipairs({ IdentityDialogs.NicknameRequest, IdentityDialogs.MainRequest, IdentityDialogs.GuildRule,
+    IdentityDialogs.GuildEntry, IdentityDialogs.NewIdentity, IdentityDialogs.LinkCharacter }) do
+    dialog:HookScript("OnHide", askGuildRequest)
+end
 
 ---Asks whether to link the character logged in. Without a main character, the identity starts with it. In a guild
 ---enforcing linking that I must answer, its dialog takes the place of this one.

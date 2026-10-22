@@ -1588,6 +1588,52 @@ for _, loginOrder in ipairs({ { 1, 2 }, { 2, 1 } }) do
         "at login, the former guild's record doesn't take it back, in either order")
 end
 
+-- Guild requests --------------------------------------------------------------------------------------------
+
+fresh()
+do
+    local GR, I = ns.GuildRecord, ns.Identity
+    local CLUB = 22835221
+    local A, O = string.rep("a", 64), string.rep("1", 64)
+    I.EnsureKeys()
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
+    I.Link(G1)
+    local function base()
+        return { v = GR.VERSION, guild = CLUB, id = A, chars = {}, signer = O, signerGuid = G1, rev = 1792000000,
+            sig = ("cd"):rep(64) }
+    end
+    local r = base()
+    r.requests = { nickname = { value = "Oswin", at = 1792000000, by = O }, main = { value = G2, at = 1792000000, by = O } }
+    check(GR.Validate(r), "the guild's record about a player holds its requests: a nickname, a main")
+    r.requests.role = { value = "healer", at = 1792000000, by = O }
+    check(GR.Validate(r), "a kind a later version adds is kept")
+    r = base(); r.requests = {}
+    check(select(2, GR.Validate(r)) == "requests", "an empty set of requests refused")
+    r = base(); r.requests = { nickname = { value = "", at = 1792000000, by = O } }
+    check(select(2, GR.Validate(r)) == "requests", "a nickname asked that isn't a name refused")
+    r = base(); r.requests = { main = { value = "Healz", at = 1792000000, by = O } }
+    check(select(2, GR.Validate(r)) == "requests", "a main asked that isn't a GUID refused")
+    r = base(); r.requests = { nickname = { value = "Oswin", at = 1792000000 } }
+    check(select(2, GR.Validate(r)) == "requests", "a request without who asked refused")
+    r = base(); r.id = "G3f9a1c207b4e5d61"; r.requests = { nickname = { value = "Oswin", at = 1792000000, by = O } }
+    check(select(2, GR.Validate(r)) == "requests", "a guild identity is asked nothing")
+
+    local asked = GR.Ask(CLUB, A, "nickname", "Oswin")
+    check(GR.Validate(asked) and asked.requests.nickname.value == "Oswin" and asked.requests.nickname.by == I.Id(),
+        "an officer's request is signed in the guild's record about the player")
+    local again = GR.Ask(CLUB, A, "nickname", "Oz")
+    check(again.requests.nickname.value == "Oz" and again.rev > asked.rev, "a new request of the same kind replaces it")
+    local both = GR.Ask(CLUB, A, "main", G2)
+    check(both.requests.nickname.value == "Oz" and both.requests.main.value == G2, "and keeps the other kind")
+
+    check(I.AnsweredRequestAt(CLUB, "nickname") == nil, "no request answered yet")
+    local revision = I.Revision()
+    I.AnswerRequest(CLUB, "nickname", 1792000005)
+    check(I.AnsweredRequestAt(CLUB, "nickname") == 1792000005 and I.Revision() == revision
+        and not I.HasGuildContent(CLUB) and I.UnsignedRecord(true, CLUB, NORMAL).guild.id == nil,
+        "an answer is kept on my side only: no revision, nothing sent")
+end
+
 if failures > 0 then
     print(("%d of %d checks FAILED"):format(failures, checks))
     os.exit(1)

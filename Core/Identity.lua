@@ -39,6 +39,7 @@ ns.Identity = Identity
 ---@class WhosWho.OwnGuildEntry
 ---@field main string? GUID of the character of mine in that guild it shows me under, as I chose
 ---@field nickname string? my nickname in that guild
+---@field answered table<string, integer>? by request kind: when the guild's request I last answered was made; never sent
 
 ---@return WhosWho.IdentityData
 local function data()
@@ -402,6 +403,26 @@ end
 function Identity.GuildNickname(clubId)
     local entry = data().guilds and data().guilds[clubId]
     return entry and entry.nickname
+end
+
+---When the request of that kind from that guild I last answered was made; nil when I answered none.
+---@param clubId integer
+---@param kind string
+---@return integer?
+function Identity.AnsweredRequestAt(clubId, kind)
+    local entry = data().guilds and data().guilds[clubId]
+    return entry and entry.answered and entry.answered[kind]
+end
+
+---Remembers that I answered that guild's request of that kind, made at that time: it isn't asked again until a newer
+---one. Changes no record.
+---@param clubId integer
+---@param kind string
+---@param at integer
+function Identity.AnswerRequest(clubId, kind, at)
+    local entry = ownGuildEntry(clubId)
+    entry.answered = entry.answered or {}
+    entry.answered[kind] = at
 end
 
 ---Whether that guild's members get a record of their own from me: the guild enforces linking, or I chose my main or my

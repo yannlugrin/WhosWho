@@ -274,6 +274,21 @@ L["Only this guild's members see the characters you share without linking."] = t
 L["%s requires linking: your characters in it stay shared with its members. Leave the guild to stop."] = true
 L["Your characters in a guild whose rule you accepted stay shared with its members. Leave it to stop."] = true
 
+-- Guild requests
+L["Ask for a nickname…"] = true
+L["Ask for a main"] = true
+L["Ask %s for a nickname in the guild"] = true
+L["They choose: they can accept it, change it or refuse."] = true
+L["Ask %s to make %s their main in the guild?"] = true
+L["They can accept or refuse."] = true
+L["Ask"] = true
+L["An officer"] = true
+L["%s asks you to be shown as %s to the guild's members."] = true
+L["%s asks you to make %s your main in the guild."] = true
+L["Now: %s. Only this guild's members see it."] = true
+L["Accept"] = true
+L["Edit…"] = true
+
 -- Guild tab
 L["Requires linking:"] = true
 L["your characters here are linked and shared with the guild."] = true

@@ -600,6 +600,74 @@ StaticPopupDialogs.WHOSWHO_GUILD_NICKNAME = {
     AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
 }
 
+-- The popup's data is { clubId, id }.
+-- Asks the typed nickname for the guild; a refused one keeps the popup open with the reason under its text.
+local function askGuildNickname(popup)
+    local typed = popup:GetEditBox():GetText()
+    local clean, err = ns.Record.CleanName(typed ~= "" and typed or nil)
+    if err or not clean then
+        err = err or "short"
+        popup:SetText(popup.baseText .. "\n\n" .. RED_FONT_COLOR:WrapTextInColorCode(ns.NameErrorMessages[err] or err))
+        popup:Resize()
+        return false
+    end
+    ns.Protocol.SendGuildRecord(GuildRecord.Ask(popup.data.clubId, popup.data.id, "nickname", clean))
+    return true
+end
+
+StaticPopupDialogs.WHOSWHO_GUILD_ASK_NICKNAME = {
+    text = L["Ask %s for a nickname in the guild"] .. "\n\n" .. L["They choose: they can accept it, change it or refuse."],
+    hasEditBox = true,
+    maxLetters = ns.Record.MAX_NAME_LENGTH,
+    button1 = L["Ask"],
+    button2 = CANCEL,
+    OnShow = function(popup)
+        popup.baseText = popup:GetText()
+        popup:GetEditBox():SetFocus()
+    end,
+    OnAccept = function(popup) return not askGuildNickname(popup) end,
+    EditBoxOnEnterPressed = function(editBox)
+        local popup = editBox:GetParent()
+        if askGuildNickname(popup) then popup:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(editBox) editBox:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+StaticPopupDialogs.WHOSWHO_GUILD_ASK_MAIN = {
+    text = L["Ask %s to make %s their main in the guild?"] .. "\n\n" .. L["They can accept or refuse."],
+    button1 = L["Ask"],
+    button2 = CANCEL,
+    OnAccept = function(_, data)
+        ns.Protocol.SendGuildRecord(GuildRecord.Ask(data.clubId, data.id, "main", data.guid))
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+---Asks, for my guild, the player of a shared identity to show its members a nickname.
+---@param clubId integer
+---@param id string
+function PeopleDialogs.AskGuildNickname(clubId, id)
+    StaticPopup_Show("WHOSWHO_GUILD_ASK_NICKNAME", coloredNickname(id), nil, { clubId = clubId, id = id })
+end
+
+---Asks, for my guild, the player of a shared identity to show its members one of their characters in it as main.
+---@param clubId integer
+---@param id string
+---@param guid string
+function PeopleDialogs.AskGuildMain(clubId, id, guid)
+    StaticPopup_Show("WHOSWHO_GUILD_ASK_MAIN", coloredNickname(id), coloredCharacter(id, guid),
+        { clubId = clubId, id = id, guid = guid })
+end
+
 ---Asks to unlink, for my guild, a character its record links; GuildRecord.CanUnlink tells which ones.
 ---@param clubId integer
 ---@param id string

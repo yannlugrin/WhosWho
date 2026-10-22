@@ -20,10 +20,18 @@ GuildRecord.VERSION = 1
 ---@field nickname string? read for a guild identity only
 ---@field main string? read for a guild identity only: GUID, one of chars; nil without characters
 ---@field chars table<string, WhosWho.Character> by GUID, the characters in the guild it links to that identity
+---@field requests table<string, WhosWho.GuildRequest>? a player's identity only, by kind ("nickname", "main"): what the
+---guild asks the player to show its members, one request of each kind
 ---@field signer string identity ID of the member who signed it
 ---@field signerGuid string the character it was signed from
 ---@field rev integer server time when it was signed
 ---@field sig string signature, 128 hex characters
+
+---What an officer asked the player; it stays until an officer dismisses it, met or not.
+---@class WhosWho.GuildRequest
+---@field value string the nickname asked, or the GUID of the character asked as main
+---@field at integer server time when it was asked
+---@field by string identity ID of the officer who asked
 
 -- Format -----------------------------------------------------------------------------------------
 
@@ -37,6 +45,20 @@ end
 local function isCharacter(character)
     return type(character) == "table" and Record.IsName(character.name) and Record.IsRuleset(character.ruleset)
         and Record.IsClassID(character.classID)
+end
+
+-- The guild's requests to a player: each one asked by someone, at some time; the kinds this version knows with their
+-- value, the others kept as they are.
+local function isRequests(requests)
+    if requests == nil then return true end
+    if type(requests) ~= "table" or next(requests) == nil then return false end
+    for kind, request in pairs(requests) do
+        if type(kind) ~= "string" or type(request) ~= "table" then return false end
+        if not (Record.IsId(request.by) and Record.IsPositiveInteger(request.at)) then return false end
+        if kind == "nickname" and not Record.IsName(request.value) then return false end
+        if kind == "main" and not Record.IsGuid(request.value) then return false end
+    end
+    return true
 end
 
 ---Checks the structure only: the fields this version knows, and the limits of the signed bytes; fields a later version
@@ -62,6 +84,7 @@ function GuildRecord.Validate(record)
         count = count + 1
     end
     if count > Record.MAX_CHARACTERS then return false, "chars" end
+    if not isRequests(record.requests) or (guildIdentity and record.requests ~= nil) then return false, "requests" end
 
     -- A guild identity's own nickname and main; a shared identity has the player's.
     if guildIdentity then
@@ -307,6 +330,20 @@ end
 ---@return WhosWho.SignedGuildRecord
 function GuildRecord.SetMain(clubId, id, guid)
     return sign(clubId, id, function(record) record.main = guid end)
+end
+
+---Asks the player of a shared identity, for my guild, to show its members a nickname or a main; it replaces the
+---guild's request of that kind.
+---@param clubId integer
+---@param id string
+---@param kind "nickname"|"main"
+---@param value string the nickname, already clean (Record.CleanName), or the GUID of one of their characters in the guild
+---@return WhosWho.SignedGuildRecord
+function GuildRecord.Ask(clubId, id, kind, value)
+    return sign(clubId, id, function(record)
+        record.requests = record.requests or {}
+        record.requests[kind] = { value = value, at = GetServerTime(), by = ns.Identity.Id() }
+    end)
 end
 
 ---Sets or removes a guild identity's nickname.
