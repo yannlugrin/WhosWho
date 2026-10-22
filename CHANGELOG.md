@@ -11,6 +11,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 - **`/ww status`** and the Diagnostic page show the newest Who's Who version another player's add-on announced this session.
 - **Guilds**: in My identity, "In my guilds" sets a nickname and a main for each guild your characters are in; only that guild's members see them.
 - **Guild requests**: the guild master and officers can suggest a nickname or a main to a member, from the right-click menu in the Guild tab; the member accepts, edits or refuses it. Officers see each request, and whether it's done, in the member's panel and in a Requests list, and dismiss it there.
+- **Guild invites**: whisper `ginv` or `guildinv` to an officer from a character outside your guild: when another character of your identity is in it, the officer is asked whether to invite it.
 
 ### Changed
 

@@ -71,7 +71,10 @@
         "LAST_ONLINE_COLON",
         "GUILD_ONLINE_LABEL",
         "COMMUNITIES_ROSTER_COLUMN_TITLE_RANK",
-        "COMMUNITIES_ROSTER_COLUMN_TITLE_CLASS"
+        "COMMUNITIES_ROSTER_COLUMN_TITLE_CLASS",
+        "UNKNOWN",
+        "DECLINE",
+        "StaticPopup_FindVisible"
     ],
     "Lua.type.weakUnionCheck": true
 }

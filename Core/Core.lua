@@ -182,12 +182,12 @@ frame:SetScript("OnEvent", function(_, event, ...)
         -- The inviter's name.
         ns.Scopes.GuildInviteReceived(arg1)
     elseif event == "CHAT_MSG_WHISPER" then
-        -- The sender's name and GUID.
-        ns.Scopes.WhisperReceived(select(2, ...), select(12, ...))
+        -- The sender's name and GUID, the text.
+        ns.Scopes.WhisperReceived(select(2, ...), select(12, ...), arg1)
     elseif event == "CHAT_MSG_WHISPER_INFORM" then
-        -- The receiver's name and GUID.
+        -- The receiver's name and GUID, the text.
         local name = select(2, ...)
-        ns.Scopes.WhisperSent(name, select(12, ...))
+        ns.Scopes.WhisperSent(name, select(12, ...), arg1)
         ns.Protocol.Whispered(name)
     elseif event == "GROUP_ROSTER_UPDATE" then
         ns.Scopes.GroupRosterChanged()

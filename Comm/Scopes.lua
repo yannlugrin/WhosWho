@@ -300,25 +300,82 @@ local function saveWhisper(name, guid)
     return whisper
 end
 
----A whisper received (CHAT_MSG_WHISPER: arguments 2 and 12): the sender's GUID, for confirmations only.
+-- Guild invite requests: a player whispers one of these words to an officer to have the character invited into a guild
+-- where another character of their identity is. For a while after it, the two share identities whatever their scopes,
+-- so the officer can check who asks.
+local GUILD_INVITE_WORDS = { ginv = true, guildinv = true }
+local GUILD_INVITE_SECONDS = 60
+---@type table<string, number> by name: when I asked that player to invite me (GetTime())
+local guildInvitesAsked = {}
+---@type table<string, { guid: string, at: number }> by name: who asked me to invite them, when I may invite
+local guildInviteRequests = {}
+local guildInviteListeners = {}
+
+local function isGuildInviteRequest(text)
+    return type(text) == "string" and not issecretvalue(text) and GUILD_INVITE_WORDS[text:match("^%s*(.-)%s*$"):lower()]
+        == true
+end
+
+-- Whether I asked that player to invite me, or that player asked me, within GUILD_INVITE_SECONDS.
+local function inGuildInviteExchange(name)
+    local asked, request = guildInvitesAsked[name], guildInviteRequests[name]
+    return (asked ~= nil and GetTime() - asked < GUILD_INVITE_SECONDS)
+        or (request ~= nil and GetTime() - request.at < GUILD_INVITE_SECONDS)
+end
+
+---A whisper received (CHAT_MSG_WHISPER: arguments 1, 2 and 12): the sender's GUID, for confirmations; a guild invite
+---request when I may invite.
 ---@param name any
 ---@param guid any
-function Scopes.WhisperReceived(name, guid)
+---@param text any
+function Scopes.WhisperReceived(name, guid, text)
     if not (name and guid and notSecret(name, guid)) then return end
     local now = time()
     saveWhisper(name, guid).receivedAt = now
     People.Activity({ [guid] = { lastSeen = now } })
+    if isGuildInviteRequest(text) and IsInGuild() and CanGuildInvite() then
+        guildInviteRequests[name] = { guid = guid, at = GetTime() }
+        for _, listener in ipairs(guildInviteListeners) do listener() end
+    end
 end
 
----A whisper sent (CHAT_MSG_WHISPER_INFORM: arguments 2 and 12): the receiver's GUID, and the Whispers scope.
+---A whisper sent (CHAT_MSG_WHISPER_INFORM: arguments 1, 2 and 12): the receiver's GUID, and the Whispers scope; a guild
+---invite request I sent.
 ---@param name any
 ---@param guid any
-function Scopes.WhisperSent(name, guid)
+---@param text any
+function Scopes.WhisperSent(name, guid, text)
     if not (name and guid and notSecret(name, guid)) then return end
     local now = time()
     saveWhisper(name, guid).sentAt = now
     People.SetWhisperedAt(guid, now)
     People.Activity({ [guid] = { lastSeen = now } })
+    if isGuildInviteRequest(text) then guildInvitesAsked[name] = GetTime() end
+end
+
+---Whether I asked that player to invite me into their guild, within GUILD_INVITE_SECONDS: my whisper sends my
+---announcement whatever my Whispers scope.
+---@param name string
+---@return boolean
+function Scopes.AskedGuildInvite(name)
+    local asked = guildInvitesAsked[name]
+    return asked ~= nil and GetTime() - asked < GUILD_INVITE_SECONDS
+end
+
+---The players who asked me to invite them, within GUILD_INVITE_SECONDS, with the character that asked.
+---@return table<string, string> GUID by name
+function Scopes.GuildInviteRequests()
+    local requests = {}
+    for name, request in pairs(guildInviteRequests) do
+        if GetTime() - request.at < GUILD_INVITE_SECONDS then requests[name] = request.guid end
+    end
+    return requests
+end
+
+---Calls the listener each time a player asks me to invite them.
+---@param listener fun()
+function Scopes.OnGuildInviteRequested(listener)
+    guildInviteListeners[#guildInviteListeners + 1] = listener
 end
 
 ---PLAYER_LOGOUT: removes the whispers neither sent nor received within the whisper window, and clears the older
@@ -611,6 +668,7 @@ local function allows(name, withoutGuildRule)
     local whispersOn = Scopes.Get("whispers")
     local guildOn = Scopes.Get("guild") or not withoutGuildRule
     if guildOn and Scopes.SharesWithGuild() and guildMember(name) then return true end
+    if inGuildInviteExchange(name) then return true end
     if friends and C_FriendList.GetFriendInfo(name) then return true end
     if Scopes.Get("group") and groupMemberGuid(name) then return true end
     if whispersOn then

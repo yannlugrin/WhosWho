@@ -276,6 +276,7 @@ local function newEnvironment(session)
     end
 
     env.IsInGuild = function() return c.guild ~= nil end
+    env.CanGuildInvite = function() return c.guild ~= nil and (c.rankIndex or 5) <= 1 end
     env.GetGuildInfo = function() return c.guild and "Guild " .. c.guild or nil end
     env.C_EventUtils = { IsEventValid = function() return true end }
     -- Right after joining, the game may give the roster before the guild's club ID (session.clubIdHidden).
@@ -432,14 +433,15 @@ local function levelUp(session)
     fire(session, "PLAYER_LEVEL_UP", session.character.level)
 end
 
--- A chat whisper: CHAT_MSG_WHISPER_INFORM on the sender's client, CHAT_MSG_WHISPER on the receiver's (name and GUID of
--- the other player in arguments 2 and 12).
-local function whisper(session, c)
-    fire(session, "CHAT_MSG_WHISPER_INFORM", "hi", c.name, nil, nil, nil, nil, nil, nil, nil, nil, nil, c.guid)
+-- A chat whisper: CHAT_MSG_WHISPER_INFORM on the sender's client, CHAT_MSG_WHISPER on the receiver's (the text, then
+-- name and GUID of the other player in arguments 2 and 12).
+local function whisper(session, c, text)
+    text = text or "hi"
+    fire(session, "CHAT_MSG_WHISPER_INFORM", text, c.name, nil, nil, nil, nil, nil, nil, nil, nil, nil, c.guid)
     local receiver = online(c.name)
     if receiver then
         local from = session.character
-        fire(receiver, "CHAT_MSG_WHISPER", "hi", from.name, nil, nil, nil, nil, nil, nil, nil, nil, nil, from.guid)
+        fire(receiver, "CHAT_MSG_WHISPER", text, from.name, nil, nil, nil, nil, nil, nil, nil, nil, nil, from.guid)
     end
 end
 
@@ -2821,6 +2823,53 @@ do
         "and each member gets the general part too, which the Group scope allows, with the guild's entry")
     world.group = {}
     for _, session in ipairs({ dax, eli, fox, gil, hob, kat }) do logout(session) end
+end
+
+-- Guild invite request --------------------------------------------------------------------------------------
+
+-- Lux's main is in Mox's guild; Lux plays an alt outside it, which Mox never met, Whispers scope off on both sides.
+-- "ginv" to Mox, an officer: Lux announces, Mox answers and fetches the record, the alt is confirmed, and Mox is asked.
+do
+    local GUILD16 = 31000016
+    local moxMain = character("Mox Main", "Player-1-00030001", MAGE, GUILD16)
+    local nedMain = character("Ned Main", "Player-1-00030101", PRIEST, GUILD16)
+    local nedAlt = character("Ned Alt", "Player-1-00030102", ROGUE)
+    moxMain.rankIndex = 1
+    local nedAccount = account("Ned")
+    local mox = login(account("Mox"), moxMain)
+    slash(mox, "link")
+    local nedOnMain = login(nedAccount, nedMain)
+    slash(nedOnMain, "link")
+    run(60)
+    local nedId = nedOnMain.ns.Identity.Id()
+    logout(nedOnMain)
+    local nedOnAlt = login(nedAccount, nedAlt)
+    slash(nedOnAlt, "link")
+    nedOnAlt.ns.settings.scopes.whispers = false
+    mox.ns.settings.scopes.whispers = false
+    run(60)
+    check(mox.ns.People.Find(nedAlt.guid) == nil, "the officer doesn't know the alt")
+
+    clearLog()
+    whisper(nedOnAlt, moxMain, "hi")
+    run(30)
+    check(sent({ from = "Ned Alt", type = "ANNOUNCE" }) == 0, "a plain whisper sends no announcement, Whispers scope off")
+
+    clearLog()
+    whisper(nedOnAlt, moxMain, " GINV ")
+    run(30)
+    check(sent({ from = "Ned Alt", type = "ANNOUNCE", target = "Mox Main" }) == 1,
+        "a guild invite request announces to the officer, whatever the Whispers scope")
+    check(sent({ from = "Mox Main", type = "GET", target = "Ned Alt" }) == 1
+        and sent({ from = "Mox Main", type = "ANNOUNCE", target = "Ned Alt" }) == 1,
+        "the officer answers with an announcement, and asks for the record that lists the alt")
+    check(state(mox, nedAlt.guid) == "confirmed" and holderId(mox, nedAlt.guid) == nedId
+        and mox.ns.Scopes.GuildInviteRequests()["Ned Alt"] == nedAlt.guid,
+        "the alt is confirmed under the identity whose main is in the guild: the officer can be asked")
+    run(90)
+    check(next(mox.ns.Scopes.GuildInviteRequests()) == nil, "the request lasts a minute")
+    logout(mox)
+    logout(nedOnAlt)
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

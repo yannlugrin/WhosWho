@@ -307,6 +307,9 @@ L["done"] = true
 L["Asked by %s, %s ago"] = true
 L["%s, %s ago"] = true
 
+-- Guild invites
+L["%s asks you to invite %s into the guild."] = true
+
 -- Guild tab
 L["Requires linking:"] = true
 L["your characters here are linked and shared with the guild."] = true

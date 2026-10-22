@@ -1510,10 +1510,12 @@ end
 ---CHAT_MSG_WHISPER_INFORM, after Scopes.WhisperSent: my announcement to the player I whispered, sent right away, when
 ---none reached them this session, the last one carried an older revision, or it left the whisperAnnouncementSeconds setting ago.
 ---A player my guild, group or friends announcements reach gets none. The player answers with theirs if they allow me.
+---A guild invite request I sent announces whatever my Whispers scope: the player checks who asks.
 ---@param name any
 function Protocol.Whispered(name)
     if not name or issecretvalue(name) or name == ns.UnitWholeName("player") then return end
-    if not (Scopes.Get("whispers") and Scopes.AnnouncementReaches(name)) then return end
+    local whispersAnnounce = Scopes.Get("whispers") or Scopes.AskedGuildInvite(name)
+    if not (whispersAnnounce and Scopes.AnnouncementReaches(name)) then return end
     if Scopes.GuildReaches(name) or Scopes.GroupReaches(name) or Scopes.FriendReaches(name) then return end
     local message = announcementText(UnitLevel("player"), true, true)
     if not message then return end

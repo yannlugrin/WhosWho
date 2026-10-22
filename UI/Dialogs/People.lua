@@ -725,6 +725,62 @@ function PeopleDialogs.EditGuildNickname(clubId, id)
     StaticPopup_Show("WHOSWHO_GUILD_NICKNAME", coloredNickname(id), nil, { clubId = clubId, id = id })
 end
 
+-- Guild invites -----------------------------------------------------------------------------------
+
+-- Whether the invite dialog is open: one request at a time.
+local askingGuildInvite = false
+
+StaticPopupDialogs.WHOSWHO_GUILD_INVITE = {
+    text = L["%s asks you to invite %s into the guild."],
+    button1 = INVITE,
+    button2 = DECLINE,
+    -- The game invites only on a click: the request alone never invites.
+    OnAccept = function(_, name) C_GuildInfo.Invite(name) end,
+    OnHide = function() askingGuildInvite = false end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(popup) popup:SetPoint("CENTER") end,
+}
+
+-- The requests already asked: one dialog per request.
+---@type table<string, true> by name and GUID
+local askedGuildInvites = {}
+
+-- Whether that character may be invited: confirmed under a player's identity with another character in my guild, and
+-- not in it itself.
+local function mayInvite(person, character, guid, clubId)
+    if not (person and person.signedRecord and character.state == "confirmed") or character.guild == clubId then
+        return false
+    end
+    for otherGuid, other in pairs(person.chars) do
+        if otherGuid ~= guid and other.guild == clubId then return true end
+    end
+    return false
+end
+
+-- Asks whether to invite the first player whose request (Scopes.GuildInviteRequests) can be checked: their character
+-- confirmed, which their announcement and record bring after the whisper. One that can't be is asked again at the next
+-- change of the people, while the request lasts.
+local function askGuildInvite()
+    if askingGuildInvite then return end
+    local clubId = ns.Identity.GuildId(UnitGUID("player"))
+    for name, guid in pairs(ns.Scopes.GuildInviteRequests()) do
+        local key = name .. guid
+        local person, character = People.Find(guid)
+        if not askedGuildInvites[key] and mayInvite(person, character, guid, clubId) then
+            askedGuildInvites[key] = true
+            -- The game shows a few popups at once at most: one it couldn't show leaves nothing waiting for its OnHide.
+            askingGuildInvite = StaticPopup_Show("WHOSWHO_GUILD_INVITE", coloredNickname(person.id),
+                coloredCharacter(person.id, guid), name) ~= nil
+            return
+        end
+    end
+end
+ns.Scopes.OnGuildInviteRequested(askGuildInvite)
+People.OnChanged(askGuildInvite)
+
 -- A record can change the people while the dialog is open: it shows them as they are.
 People.OnChanged(function()
     if dialog:IsShown() then dialog:Refresh() end

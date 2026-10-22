@@ -307,6 +307,9 @@ L["done"] = "fait"
 L["Asked by %s, %s ago"] = "Demandé par %s, il y a %s"
 L["%s, %s ago"] = "%s, il y a %s"
 
+-- Guild invites
+L["%s asks you to invite %s into the guild."] = "%s vous demande d'inviter %s dans la guilde."
+
 -- Guild tab
 L["Requires linking:"] = "Demande la liaison :"
 L["your characters here are linked and shared with the guild."] = "vos personnages ici sont liés et partagés avec la guilde."
