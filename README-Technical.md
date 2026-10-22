@@ -69,6 +69,7 @@ WhosWho/
 │   └── Decorations/               Additions to the game's own frames
 │       ├── Chat.lua               Sender names in chat lines
 │       ├── Tooltip.lua            Nickname and "Also:" line in player tooltips
+│       ├── Nameplates.lua         Nickname on friendly players' nameplates
 │       ├── UnitMenu.lua           Who's Who section in players' right-click menus, and in the People and Guild tabs' own menu
 │       ├── GuildTab.xml           Who's Who tab templates, built like the game's roster: list with column headers, row, member panel, character line and open character
 │       └── GuildTab.lua           Who's Who tab in the game's guild window: my guild's identities, member detail, and the guild's settings for the guild master and officers
@@ -269,7 +270,10 @@ The nickname shown, for me: my nickname, otherwise the identity's own (the playe
 
 Nicknames are shown by the receiving add-on only, in the lines, tooltips and lists it decorates; outgoing chat is never modified.
 
+
 In chat, `ChatFrameUtil.AddSenderNameFilter` gets each line's decorated sender name with the event's arguments; the filter adds the nickname, in light grey and round brackets, after the name, and the game puts the result inside the player link: `[Ann Main (Annie)]: hello`. It adds nothing when the `chat.nickname.enable` setting is off, when the sender's name or GUID is secret (the game already skips the filter when the decorated name is), for my own characters, for a character no identity holds, or when the nickname is the character's name.
+
+**Nameplates** (`Nameplates`, with the setting "Nickname on nameplates", hidden by default): a line of its own above or below the name of a friendly player's nameplate, holding the nickname I see for that player (`Resolver.Resolve`, as the tooltip), when it isn't the character's own name, and not on my own characters. The line is a FontString on the nameplate's `UnitFrame`, anchored to its `name`, kept in a table of its own (never a key on the game's frames, which nameplate add-ons read), set at `NAME_PLATE_UNIT_ADDED` and again for every shown nameplate when the setting or the people change. Not shown: in instances (the game gives add-ons no friendly nameplate there), for a nameplate whose GUID is secret, or with a nameplate add-on that hides the game's frame (EllesmereUI's "full plate" mode does). EllesmereUI's default name-only mode writes the guild as a second line of the same `name` text, so "below" lands under the guild (checked in game). The game's name text is never changed: a nickname "on the same line" would fight with add-ons that rewrite it. The setting's help says it may not work with nameplate add-ons, and to choose "Hidden" then.
 
 ## Protocol
 
@@ -587,6 +591,7 @@ scopes = { guild, friends, whispers, group }, whisperHours (the whisper window, 
 advanced = { revisionWaitSeconds (15), quickRelogSeconds (300), whisperAnnouncementSeconds (1800), loginWhispersSeconds (1800) }
            (delays of the protocol a player may change, no screen yet; read through Store.Advanced, which falls back on the default)
 tooltip = { nickname = { enable, position ("afterName" | "ownLine") }, otherCharacters = { enable, classColor, limit } (the "Also:" line), note = { enable } },
+nameplates = { nickname = { enable (off by default), position ("above" | "below") } },
 diagnostic = { enable, chat } (the diagnostic mode: every Who's Who message sent or received kept in messageLog, and printed in chat),
 launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the minimap button and the add-on compartment entry),
 migrationVersion (the last migration step run on the settings, see Migrations below)

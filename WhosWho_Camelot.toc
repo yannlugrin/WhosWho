@@ -58,6 +58,7 @@ UI\Dialogs\People.lua
 UI\Launcher.lua
 UI\Decorations\Chat.lua
 UI\Decorations\Tooltip.lua
+UI\Decorations\Nameplates.lua
 UI\Decorations\UnitMenu.lua
 UI\Decorations\GuildTab.xml
 UI\Decorations\GuildTab.lua

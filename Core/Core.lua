@@ -39,6 +39,7 @@ local addonName, ns = ...
 ---@field GuildRequests WhosWho.GuildRequests
 ---@field Launcher WhosWho.Launcher
 ---@field Tooltip WhosWho.Tooltip
+---@field Nameplates WhosWho.Nameplates
 ---@field UnitMenu WhosWho.UnitMenu
 
 -- Add-on -----------------------------------------------------------------------------------------

@@ -183,6 +183,27 @@ Settings.CreateCheckbox(category, Settings.RegisterProxySetting(category, "WhosW
     function() return ns.settings.tooltip.note.enable end,
     function(value) ns.settings.tooltip.note.enable = value end),
     L["Adds the start of your note about the person."])
+-- "hidden" turns the nickname off and keeps its position for when it is shown again.
+Settings.CreateDropdown(category, Settings.RegisterProxySetting(category, "WhosWho_NameplateNickname",
+    Settings.VarType.String, L["Nickname on nameplates"], "hidden",
+    function()
+        local nickname = ns.settings.nameplates.nickname
+        return nickname.enable and nickname.position or "hidden"
+    end,
+    function(value)
+        local nickname = ns.settings.nameplates.nickname
+        nickname.enable = value ~= "hidden"
+        if value ~= "hidden" then nickname.position = value end
+        ns.Nameplates.Refresh()
+    end),
+    function()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("above", L["Above the name"])
+        container:Add("below", L["Below the name"])
+        container:Add("hidden", L["Hidden"])
+        return container:GetData()
+    end,
+    L["On friendly players' nameplates, outside dungeons and raids. It may not work with nameplate add-ons: if nameplates look wrong, choose \"Hidden\"."])
 
 -- Updates ----------------------------------------------------------------------------------------
 
