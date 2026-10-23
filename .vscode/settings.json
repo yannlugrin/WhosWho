@@ -72,9 +72,8 @@
         "GUILD_ONLINE_LABEL",
         "COMMUNITIES_ROSTER_COLUMN_TITLE_RANK",
         "COMMUNITIES_ROSTER_COLUMN_TITLE_CLASS",
-        "UNKNOWN",
         "DECLINE",
-        "StaticPopup_FindVisible"
+        "ERR_CHAT_PLAYER_NOT_FOUND_S"
     ],
     "Lua.type.weakUnionCheck": true
 }
