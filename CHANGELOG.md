@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+
+- **Window**: other windows now come in front of the Who's Who window when you click them, instead of staying behind it.
+
 ## [0.5.0] - 2026-10-22
 
 This version no longer exchanges with the earlier ones: everyone needs it to keep sharing.
