@@ -23,6 +23,7 @@ ns.Store = Store
 ---@field guildRecords table<integer, table<string, WhosWho.SignedGuildRecord>> by club ID, then identity ID: what each guild says about a person (GuildRecord)
 ---@field guildLists table<integer, WhosWho.GuildListRevision> by club ID: my list's revision for each guild
 ---@field migrationVersion integer? the last migration step run on the data (Migrations)
+---@field addonVersion string? the Who's Who version that last loaded the data on the live game; nil: beta data
 ---@field messageLog WhosWho.LoggedMessage[] while the diagnostic mode is on, most recent first, at most Diagnostic.KEPT_MESSAGES; emptied at logout while it is off
 
 ---Settings (WhosWhoDB.profile; one "Default" profile shared by every character).
@@ -103,12 +104,15 @@ function Store.Init()
     ns.db = db
     ns.data = db.global
     createLogoutTables(ns.data)
-    ns.Migrations.Data(ns.data)
     ns.settings = db.profile
+    local live = not IsBetaBuild()
+    if live then ns.Migrations.LeaveBeta(ns.data, ns.settings) end
+    ns.Migrations.Data(ns.data)
     ns.Migrations.Settings(ns.settings)
+    if live then ns.data.addonVersion = ns.Version end
 end
 
----A fresh data table with the defaults, for the offline tests.
+---A fresh data table with the defaults, as on a first install (Migrations.LeaveBeta, the offline tests).
 ---@return WhosWho.Data
 function Store.NewData()
     local function copy(t)

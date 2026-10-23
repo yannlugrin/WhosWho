@@ -164,81 +164,13 @@ end
 -- Migrations --------------------------------------------------------------------------------------
 
 do
-    local function profile(old)
-        local settings = {
-            chat = { nickname = { enable = true } },
-            tooltip = {
-                nickname = { enable = true, position = "afterName" },
-                otherCharacters = { enable = true, classColor = true, limit = 4 },
-            },
-            diagnostic = { enable = false, chat = true },
-        }
-        for key, value in pairs(old) do settings[key] = value end
-        ns.Migrations.Settings(settings)
-        return settings
-    end
-
-    local s = profile({ chatNicknames = false, tooltipNickname = "ownLine", tooltipOtherCharacters = false })
-    check(s.chat.nickname.enable == false and s.tooltip.nickname.enable and s.tooltip.nickname.position == "ownLine"
-        and s.tooltip.otherCharacters.enable == false, "0.1.0-beta.1 settings move to the new keys")
-    check(s.chatNicknames == nil and s.tooltipNickname == nil and s.tooltipOtherCharacters == nil, "and the old keys are removed")
-    s = profile({ tooltipNickname = "hidden" })
-    check(s.tooltip.nickname.enable == false and s.tooltip.nickname.position == "afterName", "a hidden nickname keeps the default position")
-    s = profile({ tooltipOtherCharacters = { enable = true, classColor = false, limit = 7 } })
-    check(s.tooltip.otherCharacters.classColor == false and s.tooltip.otherCharacters.limit == 7
-        and s.tooltipOtherCharacters == nil, "the table form of the other characters setting moves too")
-    s = profile({ debugMessages = true })
-    check(s.diagnostic.enable and s.diagnostic.chat and s.debugMessages == nil,
-        "0.1.1 debug messages turn the diagnostic mode on, printed in chat")
-    s = profile({})
-    check(s.chat.nickname.enable and s.tooltip.nickname.position == "afterName", "nothing saved: the defaults stay")
-
-    local data = {
-        identity = { chars = { [G1] = { linked = false, removedInRevision = 4 }, [G2] = { linked = true, guild = 7 } } },
-        forgotten = { a = 7, b = { rev = 2, at = 50 } },
-        guildSettings = { [7] = { v = 1, guild = 7 } },
-        people = {
-            p = { id = "p", chars = { [G3] = { state = "guild" }, [G4] = { state = "listed" } } },
-            e = { id = "e", signedRecord = { id = "e", rev = 3 }, chars = {} },
-            g = { id = "g", madeByGuild = 7, chars = {} },
-        },
-    }
+    local data, settings = { identity = { rev = 1, chars = {} } }, {}
     ns.Migrations.Data(data)
-    check(data.identity.chars[G1].removedAt == time() and data.identity.chars[G1].removedInRevision == nil
-        and data.identity.chars[G2].removedAt == nil, "a 0.1.0-beta.1 removal revision becomes a removal time")
-    check(data.forgotten.a.rev == 7 and data.forgotten.a.at == time() and data.forgotten.b.at == 50,
-        "a 0.1.0-beta.1 forgotten revision gets the migration's time")
-    check(data.guildSettings[7].record.guild == 7, "a 0.1.1 guild settings record is held in its entry")
-    check(data.people.p.chars[G3].state == "relayed" and data.people.p.chars[G4].state == "listed",
-        "a character 0.3.0 had as passed on by the guild (\"guild\") is now \"relayed\"")
-    check(data.people.e == nil and data.forgotten.e == nil and data.people.g ~= nil,
-        "a player's identity kept without characters goes, its revision not held as forgotten")
-
-    check(data.identity.chars[G2].guild.id == 7 and data.identity.chars[G2].guild.joinedAt == nil
-        and data.identity.chars[G1].guild == nil, "a 0.1.0 guild club ID becomes a guild without a join time")
-
-    local version = data.migrationVersion
-    check(version and version > 0 and s.migrationVersion and s.migrationVersion > 0, "the last step run is saved")
-    data.identity.chars[G1].removedInRevision, data.forgotten.c = 5, 9
+    ns.Migrations.Settings(settings)
+    check(data.migrationVersion == 0 and settings.migrationVersion == 0, "no live step yet: the counts start at 0")
+    data.migrationVersion = 3
     ns.Migrations.Data(data)
-    check(data.identity.chars[G1].removedInRevision == 5 and data.forgotten.c == 9 and data.migrationVersion == version,
-        "a step runs once: data saved after it stays as it is")
-    data.migrationVersion = version + 10
-    ns.Migrations.Data(data)
-    check(data.migrationVersion == version + 10, "a later release's number is kept, so its steps don't run again")
-
-    local saved = {
-        identity = { id = string.rep("a", 64), rev = 5, signatures = { x = "y" }, chars = {} }, forgotten = {}, guildSettings = {},
-        people = {},
-    }
-    ns.Migrations.Data(saved)
-    check(saved.identity.rev == 6 and saved.identity.signatures == nil,
-        "my record, signed by 0.2.0 over a fixed list of fields, gets a new revision: the others fetch it in the new format")
-    ns.Migrations.Data(saved)
-    check(saved.identity.rev == 6, "once")
-    local notCreated = { identity = { rev = 1, chars = {} }, forgotten = {}, guildSettings = {}, people = {} }
-    ns.Migrations.Data(notCreated)
-    check(notCreated.identity.rev == 1, "an identity not created yet keeps its revision")
+    check(data.migrationVersion == 3, "a later release's number is kept, so its steps don't run again")
 end
 
 -- Record validation -------------------------------------------------------------------------------
@@ -492,16 +424,6 @@ do
     check(select(2, R.Validate(record)) == "guild", "a guild nickname without its guild refused")
     record.guild.id, record.guild.nickname = 8, ""
     check(select(2, R.Validate(record)) == "guild", "a guild nickname that isn't a name refused")
-end
-
--- Migration: the guild main I chose, a flag on my character in that guild.
-do
-    local data = { identity = { chars = { [G1] = { guild = { id = 8, main = true } }, [G2] = { guild = { main = true } } } },
-        people = {}, forgotten = {}, guildSettings = {}, migrationVersion = 6 }
-    ns.Migrations.Data(data)
-    check(data.identity.guilds[8].main == G1 and data.identity.chars[G1].guild.main == nil
-        and data.identity.chars[G2].guild.main == nil and data.migrationVersion == 7,
-        "the guild main I chose moves to my entry for that guild")
 end
 
 -- People: shared identities ------------------------------------------------------------------------
@@ -1629,6 +1551,39 @@ for _, loginOrder in ipairs({ { 1, 2 }, { 2, 1 } }) do
     P.UpdateGuildMembers(BETA, { [G1] = true })
     check(holderId(G1) == BETA_IDENTITY and select(2, P.Find(G1)).guild == BETA,
         "at login, the former guild's record doesn't take it back, in either order")
+end
+
+-- Leaving the beta --------------------------------------------------------------------------------------------
+
+do
+    local M = ns.Migrations
+    local function betaData()
+        local data = ns.Store.NewData()
+        data.identity = { id = string.rep("a", 64), seed = string.rep("b", 64), rev = 12, nickname = "Annie", main = G1,
+            chars = { [G1] = { name = "Ann Main", linked = true } }, guilds = { [7] = { nickname = "Ann" } } }
+        data.people = { [string.rep("c", 64)] = { chars = {} } }
+        data.guildSettings = { [7] = {} }
+        data.whispers = { [G2] = { name = "Bob Main" } }
+        data.nextManual, data.migrationVersion = 4, 7
+        return data
+    end
+
+    local data, settings = betaData(), { migrationVersion = 2, chat = { nickname = { enable = false } } }
+    M.LeaveBeta(data, settings)
+    local identity = data.identity
+    check(identity.id == nil and identity.seed == nil and identity.rev == 1 and identity.nickname == nil
+        and next(identity.chars) == nil and identity.main == nil and identity.guilds == nil,
+        "data no live client loaded yet is the beta's: it starts over as on a first install, my identity included")
+    check(next(data.people) == nil and next(data.guildSettings) == nil and next(data.whispers) == nil
+        and data.nextManual == 1 and data.migrationVersion == nil, "and so does everything else in it")
+    check(settings.migrationVersion == nil and settings.chat.nickname.enable == false,
+        "the settings keep everything; their migration count starts again with the live game's steps")
+
+    data = betaData()
+    data.addonVersion = "1.0.0"
+    M.LeaveBeta(data, {})
+    check(data.identity.chars[G1] ~= nil and next(data.people) ~= nil and data.migrationVersion == 7,
+        "data a live client loaded keeps everything")
 end
 
 -- Guild requests --------------------------------------------------------------------------------------------

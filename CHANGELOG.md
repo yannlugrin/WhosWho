@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Changed
+
+- **Saved data**: the first time you play the live game, Who's Who starts over as on a first install: what it saved during the beta, your identity included, is gone with the beta. Your settings stay.
+
 ### Fixed
 
 - **Window**: other windows now come in front of the Who's Who window when you click them, instead of staying behind it.
