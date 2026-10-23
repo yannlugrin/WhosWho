@@ -266,8 +266,6 @@ local function newEnvironment(session)
         return u ~= nil and online(u.name) ~= nil
     end
     env.IsResting = function() return c.resting == true end
-    -- The live game: the first login of an account leaves the beta, with nothing to reset.
-    env.IsBetaBuild = function() return false end
     env.UnitAffectingCombat = function() return c.inCombat == true end
     env.Logout, env.Quit = function() end, function() end
     env.StaticPopupDialogs = { CAMP = { OnCancel = function() end }, QUIT = { OnHide = function() end } }

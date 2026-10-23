@@ -34,9 +34,9 @@ function Migrations.Settings(settings)
     run(SETTINGS_STEPS, settings)
 end
 
----On the live game, before the migrations. Data no live client loaded yet (no addonVersion) comes from the beta, whose
----characters, people and guilds ended with it: it starts over, once, as on a first install, my identity included (new
----keys at the first link). The settings keep everything; their migration count starts again with the live game's steps.
+---Before the migrations. 1.0.0 came out after the beta closed: data no 1.0.0 or later loaded yet (no addonVersion) comes
+---from the beta, whose characters, people and guilds ended with it. It starts over, once, as on a first install, my
+---identity included (new keys at the first link). The settings keep everything; their migration count starts again.
 ---@param data WhosWho.Data the account-wide data, with its logout tables
 ---@param settings WhosWho.Settings the profile
 function Migrations.LeaveBeta(data, settings)

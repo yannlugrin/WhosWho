@@ -582,7 +582,7 @@ messageLog  { { time, sent, distribution, name (the receiver of a whisper, or th
             GLIST or GIREC keeps only its version, type and header in text, size being the whole message's; emptied on PLAYER_LOGOUT
             (logout or /reload) while the mode is off
 migrationVersion  the last migration step run on the data (see Migrations below)
-addonVersion  the version of Who's Who that last loaded the data on the live game; absent: beta data (see Migrations below)
+addonVersion  the version of Who's Who that last loaded the data; absent: beta data (see Migrations below)
 ```
 
 Settings are in the profile, `WhosWhoDB.profile` (one "Default" profile shared by every character), so they can be reset without touching the data:
@@ -598,7 +598,7 @@ launcher = { hide, showInCompartment, minimapPos } (LibDBIcon's format: the mini
 migrationVersion (the last migration step run on the settings, see Migrations below)
 ```
 
-**Migrations** (`Migrations`), at load only, from `Store.Init`: numbered steps, run once each and in order, for the data (`Migrations.Data`) and for the settings (`Migrations.Settings`); the number of the last step run is saved as `migrationVersion` in each (a later release's number is kept, so its steps don't run again after going back to it). A step only reads and changes the saved tables: what needs the game, the roster or sending is not a migration. There is no step yet: the beta's went with its data. **Leaving the beta** (`Migrations.LeaveBeta`, on the live game only: `IsBetaBuild()` false): data no live client loaded yet, without `addonVersion`, comes from the beta, whose characters, people and guilds ended with it, so it starts over once, as on a first install (`Store.NewData`), my identity included: new keys at the first link; the settings keep everything, their `migrationVersion` starting again. Then every load on the live game saves `addonVersion`, the version of Who's Who that loaded the data, which future steps can read. A fresh install on the live game has nothing to reset. On the beta, nothing is reset and `addonVersion` isn't written.
+**Migrations** (`Migrations`), at load only, from `Store.Init`: numbered steps, run once each and in order, for the data (`Migrations.Data`) and for the settings (`Migrations.Settings`); the number of the last step run is saved as `migrationVersion` in each (a later release's number is kept, so its steps don't run again after going back to it). A step only reads and changes the saved tables: what needs the game, the roster or sending is not a migration. There is no step yet: the beta's went with its data. **Leaving the beta** (`Migrations.LeaveBeta`, before the migrations): 1.0.0 came out after the beta closed, so data no 1.0.0 or later loaded yet, without `addonVersion`, comes from the beta, whose characters, people and guilds ended with it, so it starts over once, as on a first install (`Store.NewData`), my identity included: new keys at the first link; the settings keep everything, their `migrationVersion` starting again. Then every load saves `addonVersion`, the version of Who's Who that loaded the data, which future steps can read. A fresh install has nothing to reset. The game's `IsBetaBuild()` isn't read: the saved version alone decides.
 
 Planned: `scopes.selected` and the list of selected players.
 
