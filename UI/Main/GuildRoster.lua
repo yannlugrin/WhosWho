@@ -222,8 +222,7 @@ end
 
 ---A row of my guild's list: a person's row, with the member it shows in the game's guild window.
 ---@class WhosWho.GuildRosterEntry: WhosWho.PersonListEntry
----@field member WhosWho.GuildMember the identity's character in the guild being played, else its main there, else
----the first one met; the character itself for one no identity holds
+---@field member WhosWho.GuildMember the character played, else the main, else the first met; or the unknown character
 
 ---The identities of my guild's characters held as counts, as the Guild tab's header shows them.
 ---@class WhosWho.GuildCounts

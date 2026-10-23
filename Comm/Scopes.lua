@@ -930,8 +930,7 @@ end
 ---Every player a message for all my enabled scopes reaches.
 ---@class WhosWho.Audience
 ---@field memberChannels WhosWho.Channel[] GUILD, PARTY or RAID: one message reaches every member
----@field guildMembers string[] the online members of my guild, one message each, in place of GUILD while my messages on
----it reach no one (Scopes.CanSendOnGuild)
+---@field guildMembers string[] my guild's online members, one message each, while GUILD reaches no one (CanSendOnGuild)
 ---@field names string[] players reached by no member channel, one message each
 
 -- One character for each shared person the character I play whispered since that time, within the whisper window: the

@@ -77,8 +77,7 @@ end
 
 ---Adds the Who's Who section, after a divider, when it has an entry for that player.
 ---@param root table the menu's root description
----@param contextData table the game's menu context: unit, guid, name and surname, Battle.net account or chat line; from
----our own menu, the character as its caller knows it, and the tab it comes from (tab)
+---@param contextData table the game's menu context, or our own menu's: the character as known, and its tab (tab)
 function UnitMenu.AddSection(root, contextData)
     if contextData.unit and not UnitIsFriend("player", contextData.unit) then return end
     local guid = playerGuid(contextData)

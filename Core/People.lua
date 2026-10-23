@@ -694,8 +694,7 @@ end
 ---@param id string
 ---@param guid string
 ---@param level integer
----@param claimedBy string? the sender's name, when the GUID is only the sender's word (a guild invite request): it
----confirms the character only if the record lists it under that name and no other identity holds it
+---@param claimedBy string? the sender's name when the GUID is only their word (GINV): see claimHolds
 ---@return boolean confirmed false while it waits
 function People.Confirm(id, guid, level, claimedBy)
     local person = ns.data.people[id]

@@ -17,8 +17,7 @@ GuildSettings.LOWEST_RANK_INDEX = 1
 ---@class WhosWho.GuildSettingsValues
 ---@field enable boolean Who's Who enabled for the guild
 ---@field enforceLinking boolean members' characters in the guild known under their identity; only with enable
----@field inviteRequests boolean? members may ask officers to invite their other characters (Guild Invite Requests); only
----with enable; nil in a record signed before it existed: off
+---@field inviteRequests boolean? members may ask officers to invite their other characters; only with enable; nil: off
 
 ---A guild's settings as its members share them; data, kept as received.
 ---@class WhosWho.GuildSettingsRecord

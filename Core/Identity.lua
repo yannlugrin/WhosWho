@@ -155,8 +155,7 @@ function Identity.LastLogout()
     return data().lastLogout
 end
 
----@param revision integer? the revision my announcement to every audience that answers a GET carried; nil makes the next
----login announce
+---@param revision integer? the revision my last announcement to everyone carried; nil makes the next login announce
 function Identity.SetLastBroadcastRevision(revision)
     data().lastBroadcastRevision = revision
 end

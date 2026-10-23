@@ -20,8 +20,7 @@ GuildRecord.VERSION = 1
 ---@field nickname string? read for a guild identity only
 ---@field main string? read for a guild identity only: GUID, one of chars; nil without characters
 ---@field chars table<string, WhosWho.Character> by GUID, the characters in the guild it links to that identity
----@field requests table<string, WhosWho.GuildRequest>? a player's identity only, by kind ("nickname", "main"): what the
----guild asks the player to show its members, one request of each kind
+---@field requests table<string, WhosWho.GuildRequest>? a player's identity only, by kind: what the guild asks them
 ---@field signer string identity ID of the member who signed it
 ---@field signerGuid string the character it was signed from
 ---@field rev integer server time when it was signed

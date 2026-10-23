@@ -394,8 +394,7 @@ local function createGuildEntryDialog()
     ---@param guildName string? nil while unknown
     ---@param nickname string? my nickname in that guild, nil when not set
     ---@param identityNickname string my identity's nickname, or my main's name
-    ---@param characters { guid: string, name: string, classID: integer }[] my characters in that guild that its members
-    ---see, in the order shown
+    ---@param characters { guid: string, name: string, classID: integer }[] my characters its members see, in order
     ---@param mainGuid string? the one it shows me under
     function dialog:SetGuild(clubId, guildName, nickname, identityNickname, characters, mainGuid)
         local Lists = ns.Lists

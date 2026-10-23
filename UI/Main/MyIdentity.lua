@@ -431,8 +431,7 @@ end
 ---@field mainName string
 ---@field mainClassID integer
 ---@field characters { guid: string, name: string, classID: integer }[] my characters in that guild that its members see
----@field officers WhosWho.KnownOfficer[]? when the character I play may ask that guild for an invite: its officers I
----know of
+---@field officers WhosWho.KnownOfficer[]? its officers I know of, when the character I play may ask it for an invite
 
 ---Shows a line per guild under My characters, or hides the section when the list is empty.
 ---@param guilds WhosWho.MyIdentityGuild[] in the order shown
