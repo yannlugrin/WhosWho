@@ -4,7 +4,7 @@ Link all your characters into one identity, choose who can see it, and recognise
 
 For **World of Warcraft: Forever**. Source code, issues and releases: [github.com/yannlugrin/WhosWho](https://github.com/yannlugrin/WhosWho).
 
-> **In development.** What is marked *coming* isn't built yet. Please report what goes wrong or any suggestion (see [Reporting a problem](#reporting-a-problem)).
+> What is marked *coming* isn't built yet. Please report what goes wrong or any suggestion (see [Reporting a problem](#reporting-a-problem)).
 
 ## Features
 
@@ -20,7 +20,7 @@ For **World of Warcraft: Forever**. Source code, issues and releases: [github.co
 - **Guilds that link alts to mains.** The guild master or an officer can require it. Each member is asked first: link their characters in the guild, share them with the guild only without linking them, or refuse, and Who's Who then shares nothing with that guild. Only the guild sees the characters they didn't link.
 - **Guild links.** The guild master and officers can link members' characters for the whole guild, from the Guild tab's right-click menu: to a member's identity, or to a new person for someone who doesn't use Who's Who. Every member sees them; what a player shares about themselves always comes first.
 - **Guild requests.** The guild master and officers can suggest a nickname or a main to a member, from the Guild tab's right-click menu. The member accepts, edits or refuses it, and the officers see which requests are done.
-- **Guild invites for your alts.** When the guild allows it, **Invitation…** in My identity asks the guild's officers you know of to invite the character you play into a guild where another of your characters is; the officer confirms the invite.
+- **Guild invites for your alts.** Playing an alt outside a guild where another of your characters is, click **Invitation…** on that guild's line in My identity and pick an officer: Who's Who sends them the request, and their Who's Who shows a dialog to invite your alt with one click. No whisper to type, no invite to wait for by hand. The guild master or an officer turns it on in the guild's Who's Who settings.
 - **Nicknames on nameplates.** Optionally, the nickname above or below friendly players' names on their nameplates, outside dungeons and raids.
 - **Told when a newer version is out.** Once a session, when another player's Who's Who is a newer release than yours, a line in chat says so. You can turn it off in the settings.
 - *Coming:* **Review** what Who's Who changed on its own, for example when a player you linked yourself starts sharing their own identity.

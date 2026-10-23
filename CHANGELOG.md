@@ -4,6 +4,18 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-23
+
+First release for the live game of World of Warcraft: Forever. What Who's Who does:
+
+- **One identity for all your characters**: link the characters you play, pick your main, set a nickname, and a different nickname or main in each guild if you like.
+- **You decide who sees it**: your guild, your friends (WoW friends, and Battle.net friends playing WoW: Forever), your party or raid, or the people you whisper. Nothing is shared until you link a character.
+- **Recognise people across their alts**: the People tab lists the identities shared with you, with their characters, who is online and when you last saw them; their nickname shows in chat, in tooltips and, if you want, on nameplates.
+- **Your own nicknames and notes** for anyone, seen only by you, and links you make yourself for players who don't use Who's Who.
+- **Guilds**: once the guild master or an officer enables Who's Who, guildmates pass on each other's identities, and the Guild tab lists the guild by identity. Officers can require members to link their characters in the guild, link characters for the whole guild, and suggest a nickname or a main to a member.
+- **Guild invites for your alts**: when the guild allows it, an alt outside the guild asks for an invite with the **Invitation…** button in My identity; an officer online gets a dialog and invites it with one click.
+- **Privacy**: your identity is signed with a key that stays on your computer, BattleTags are never sent, and **Forget me** removes you from everyone's list.
+
 ### Changed
 
 - **Saved data**: the first time you play the live game, Who's Who starts over as on a first install: what it saved during the beta, your identity included, is gone with the beta. Your settings stay.
@@ -173,7 +185,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/yannlugrin/WhosWho/compare/0.5.0...1.0.0
 [0.5.0]: https://github.com/yannlugrin/WhosWho/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/yannlugrin/WhosWho/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/yannlugrin/WhosWho/compare/0.4.1...0.4.2
