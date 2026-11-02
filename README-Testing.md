@@ -257,7 +257,15 @@ Needs A and B on two accounts, both linked, sharing nothing else: no group, guil
 - With a character of A offline when B links: no "No player named" line in chat. A logs in on the character its code named: the waiting line goes.
 - With the two accounts already linked, each on another character listed in the other's record, a change on B while A is offline: A's page shows it after its next login.
 - A, **Link an account…** again: no role choice.
-- **Remove** on A, confirmed: the row goes.
+- A logs in on a new character and links it, with B online: within seconds, the character is in **Other accounts** and in **My identity** on B.
+- B unlinks the character it plays, its last linked one, with A online: within seconds, A shows B with no characters. B links it again: A shows it again.
+- A, **My identity**: A's characters directly under the column header, with their crowns and checkboxes, then a line and **Other account** with B's short ID and B's characters, no crown, no checkbox, a dash for level and last played. The count says "on this account", and the footer that B's characters are managed from B. B is not in **People**, nor in the person chooser.
+- B, **My identity**: "Part of" above A's name, no edit button, no Main column, **Main identity** with A's characters. Unlinking B's main works, and B's name doesn't change.
+- A changes its nickname, with both online: within seconds B shows it, and so does A's row for B in **Other accounts**. With B offline: B shows it after its next login.
+- A's tooltip and chat on a character of B show A's nickname. Its right-click menu offers **Show my identity**.
+- A knows B as a person, with a nickname and a note of A's, then links B: B leaves **People**. **Remove** on A: B is back with that nickname and note.
+- **Remove** on B, confirmed: B has its own nickname back, the edit button and the Main column too, with no group titles.
+- **Remove** on A, confirmed: the row goes, the group goes, and B comes back in **People**.
 - A with no accounts left: the list's title is gone.
 
 ## Still to Test

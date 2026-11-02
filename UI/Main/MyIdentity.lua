@@ -43,6 +43,11 @@ Main.AddTab(L["My identity"], panel)
 panel.IdentityName = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
 panel.IdentityName:SetPoint("TOPLEFT", HEADER_LEFT, -32)
 
+-- Above the name, on another of my accounts: the name is my main identity's.
+panel.PartOfLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+panel.PartOfLabel:SetPoint("BOTTOMLEFT", panel.IdentityName, "TOPLEFT", 0, 2)
+panel.PartOfLabel:SetText(L["Part of"])
+
 -- Shown when the identity goes by its main character's name.
 panel.MainCrown = panel:CreateTexture(nil, "OVERLAY")
 panel.MainCrown:SetTexture(CROWN_TEXTURE)
@@ -111,8 +116,19 @@ for _, column in ipairs(COLUMNS) do columnByKey[column.key] = column end
 ---@type table? EllesmereUI's skinning functions, for rows created after they were handed over
 local skin
 
----A character row of the list; createRow adds its regions the first time the row is used.
+-- Shown for what the record of another account doesn't say.
+local UNKNOWN_VALUE = "\226\128\148"
+local GROUP_COLUMN_SPACING = 10
+local GROUP_LINE_TOP = 4
+
+---A row of the list, a character or an account's title; createRow adds its regions the first time the row is used.
 ---@class WhosWho.MyIdentityRow: Frame
+---@field CharacterRegions Region[]
+---@field GroupRegions Region[]
+---@field GroupLine Texture the line above an account's title
+---@field GroupTitle FontString
+---@field GroupId FontString
+---@field GroupWaiting FontString
 ---@field Online Texture the gold bar behind the character logged in
 ---@field ClassIcon Texture
 ---@field Name FontString
@@ -171,6 +187,24 @@ local function createRow(row)
     row.LinkedCheckbox:SetScript("OnEnter", showControlTooltip)
     row.LinkedCheckbox:SetScript("OnLeave", GameTooltip_Hide)
 
+    row.GroupLine = row:CreateTexture(nil, "ARTWORK")
+    row.GroupLine:SetAtlas("Options_HorizontalDivider")
+    row.GroupLine:SetHeight(1)
+    row.GroupLine:SetPoint("TOPLEFT", 0, -GROUP_LINE_TOP)
+    row.GroupLine:SetPoint("TOPRIGHT", 0, -GROUP_LINE_TOP)
+    row.GroupTitle = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.GroupTitle:SetPoint("LEFT", 6, -GROUP_LINE_TOP / 2)
+    row.GroupId = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    row.GroupId:SetPoint("LEFT", row.GroupTitle, "RIGHT", GROUP_COLUMN_SPACING, 0)
+    row.GroupWaiting = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    row.GroupWaiting:SetPoint("LEFT", row.GroupId, "RIGHT", GROUP_COLUMN_SPACING, 0)
+    row.GroupWaiting:SetText(L["Waiting for the other account"])
+
+    row.CharacterRegions = {
+        row.Online, iconFrame, row.Name, row.Ruleset, row.Level, row.LastPlayed, row.MainButton, row.LinkedCheckbox,
+    }
+    row.GroupRegions = { row.GroupLine, row.GroupTitle, row.GroupId }
+
     if skin then
         skin.SquareIcon(row.ClassIcon, iconFrame)
         skin.Checkbox(row.LinkedCheckbox)
@@ -178,10 +212,22 @@ local function createRow(row)
 end
 
 ---@param row WhosWho.MyIdentityRow
----@param character WhosWho.MyIdentityCharacter
-local function initRow(row, character)
+---@param element WhosWho.MyIdentityCharacter|WhosWho.MyIdentityGroup
+local function initRow(row, element)
     if not row.Name then createRow(row) end
 
+    local isGroup = element.groupTitle ~= nil
+    for _, region in ipairs(row.CharacterRegions) do region:SetShown(not isGroup) end
+    for _, region in ipairs(row.GroupRegions) do region:SetShown(isGroup) end
+    row.GroupWaiting:SetShown(isGroup and element.waiting)
+    if isGroup then
+        row.GroupTitle:SetText(element.groupTitle)
+        row.GroupId:SetText(element.groupId)
+        return
+    end
+
+    ---@type WhosWho.MyIdentityCharacter
+    local character = element
     local coloredName = Lists.ClassColoredName(character.name, character.classID)
     Lists.SetClassIcon(row.ClassIcon, character.classID)
     row.Name:SetText(coloredName)
@@ -190,11 +236,12 @@ local function initRow(row, character)
     row.Ruleset:SetFontObject(character.online and "GameFontHighlight" or "GameFontDisable")
     row.LastPlayed:SetFontObject(character.online and "GameFontHighlight" or "GameFontDisable")
     row.Ruleset:SetText(Lists.RulesetName(character.ruleset))
-    row.Level:SetText(tostring(character.level))
+    row.Level:SetText(character.level and tostring(character.level) or UNKNOWN_VALUE)
     row.LastPlayed:SetText(character.online and GREEN_FONT_COLOR:WrapTextInColorCode(L["Online"])
-        or FriendsFrame_GetLastOnline(character.lastSeen))
+        or character.lastSeen and FriendsFrame_GetLastOnline(character.lastSeen) or UNKNOWN_VALUE)
 
-    row.MainButton:SetShown(character.linked)
+    row.LinkedCheckbox:SetShown(not character.readOnly)
+    row.MainButton:SetShown(character.linked and character.canBeMain)
     row.MainButton:GetNormalTexture():SetDesaturated(not character.main)
     row.MainButton:SetAlpha(character.main and 1 or DIM_CROWN_ALPHA)
     row.MainButton:SetEnabled(not character.main)
@@ -354,7 +401,6 @@ panel.NicknameNote = footer.Content:CreateFontString(nil, "OVERLAY", "GameFontDi
 panel.NicknameNote:SetPoint("LEFT", 10, 0)
 panel.NicknameNote:SetPoint("RIGHT", panel.SharingSettingsButton, "LEFT", -16, 0)
 panel.NicknameNote:SetJustifyH("LEFT")
-panel.NicknameNote:SetText(L["Other players see your nickname instead of your main character's name; each of them can still give you their own nickname, which only they see."])
 
 -- My identity: no identity -----------------------------------------------------------------------
 
@@ -380,7 +426,7 @@ panel.Empty.LinkButton:SetScript("OnClick", function() ns.IdentityDialogs.AskToL
 
 -- Shown while the identity has a linked character, in place of the empty state.
 local identityRegions = {
-    panel.IdentityName, panel.MainCrown, panel.EditNicknameButton, panel.SharingStatus, panel.CharactersHeading, panel.LinkedCount,
+    panel.IdentityName, panel.PartOfLabel, panel.MainCrown, panel.EditNicknameButton, panel.SharingStatus, panel.CharactersHeading, panel.LinkedCount,
     header, scrollBox, scrollBar, panel.NicknameNote,
 }
 
@@ -405,20 +451,27 @@ end
 ---@field name string
 ---@field classID integer
 ---@field ruleset WhosWho.Ruleset
----@field level integer
----@field lastSeen number seconds, from time()
+---@field level integer? nil on another account: its record doesn't say
+---@field lastSeen number? seconds, from time(); nil on another account: its record doesn't say
 ---@field online boolean the character logged in
 ---@field main boolean
 ---@field linked boolean
+---@field canBeMain boolean this account chooses a main among its characters
+---@field readOnly boolean? a character of another account, managed from there
 
----@param characters WhosWho.MyIdentityCharacter[] in the order shown
-function panel:SetCharacters(characters)
-    local linked = 0
-    for _, character in ipairs(characters) do
-        if character.linked then linked = linked + 1 end
-    end
-    self.LinkedCount:SetText(L["%d of %d linked"]:format(linked, #characters))
-    scrollBox:SetDataProvider(CreateDataProvider(characters))
+---The title of an account's characters in the list.
+---@class WhosWho.MyIdentityGroup
+---@field groupTitle string
+---@field groupId string the account's short ID
+---@field waiting boolean? the other account doesn't declare the link back yet
+
+---@param elements (WhosWho.MyIdentityCharacter|WhosWho.MyIdentityGroup)[] in the order shown
+---@param linked integer this account's linked characters
+---@param total integer this account's characters
+---@param grouped boolean the list holds other accounts too
+function panel:SetCharacters(elements, linked, total, grouped)
+    self.LinkedCount:SetText((grouped and L["%d of %d linked on this account"] or L["%d of %d linked"]):format(linked, total))
+    scrollBox:SetDataProvider(CreateDataProvider(elements))
 end
 
 ---@class WhosWho.MyIdentityGuild
@@ -585,6 +638,19 @@ function panel:EditGuild(clubId, nickname)
     end
 end
 
+-- The characters of the record I hold of that account, read-only, in the order of the list.
+local function accountCharacters(id)
+    local characters = {}
+    for guid, character in pairs(ns.LinkedAccounts.Characters(id)) do
+        characters[#characters + 1] = {
+            guid = guid, name = character.name, classID = character.classID, ruleset = character.ruleset,
+            online = false, main = false, linked = true, canBeMain = false, readOnly = true,
+        }
+    end
+    sortCharacters(characters)
+    return characters
+end
+
 ---Fills the panel from the identity, or shows the empty state while no character is linked.
 function panel:Refresh()
     local Identity = ns.Identity
@@ -594,7 +660,12 @@ function panel:Refresh()
     self:SetGuilds(empty and {} or ownGuilds())
     if empty then return end
 
-    self:SetIdentityName(Identity.Nickname(), not Identity.HasNickname())
+    local partOf = Identity.PartOf() ~= nil
+    self:SetIdentityName(Identity.Nickname(), not Identity.HasNickname() and not partOf)
+    self.IdentityName:SetPoint("TOPLEFT", HEADER_LEFT, partOf and -40 or -32)
+    self.PartOfLabel:SetShown(partOf)
+    self.EditNicknameButton:SetShown(not partOf)
+    self.ListHeader.Labels.Main:SetShown(not partOf)
 
     local scopeNames = {}
     for _, scope in ipairs(SCOPES) do
@@ -604,17 +675,35 @@ function panel:Refresh()
 
     local mainGuid = Identity.Main()
     local onlineGuid = UnitGUID("player")
-    local characters = {}
+    local characters, linked = {}, 0
     for guid, character in pairs(Identity.Characters()) do
+        if character.linked then linked = linked + 1 end
         characters[#characters + 1] = {
             guid = guid, name = character.name, classID = character.classID, ruleset = character.ruleset,
             level = character.level, lastSeen = character.lastSeen,
-            online = guid == onlineGuid, main = guid == mainGuid, linked = character.linked == true,
+            online = guid == onlineGuid, main = not partOf and guid == mainGuid, linked = character.linked == true,
+            canBeMain = not partOf,
         }
     end
     sortCharacters(characters)
     self.ListHeader:SetSort(sortKey, sortAscending)
-    self:SetCharacters(characters)
+
+    local accounts = ns.LinkedAccounts.List()
+    local grouped = accounts[1] ~= nil
+    local total = #characters
+    local elements = characters
+    for _, account in ipairs(accounts) do
+        elements[#elements + 1] = {
+            groupTitle = partOf and L["Main identity"] or L["Other account"], groupId = account.id:sub(1, 8),
+            waiting = account.waiting,
+        }
+        for _, character in ipairs(accountCharacters(account.id)) do elements[#elements + 1] = character end
+    end
+    self:SetCharacters(elements, linked, total, grouped)
+
+    self.NicknameNote:SetText(partOf and L["Your nickname and your main come from your main identity: change them on that account, where its characters are managed too."]
+        or grouped and L["Your other accounts' characters are managed from those accounts."]
+        or L["Other players see your nickname instead of your main character's name; each of them can still give you their own nickname, which only they see."])
 end
 
 window:HookScript("OnShow", function() panel:Refresh() end)
@@ -627,6 +716,8 @@ ns.IdentityDialogs.NewIdentity:HookScript("OnHide", refreshIfShown)
 ns.IdentityDialogs.LinkCharacter:HookScript("OnHide", refreshIfShown)
 -- Changes made while the window is open, from the panel or elsewhere (Settings, slash commands).
 ns.Identity.OnRevisionChanged(refreshIfShown)
+-- The other accounts' characters come from the records I hold.
+ns.LinkedAccounts.OnChanged(refreshIfShown)
 
 -- A click on the active column reverses it; another column starts A to Z for names, highest first for levels and most
 -- recent first for last played.

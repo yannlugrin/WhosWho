@@ -168,11 +168,13 @@ function People.FindConfirmedByName(name, ruleset)
 end
 
 ---Whether a record of that identity and revision would be new: not held at that revision or a later one, and not
----forgotten at that revision or a later one.
+---forgotten at that revision or a later one. My linked accounts are not people: their records go to LinkedAccounts.
 ---@param id string
 ---@param rev integer
 ---@return boolean
 function People.IsNewer(id, rev)
+    if ns.Identity.IsLinkedAccount(id) then return false end
+
     local person = ns.data.people[id]
     if person and person.signedRecord and person.signedRecord.rev >= rev then return false end
 
@@ -231,26 +233,6 @@ function People.IdentityNickname(id)
     -- Another identity can hold the main (a confirmation moved it there); its name is still in the record.
     local main = person.chars[person.main] or (person.signedRecord and person.signedRecord.chars[person.main])
     return person.nickname or (main and main.name)
-end
-
----Whether the record I hold of an identity declares it part of that main identity.
----@param id string
----@param mainId string
----@return boolean
-function People.DeclaresPartOf(id, mainId)
-    local person = ns.data.people[id]
-    local signedRecord = person and person.signedRecord
-    return signedRecord ~= nil and signedRecord.partOf == mainId
-end
-
----Whether the record I hold of a main identity declares that identity one of its other accounts.
----@param mainId string
----@param id string
----@return boolean
-function People.DeclaresAccount(mainId, id)
-    local person = ns.data.people[mainId]
-    local accounts = person and person.signedRecord and person.signedRecord.accounts
-    return accounts ~= nil and accounts[id] == true
 end
 
 ---The name a person is shown under: my nickname, otherwise the identity's own.
@@ -454,6 +436,33 @@ function People.Forget(id)
     if not ns.data.people[id] then return end
     forget(id)
     changed()
+end
+
+---A person became one of my linked accounts: it leaves the people I hold, and its holder keeps it (LinkedAccounts.Hold).
+---@param id string
+---@return WhosWho.Person? person
+function People.TakeOut(id)
+    local person = ns.data.people[id]
+    if not person then return nil end
+
+    forget(id)
+    pendingConfirmations[id] = nil
+    changed()
+    return person
+end
+
+---A linked account is a person again: the one I knew, without the characters another person took since, and its newest
+---record, whichever I hold.
+---@param person WhosWho.Person?
+---@param signedRecord WhosWho.SignedIdentityRecord?
+function People.GiveBack(person, signedRecord)
+    if person then
+        ns.data.people[person.id] = person
+        for guid in pairs(person.chars) do
+            if People.Exists(guid) then person.chars[guid] = nil else indexCharacter(guid, person.id) end
+        end
+    end
+    if not (signedRecord and People.Accept(signedRecord) == "updated") then changed() end
 end
 
 ---Forgets every person, shared and manual.

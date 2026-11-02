@@ -14,6 +14,7 @@ ns.Store = Store
 ---@class WhosWho.Data
 ---@field identity WhosWho.IdentityData
 ---@field people table<string, WhosWho.Person> by identity ID
+---@field linkedAccounts table<string, WhosWho.LinkedAccount> by identity ID: what I hold of my other accounts
 ---@field nextManual integer number of the next manual person ("M<n>")
 ---@field forgotten table<string, WhosWho.ForgottenIdentity> by identity ID
 ---@field noIdentity table<string, number> GUID -> when (time()) the character last declared no identity (NOID), until it confirms one
@@ -42,6 +43,7 @@ ns.Store = Store
 Store.DEFAULTS = {
     global = {
         identity = { rev = 1, chars = {} },
+        linkedAccounts = {},
         nextManual = 1,
         forgotten = {},
         noIdentity = {},

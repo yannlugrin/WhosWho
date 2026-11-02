@@ -594,7 +594,11 @@ local function addCodeBox(dialog)
     inset:EnableMouse(true)
     inset:SetScript("OnMouseDown", function() input:SetFocus() end)
 
-    ns.Skin.Apply(function(S) S.Inset(inset) end)
+    -- S.Inset alone leaves nothing to see: this box has to show where to paste.
+    ns.Skin.Apply(function(S)
+        S.Inset(inset)
+        S.Panel(inset, { inset = true })
+    end)
     return input
 end
 

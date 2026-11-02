@@ -22,7 +22,7 @@ strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 local ns = {}
 for _, file in ipairs({
     "Crypto/Slicing.lua", "Crypto/SHA512.lua", "Crypto/Ed25519.lua", "Core/Store.lua", "Core/Migrations.lua", "Core/Record.lua",
-    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Core/GuildRecord.lua", "Core/GuildList.lua", "Comm/Scopes.lua",
+    "Core/Identity.lua", "Core/AutomaticChanges.lua", "Core/People.lua", "Core/LinkedAccounts.lua", "Core/Resolver.lua", "Core/GuildSettings.lua", "Core/GuildRecord.lua", "Core/GuildList.lua", "Comm/Scopes.lua",
 }) do
     assert(loadfile(root .. "/" .. file))("WhosWho", ns)
 end
@@ -570,23 +570,69 @@ local function indexMatchesSavedData(guids)
     return true
 end
 
--- What a held record declares about the player's other accounts.
+-- My linked accounts: their records are held apart from the people I hold.
 fresh()
 do
-    local P = ns.People
-    local A, B, C = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+    local I, P, LA = ns.Identity, ns.People, ns.LinkedAccounts
+    I.EnsureKeys()
+    local own, A, B = I.Id(), string.rep("a", 64), string.rep("b", 64)
+    I.Refresh(G4, "My Char", NORMAL, MAGE, nil, 10)
+    I.Link(G4)
+    local changes = 0
+    LA.OnChanged(function() changes = changes + 1 end)
 
-    check(not P.DeclaresPartOf(A, B) and not P.DeclaresAccount(A, B), "no record held declares nothing")
-    local mainRecord = makeRecord(A, 1, { G1 }, "Ann")
-    mainRecord.accounts = { [B] = true }
-    P.Accept(mainRecord)
-    check(P.DeclaresAccount(A, B) and not P.DeclaresAccount(A, C), "a main identity's record declares its accounts only")
-    check(not P.DeclaresPartOf(A, B), "a main identity's record declares no main identity")
-    local otherRecord = makeRecord(B, 1, { G2 }, "Bob")
-    otherRecord.partOf = A
-    P.Accept(otherRecord)
-    check(P.DeclaresPartOf(B, A) and not P.DeclaresPartOf(B, C), "another account's record declares its main identity only")
-    check(not P.DeclaresAccount(B, A), "another account's record declares no accounts")
+    -- A person I knew, with my nickname and note, becomes my linked account.
+    P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann"))
+    P.Rename(A, "My Ann")
+    P.SetNote(A, "a note")
+    I.AddAccount(A)
+    check(P.Get(A) == nil and P.All()[A] == nil and P.Find(G1) == nil, "linked, the person leaves People")
+    check(LA.Nickname(A) == "Ann" and LA.Holding(G1) == A and LA.List()[1].id == A, "and its record is held here")
+    check(LA.List()[1].waiting, "the account waits until its record declares mine")
+    check(ns.Resolver.Resolve(G1).nickname == "My Char" and not ns.Resolver.Resolve(G1).mine,
+        "its characters go by my nickname, and aren't this account's")
+    check(not P.IsNewer(A, 99), "People wants no record of it")
+
+    -- Newer records come here, and decide the characters.
+    local record = makeRecord(A, 2, { G1, G2 }, "Ann")
+    record.partOf = own
+    LA.Accept(record)
+    check(not LA.List()[1].waiting and not LA.IsNewer(A, 2) and LA.IsNewer(A, 3) and changes > 0,
+        "a newer record declaring mine ends the wait")
+    local withoutGeneral = makeRecord(A, 3, { G1 }, "Ann")
+    withoutGeneral.main = nil
+    LA.Accept(withoutGeneral)
+    check(LA.IsNewer(A, 3), "a record without the general part is refused: it says what a guild gets")
+    LA.DeclaredNoIdentity(G2)
+    check(LA.Characters(A)[G2] == nil and LA.Holding(G2) == nil and LA.Characters(A)[G1] ~= nil,
+        "a character declaring no identity leaves, the record stays")
+    LA.DeclaredNoIdentity(G1)
+    check(next(LA.Characters(A)) == nil and LA.Nickname(A) == "Ann" and LA.List()[1].id == A, "the last one too: the account stays")
+    local linkedAgain = makeRecord(A, 4, { G1, G2 }, "Annie")
+    linkedAgain.partOf = own
+    LA.Accept(linkedAgain)
+    check(LA.Characters(A)[G1] ~= nil and LA.Characters(A)[G2] ~= nil and ns.data.noIdentity[G1] == nil,
+        "a newer record brings them back, and leaves People's marks alone")
+    LA.DeclaredNoIdentity(G2)
+
+    -- The link ends: the person is back, with what I gave it and the newest record.
+    I.RemoveAccount(A)
+    local person = P.Get(A)
+    check(person ~= nil and person.customNickname == "My Ann" and person.note == "a note", "removed, the person is back with my nickname and note")
+    check(person.signedRecord.rev == 4 and person.nickname == "Annie" and P.Find(G1) == person, "with the newest record")
+    check(P.Find(G2) == nil and ns.data.noIdentity[G2] ~= nil, "without the character that declared no identity")
+    check(LA.Nickname(A) == nil and LA.Holding(G1) == nil and next(LA.List()) == nil, "and nothing is held here")
+    check(P.IsNewer(A, 5), "People wants its records again")
+
+    -- Never known: nothing moves, and its record becomes a person when the link ends.
+    I.SetPartOf(B)
+    check(I.Nickname() ~= "Bea" and P.Get(B) == nil and LA.List()[1].waiting, "a main identity I never knew holds nothing yet")
+    local mainRecord = makeRecord(B, 1, { G3 }, "Bea")
+    mainRecord.accounts = { [own] = true }
+    LA.Accept(mainRecord)
+    check(I.Nickname() == "Bea" and not LA.List()[1].waiting, "its record gives the name I go by")
+    I.SetPartOf(nil)
+    check(I.Nickname() ~= "Bea" and P.Get(B).nickname == "Bea" and LA.Holding(G3) == nil, "the link ends: it is a person")
 end
 
 fresh()

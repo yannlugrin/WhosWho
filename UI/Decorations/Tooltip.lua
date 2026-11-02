@@ -78,12 +78,10 @@ local function decorate(tooltip, data)
 
     local resolution = ns.Resolver.Resolve(guid)
     if not resolution or resolution.mine then return end
-    local person = ns.People.Get(resolution.id)
-    if not (person and person.chars[guid]) then return end
 
     local settings = ns.settings
     local nickname = resolution.nickname
-    if settings.tooltip.nickname.enable and nickname ~= person.chars[guid].name then
+    if settings.tooltip.nickname.enable and nickname ~= resolution.characterName then
         if settings.tooltip.nickname.position == "afterName" then
             local nameLine = GameTooltipTextLeft1
             local text = nameLine:GetText()
@@ -92,6 +90,10 @@ local function decorate(tooltip, data)
             tooltip:AddLine(soft(L["Who's Who: %s"]:format(nickname)))
         end
     end
+
+    -- A character of my linked account has my nickname, and no person.
+    local person = ns.People.Get(resolution.id)
+    if not person then return end
 
     if settings.tooltip.otherCharacters.enable then
         local line = otherCharactersLine(person, guid)

@@ -83,7 +83,7 @@ function UnitMenu.AddSection(root, contextData)
     local guid = playerGuid(contextData)
     if not guid or issecretvalue(guid) then return end
 
-    if ns.Identity.Characters()[guid] then
+    if ns.Identity.Characters()[guid] or ns.LinkedAccounts.Holding(guid) then
         root:CreateDivider()
         root:CreateTitle(L["Who's Who"])
         root:CreateButton(L["Show my identity"], showMyIdentity)

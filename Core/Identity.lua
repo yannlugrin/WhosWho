@@ -18,6 +18,7 @@ ns.Identity = Identity
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
 ---@field accounts table<string, true>? by identity ID: my other accounts, when this is my main identity
 ---@field partOf string? the ID of my main identity, when this is another of my accounts
+---@field mainIdentityNickname string? on another of my accounts, what my main identity goes by, from its record: it stands for my nickname
 ---@field accountCharacters table<string, string>? by identity ID: the character the link code of that account named; never sent
 ---@field signatures table<string, string>? the current revision's records' signatures, by SHA-512 (hex) of their bytes
 ---@field enforcedLinkingOptIns table<integer, boolean>? by club ID, my answer to a guild enforcing linking: true opts in
@@ -494,8 +495,8 @@ local function setLinked(guid, linked)
 
     if linked and not identity.main then identity.main = guid end
     if not linked and identity.main == guid then identity.main = findFirstLinked(identity) end
-    nextRevision()
     character.removedAt = not linked and time() or nil
+    nextRevision()
 end
 
 ---Adds one of this account's characters to the identity. The first one linked becomes the main.
@@ -526,8 +527,10 @@ function Identity.Forget()
     end
     if not unlinked[1] and not identity.nickname and not identity.accounts and not identity.partOf then return end
 
+    local linkedAccounts = ns.LinkedAccounts.List()
     identity.main, identity.nickname, identity.accounts, identity.partOf = nil, nil, nil, nil
-    identity.accountCharacters = nil
+    identity.accountCharacters, identity.mainIdentityNickname = nil, nil
+    for _, account in ipairs(linkedAccounts) do ns.LinkedAccounts.Release(account.id) end
     nextRevision()
     for _, character in ipairs(unlinked) do character.removedAt = time() end
 end
@@ -579,6 +582,7 @@ function Identity.AddAccount(id)
 
     accounts[id] = true
     identity.accounts = accounts
+    ns.LinkedAccounts.Hold(id)
     nextRevision()
     return true
 end
@@ -594,6 +598,7 @@ function Identity.RemoveAccount(id)
     accounts[id] = nil
     if next(accounts) == nil then identity.accounts = nil end
     setAccountCharacter(id, nil)
+    ns.LinkedAccounts.Release(id)
     nextRevision()
 end
 
@@ -610,8 +615,12 @@ function Identity.SetPartOf(id)
     end
 
     if identity.partOf ~= id then
-        if identity.partOf then setAccountCharacter(identity.partOf, nil) end
+        local previous = identity.partOf
+        if previous then setAccountCharacter(previous, nil) end
         identity.partOf = id
+        if previous then ns.LinkedAccounts.Release(previous) end
+        if id then ns.LinkedAccounts.Hold(id) end
+        identity.mainIdentityNickname = id and ns.LinkedAccounts.Nickname(id) or nil
         nextRevision()
     end
     return true
@@ -649,6 +658,23 @@ function Identity.LinkWithCode(code, partOf)
     return true
 end
 
+---A record of my main identity arrived: the name it goes by now stands for my nickname, in my record too.
+---@param nickname string?
+function Identity.SetMainIdentityNickname(nickname)
+    local identity = data()
+    if not nickname or identity.mainIdentityNickname == nickname then return end
+    identity.mainIdentityNickname = nickname
+    nextRevision()
+end
+
+---Whether that identity is one of my linked accounts: one I declared.
+---@param id string
+---@return boolean
+function Identity.IsLinkedAccount(id)
+    local identity = data()
+    return identity.partOf == id or (identity.accounts ~= nil and identity.accounts[id] == true)
+end
+
 ---The character each linked account's link code named.
 ---@return table<string, string>? by identity ID
 function Identity.AccountCharacters()
@@ -677,10 +703,15 @@ function Identity.SetMain(guid)
     return true
 end
 
+-- On another of my accounts, what my main identity goes by; my own nickname comes back when the link ends.
+local function shownNickname(identity)
+    return identity.mainIdentityNickname or identity.nickname
+end
+
 ---Whether the identity has a nickname override; without one, it goes by its main character's name.
 ---@return boolean
 function Identity.HasNickname()
-    return data().nickname ~= nil
+    return shownNickname(data()) ~= nil
 end
 
 ---The nickname override, or the main character's name.
@@ -689,7 +720,7 @@ function Identity.Nickname()
     local _, main = Identity.Main()
     if not main then return nil end
 
-    return data().nickname or main.name
+    return shownNickname(data()) or main.name
 end
 
 ---@param nickname string? nil removes the override: the main character's name is shown
@@ -817,7 +848,7 @@ function Identity.UnsignedRecord(general, clubId, ruleset)
         for id in pairs(identity.accounts) do accounts[id] = true end
     end
     return {
-        v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = general and identity.nickname or nil,
+        v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = general and shownNickname(identity) or nil,
         main = main, chars = chars, guild = guild, accounts = accounts, partOf = general and identity.partOf or nil,
     }
 end

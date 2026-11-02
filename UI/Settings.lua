@@ -294,30 +294,21 @@ StaticPopupDialogs.WHOSWHO_REMOVE_ACCOUNT = {
 
 -- The characters in the record I hold of an account, by name, in class colours, separated by commas; nil without one.
 local function accountCharacters(id)
-    local person = ns.People.Get(id)
-    if not (person and person.signedRecord) then return nil end
-
     local characters = {}
-    for _, character in pairs(person.signedRecord.chars) do characters[#characters + 1] = character end
+    for _, character in pairs(ns.LinkedAccounts.Characters(id)) do characters[#characters + 1] = character end
+    if not characters[1] then return nil end
+
     table.sort(characters, function(a, b) return a.name < b.name end)
     local names = {}
     for i, character in ipairs(characters) do names[i] = ns.Lists.ClassColoredName(character.name, character.classID) end
     return table.concat(names, ", ")
 end
 
--- The accounts linked to this one, by name: my main identity on another account, my other accounts on my main identity.
--- `waiting`: the record I hold of it doesn't declare the link back, or I hold none.
+-- The accounts linked to this one, by name.
 local function linkedAccounts()
-    local Identity, People = ns.Identity, ns.People
-    local ownId, mainId = Identity.Id(), Identity.PartOf()
-    local accounts = {}
-    local function add(id, declaredBack)
-        accounts[#accounts + 1] = { id = id, name = People.Nickname(id), characters = accountCharacters(id), waiting = not declaredBack }
-    end
-    if mainId then
-        add(mainId, People.DeclaresAccount(mainId, ownId))
-    else
-        for id in pairs(Identity.Accounts() or {}) do add(id, People.DeclaresPartOf(id, ownId)) end
+    local accounts = ns.LinkedAccounts.List()
+    for _, account in ipairs(accounts) do
+        account.name, account.characters = ns.LinkedAccounts.Nickname(account.id), accountCharacters(account.id)
     end
     table.sort(accounts, function(a, b) return (a.name or "") < (b.name or "") end)
     return accounts
@@ -506,7 +497,7 @@ local function refreshAccountsIfShown()
     if accountsPanel and accountsPanel:IsVisible() then refreshAccountsPanel(accountsPanel) end
 end
 ns.Identity.OnRevisionChanged(refreshAccountsIfShown)
-ns.People.OnChanged(refreshAccountsIfShown)
+ns.LinkedAccounts.OnChanged(refreshAccountsIfShown)
 
 -- Diagnostic -------------------------------------------------------------------------------------
 

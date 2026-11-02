@@ -9,7 +9,7 @@ dofile(root .. "/Tests/Support/Bit.lua")
 local FILES = {
     "Crypto/Slicing.lua", "Crypto/SHA512.lua", "Crypto/Ed25519.lua",
     "Core/Core.lua", "Core/Store.lua", "Core/Migrations.lua", "Core/Record.lua", "Core/Identity.lua", "Core/AutomaticChanges.lua",
-    "Core/People.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua", "Core/GuildRecord.lua", "Core/GuildList.lua",
+    "Core/People.lua", "Core/LinkedAccounts.lua", "Core/Resolver.lua", "Core/RecordVerification.lua", "Core/GuildSettings.lua", "Core/GuildRecord.lua", "Core/GuildList.lua",
     "Comm/Diagnostic.lua", "Comm/Codec.lua", "Comm/Scopes.lua", "Comm/Protocol.lua",
 }
 local chunks = {}
@@ -3024,33 +3024,82 @@ do
     soma.ns.Protocol.ReachLinkedAccounts()
     run(1)
     check(sent({ from = "Soma Main", type = "ANNOUNCE", target = "Tam Main" }) == 1 and sent({ from = "Tam Main", type = "ANNOUNCE" }) == 0
-        and sent({ from = "Tam Main", type = "GET" }) == 0 and tam.ns.People.Get(somaId) == nil,
+        and sent({ from = "Tam Main", type = "GET" }) == 0 and tam.ns.People.Get(somaId) == nil
+        and tam.ns.LinkedAccounts.Nickname(somaId) == nil,
         "before the other account pasted mine, my whisper is ignored")
 
     check(tam.ns.Identity.LinkWithCode(somaCode, true), "the other account pastes the main identity's code")
     tam.ns.Protocol.ReachLinkedAccounts()
     run(1)
-    check(soma.ns.People.DeclaresPartOf(tamId, somaId) and tam.ns.People.DeclaresAccount(somaId, tamId),
+    check(not soma.ns.LinkedAccounts.List()[1].waiting and not tam.ns.LinkedAccounts.List()[1].waiting,
         "once both pasted, each holds the other's record declaring the link, at once")
     check(soma.ns.Scopes.IsLinkedAccountCharacter("Tam Main") and not soma.ns.Scopes.Allows("Eve Main"),
         "my linked account is allowed, a stranger still isn't")
-    check(select(2, soma.ns.People.Find(tamMain.guid)).state ~= "confirmed", "its characters stay unconfirmed until met")
     soma.ns.Protocol.UnlockSending()
     tam.ns.Protocol.UnlockSending()
     run(30)
 
+    -- The other account goes by my main identity's name, and is me.
+    check(tam.ns.Identity.Nickname() == "Soma Main" and tam.ns.Identity.SignedRecord(true).nickname == "Soma Main",
+        "the other account takes the name my main identity goes by, in its record too")
+    check(soma.ns.LinkedAccounts.Nickname(tamId) == "Soma Main", "which the main identity then holds")
+    check(soma.ns.People.Get(tamId) == nil and tam.ns.People.Get(somaId) == nil
+        and soma.ns.People.Find(tamMain.guid) == nil, "each keeps the other's record, out of its People")
+    check(soma.ns.Resolver.Resolve(tamMain.guid).nickname == "Soma Main", "its characters show my nickname")
+
+    -- My main identity's change reaches the other account at once.
+    soma.ns.Identity.SetNickname("Somnus")
+    run(1)
+    check(tam.ns.Identity.Nickname() == "Somnus" and soma.ns.LinkedAccounts.Nickname(tamId) == "Somnus",
+        "a new nickname on the main identity follows on the other account, right away")
+
     -- Offline at the other's change: the next login reaches it.
-    logout(soma)
-    tam.ns.Identity.SetNickname("Tammy")
+    logout(tam)
+    soma.ns.Identity.SetNickname("Somnia")
     run(30)
+    tam = login(tamAccount, tamMain)
+    run(1)
+    check(tam.ns.Identity.Nickname() == "Somnia" and soma.ns.LinkedAccounts.Nickname(tamId) == "Somnia",
+        "at login, the linked account's newer record comes")
+
+    -- A new character of the main identity, linked while playing it: the other account hears at once.
+    logout(soma)
+    local somaAlt = character("Soma Alt", "Player-3-00050003", MAGE)
+    soma = login(somaAccount, somaAlt)
+    run(1)
+    clearLog()
+    soma.ns.Identity.Link(somaAlt.guid)
+    run(1)
+    check(sent({ from = "Soma Alt", type = "ANNOUNCE", target = "Tam Main" }) == 1, "linking a new character whispers the other account")
+    check(tam.ns.LinkedAccounts.Characters(somaId)[somaAlt.guid] ~= nil, "which then holds it")
+    logout(soma)
     soma = login(somaAccount, somaMain)
     run(1)
-    check(soma.ns.People.Get(tamId).nickname == "Tammy", "at login, the linked account's newer record comes")
 
-    soma.ns.Identity.RemoveAccount(tamId)
-    check(soma.ns.Identity.AccountCharacters() == nil and not soma.ns.Scopes.Allows("Tam Main"), "a removed account is a stranger again")
+    -- The character I play is unlinked: it says so at once, and its next link brings it back.
+    clearLog()
+    tam.ns.Identity.Unlink(tamMain.guid)
+    run(1)
+    check(sent({ from = "Tam Main", type = "NOID", target = "Soma Main" }) == 1 and sent({ from = "Tam Main", type = "ANNOUNCE" }) == 0,
+        "unlinking the character I play whispers NOID to the linked account, nothing else")
+    check(next(soma.ns.LinkedAccounts.Characters(tamId)) == nil and soma.ns.LinkedAccounts.Nickname(tamId) == "Somnia",
+        "the linked account drops a last character, with no guild, group or friend in common, and keeps the account")
+    tam.ns.Identity.Link(tamMain.guid)
+    run(1)
+    check(soma.ns.LinkedAccounts.Characters(tamId)[tamMain.guid] ~= nil,
+        "linked again, it is back on the linked account, without being met")
+
+    -- The link ends: the other account has its own nickname back.
+    tam.ns.Identity.SetNickname("Tammy")
+    check(tam.ns.Identity.Nickname() == "Somnia", "a nickname set on the other account waits")
     tam.ns.Identity.SetPartOf(nil)
-    check(tam.ns.Identity.AccountCharacters() == nil, "so is a main identity no longer declared")
+    check(tam.ns.Identity.AccountCharacters() == nil and tam.ns.Identity.Nickname() == "Tammy",
+        "a main identity no longer declared is a stranger again, and my own nickname is back")
+    check(tam.ns.Identity.SignedRecord(true).nickname == "Tammy", "in my record too")
+    soma.ns.Identity.RemoveAccount(tamId)
+    check(soma.ns.Identity.AccountCharacters() == nil and not soma.ns.Scopes.Allows("Tam Main")
+        and soma.ns.People.All()[tamId] ~= nil and soma.ns.LinkedAccounts.Nickname(tamId) == nil,
+        "so is a removed account, back in my People")
     logout(soma)
     logout(tam)
 end

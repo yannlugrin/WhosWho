@@ -21,9 +21,7 @@ local function nicknameOf(unit)
     local guid = UnitGUID(unit)
     if not guid or issecretvalue(guid) then return nil end
     local resolution = ns.Resolver.Resolve(guid)
-    if not resolution or resolution.mine then return nil end
-    local person = ns.People.Get(resolution.id)
-    if not (person and person.chars[guid]) or resolution.nickname == person.chars[guid].name then return nil end
+    if not resolution or resolution.mine or resolution.nickname == resolution.characterName then return nil end
     return resolution.nickname
 end
 
@@ -73,3 +71,4 @@ events:SetScript("OnEvent", function(_, event, unit)
     if plate and lines[plate] then lines[plate]:Hide() end
 end)
 ns.People.OnChanged(Nameplates.Refresh)
+ns.LinkedAccounts.OnChanged(Nameplates.Refresh)

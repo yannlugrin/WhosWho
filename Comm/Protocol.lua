@@ -3,6 +3,7 @@ local _, ns = ...
 local Codec, Diagnostic, GuildList, GuildRecord, GuildSettings, Identity, People, Record, RecordVerification, Scopes, Store =
     ns.Codec, ns.Diagnostic, ns.GuildList, ns.GuildRecord, ns.GuildSettings, ns.Identity, ns.People, ns.Record,
     ns.RecordVerification, ns.Scopes, ns.Store
+local LinkedAccounts = ns.LinkedAccounts
 
 -- Announcements, record requests (GET) and records (REC) between clients, the guild settings (GSGET, GSET), the guild
 -- lists (GLGET, GLIST) and the guild's records (GIGET, GIREC).
@@ -525,9 +526,10 @@ end
 -- to close nor for the delays that gather messages. Everyone else still gets my new revision the usual way.
 
 local function announceToAccountCharacter(name, wantsAnnouncement)
-    if not Identity.IsLinked(UnitGUID("player")) then return end
+    local message = announcementText(UnitLevel("player"), true, wantsAnnouncement)
+    if not message then return end
 
-    sendAnnouncement(announcementText(UnitLevel("player"), true, wantsAnnouncement), "WHISPER", name)
+    sendAnnouncement(message, "WHISPER", name)
     rememberAnnouncement(name, Identity.AnnouncedRevision(UnitGUID("player")))
 end
 
@@ -538,7 +540,7 @@ local function sendRecordToAccountCharacter(name)
 end
 
 ---Whispers my announcement to the characters of my linked accounts, asking theirs back: whichever plays answers, and the
----two accounts then ask each other for their records. After linking, and at each login.
+---two accounts then ask each other for their records. After linking, at each login and at each change of revision.
 function Protocol.ReachLinkedAccounts()
     for _, name in ipairs(Scopes.LinkedAccountCharacters()) do announceToAccountCharacter(name, true) end
 end
@@ -1021,6 +1023,23 @@ local answerGuildRecordRequests = newGathering(REQUEST_WAIT, sendGuildRecords)
 
 -- Receiving --------------------------------------------------------------------------------------
 
+-- Characters new to my linked accounts, not in the records I hold of them yet, that I asked for that record.
+---@type table<string, true> by name
+local askedAccountCharacters = {}
+
+-- A character of my linked account: its record is all I want, from a linked character. A character new to that account
+-- isn't in the record I hold: the announcement's ID is enough to ask, and the record's signature decides.
+---@param announcement WhosWho.Announcement
+local function receiveAccountAnnouncement(announcement, sender)
+    local id = announcement.id
+    if not announcement.acceptsGet then
+        recordRequests[id] = nil
+    elseif Identity.IsLinked(UnitGUID("player")) and LinkedAccounts.IsNewer(id, announcement.rev) then
+        if not Scopes.IsLinkedAccountCharacter(sender) then askedAccountCharacters[sender] = true end
+        requestRecord(id, sender)
+    end
+end
+
 ---@param announcement WhosWho.Announcement
 local function receiveAnnouncement(announcement, sender)
     local id = announcement.id
@@ -1042,6 +1061,8 @@ local function receiveAnnouncement(announcement, sender)
         scheduleGuildListEvaluation()
         requestUnvouchedGuildRecords(sender)
     end
+    if Identity.IsLinkedAccount(id) then return receiveAccountAnnouncement(announcement, sender) end
+
     -- An anonymous character only updates the identities I hold, and asks nothing; without any linked character, it
     -- takes nothing.
     local sharing = Scopes.RecordReaches(sender)
@@ -1087,7 +1108,7 @@ end
 local function sharedChannel(distribution, sender)
     if distribution == "GUILD" then return Scopes.SharesWithGuild() end
     if distribution == "PARTY" or distribution == "RAID" then return Scopes.Get("group") end
-    if distribution == "WHISPER" then return Scopes.Allows(sender) end
+    if distribution == "WHISPER" then return Scopes.Allows(sender) or askedAccountCharacters[sender] == true end
     return false
 end
 
@@ -1100,10 +1121,22 @@ local function sentByOwner(signedRecord, sender)
     return false
 end
 
+-- A record of my linked account, for LinkedAccounts: its signature decides, whoever sent it.
+local function receiveAccountRecord(signedRecord, sender)
+    askedAccountCharacters[sender] = nil
+    if not LinkedAccounts.IsNewer(signedRecord.id, signedRecord.rev) then return end
+
+    RecordVerification.Queue(signedRecord, Record, function(verified)
+        recordRequests[verified.id] = nil
+        LinkedAccounts.Accept(verified)
+    end)
+end
+
 ---@param recordUpdate WhosWho.RecordUpdate
 local function receiveRecordUpdate(recordUpdate, distribution, sender)
     local signedRecord = recordUpdate.signedRecord
     if signedRecord.id == Identity.Id() then return end
+    if Identity.IsLinkedAccount(signedRecord.id) then return receiveAccountRecord(signedRecord, sender) end
     local fromMyGuild = distribution == "GUILD" or (distribution == "WHISPER" and Scopes.GuildReaches(sender))
     local wanted = People.IsNewer(signedRecord.id, signedRecord.rev) or People.ReplacesHeld(signedRecord)
     if not wanted then return end
@@ -1136,8 +1169,11 @@ local function receiveRecordUpdate(recordUpdate, distribution, sender)
     end)
 end
 
--- A character declaring no identity leaves the shared identity holding it.
+-- A character declaring no identity leaves my linked account or the shared identity holding it.
 local function receiveNoIdentity(sender)
+    local accountGuid = Scopes.LinkedAccountCharacterGuid(sender)
+    if accountGuid then return LinkedAccounts.DeclaredNoIdentity(accountGuid) end
+
     local guid = Scopes.SenderGuid(sender)
     if guid and not Identity.Characters()[guid] then People.DeclaredNoIdentity(guid) end
 end
@@ -1332,6 +1368,7 @@ local PAYLOAD_WANTED = {
     ---@param header WhosWho.PayloadHeader
     REC = function(header)
         if header.id == Identity.Id() then return false end
+        if Identity.IsLinkedAccount(header.id) then return LinkedAccounts.IsNewer(header.id, header.rev) end
         local held = People.Get(header.id)
         return People.IsNewer(header.id, header.rev)
             or (held ~= nil and held.signedRecord ~= nil and held.signedRecord.rev == header.rev)
@@ -1471,7 +1508,10 @@ function Protocol.Start()
     -- A change found at login reaches online players through the login announcement and their GETs.
     publishedRevision, publishedSharingWithGuild = Identity.Revision(), Scopes.SharesWithGuild()
     publishedBytes = Identity.RecordBytesWithoutRevision(true)
-    Identity.OnRevisionChanged(function() scheduleRecordSending(Store.Advanced("revisionWaitSeconds")) end)
+    Identity.OnRevisionChanged(function()
+        scheduleRecordSending(Store.Advanced("revisionWaitSeconds"))
+        Protocol.ReachLinkedAccounts()
+    end)
     Scopes.OnEnabled(scopeEnabled)
     Scopes.OnGuildMembersChanged(tidyGuildRecords)
     People.OnChanged(retryPendingGuildSettings)

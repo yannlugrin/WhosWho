@@ -20,6 +20,7 @@ local addonName, ns = ...
 ---@field Identity WhosWho.Identity
 ---@field AutomaticChanges WhosWho.AutomaticChanges
 ---@field People WhosWho.People
+---@field LinkedAccounts WhosWho.LinkedAccounts
 ---@field Resolver WhosWho.Resolver
 ---@field RecordVerification WhosWho.RecordVerification
 ---@field GuildSettings WhosWho.GuildSettings

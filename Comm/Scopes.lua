@@ -1,6 +1,7 @@
 local _, ns = ...
 ---@cast ns WhosWho.Namespace
 local GuildList, GuildRecord, GuildSettings, Identity, People = ns.GuildList, ns.GuildRecord, ns.GuildSettings, ns.Identity, ns.People
+local LinkedAccounts = ns.LinkedAccounts
 
 -- Who my record goes to and through which channel, the GUIDs the game gives for the players I share with, and the
 -- relationships kept on confirmed characters (guild, friendOf, whisperedAt).
@@ -772,9 +773,7 @@ function Scopes.LinkedAccountCharacters()
     end
     for id, name in pairs(Identity.AccountCharacters() or {}) do
         add(name)
-        local person = People.Get(id)
-        local signedRecord = person and person.signedRecord
-        for _, character in pairs(signedRecord and signedRecord.chars or {}) do
+        for _, character in pairs(LinkedAccounts.Characters(id)) do
             if character.ruleset == ruleset then add(character.name) end
         end
     end
@@ -789,6 +788,19 @@ function Scopes.IsLinkedAccountCharacter(name)
         if accountCharacter == name then return true end
     end
     return false
+end
+
+---The GUID of that character of my linked accounts, from the records I hold of them on my ruleset.
+---@param name string
+---@return string? guid
+function Scopes.LinkedAccountCharacterGuid(name)
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    for id in pairs(Identity.AccountCharacters() or {}) do
+        for guid, character in pairs(LinkedAccounts.Characters(id)) do
+            if character.name == name and character.ruleset == ruleset then return guid end
+        end
+    end
+    return nil
 end
 
 -- Whether my scopes allow sharing with that player; withoutGuildRule: not counting a guild enforcing linking, which I
