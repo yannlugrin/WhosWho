@@ -8,6 +8,7 @@ local addonName, ns = ...
 ---@field Print fun(msg: string)
 ---@field UnitWholeName fun(unit: string): string?
 ---@field NameErrorMessages table<WhosWho.NameErrorCode|"missing", string>
+---@field AccountErrorMessages table<WhosWho.AccountErrorCode, string>
 ---@field Commands table<string, fun(rest: string)>
 ---@field db table AceDB object
 ---@field data WhosWho.Data
@@ -73,6 +74,12 @@ ns.NameErrorMessages = {
     long = L["The name is too long."],
     invalid = L["The name contains characters that are not allowed."],
     missing = L["This person no longer exists."],
+}
+ns.AccountErrorMessages = {
+    invalid = L["This is not a Who's Who link code."],
+    own = L["This is this account's own link code: paste the other account's."],
+    role = L["This account already has a link of the other kind: remove it first."],
+    full = L["You can't link more accounts."],
 }
 
 -- Events -----------------------------------------------------------------------------------------

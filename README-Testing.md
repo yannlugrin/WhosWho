@@ -243,6 +243,23 @@ Needs A and B in one group, both linked with the Group scope on, and `/ww debug 
 - B fights a training dummy; A changes its nickname. About 15 seconds later B shows `Received, PARTY <A>: 2 ANNOUNCE …` but sends no `GET` while in combat. When B leaves combat, B sends `Sent, WHISPER <A>: 2 GET …` and `/ww people <A's character>` on B shows the new nickname.
 - B fights a training dummy for more than 15 seconds and changes its own nickname meanwhile: B sends no `ANNOUNCE` while in combat; within 5 seconds of leaving combat, B shows `Sent, PARTY: 2 ANNOUNCE …`.
 
+## Other Accounts
+
+Needs A and B on two accounts, both linked, sharing nothing else: no group, guild or friend list, every scope off.
+
+- A, **Settings › Who's Who › Other accounts**, before linking any character: the code box is empty and greyed out, and **Link an account…** too, with the line telling to link first. The same from an unlinked character of an account with a linked one.
+- A, linked: the page shows A's link code, its ID and A's name, whole on one line; click it and copy with Ctrl+C; typing doesn't change it.
+- A, **Link an account…**: the dialog opens over the settings, and shows no code of A's.
+- A, dialog open, close the settings: the dialog closes with them.
+- A pastes its own code, then `xyz`, and clicks **Link**: a refusal in red each time, and the dialog stays open.
+- A pastes B's code, from B's page, keeps **my main identity**, and clicks **Link**. Settings page: B's row, **Unknown account**, grey, no characters line, waiting line. `/dump WhosWhoDB.global.identity.accounts` shows B's ID.
+- B pastes A's code, chooses **part of my main identity**, and clicks **Link**, the settings still open. Within seconds on both pages: the other's name, short ID, characters separated by commas in class colours, and no waiting line. B's page has no link button, still shows its code, and "My main identity" lists A. `/dump WhosWhoDB.global.identity.partOf` on B shows A's ID.
+- With a character of A offline when B links: no "No player named" line in chat. A logs in on the character its code named: the waiting line goes.
+- With the two accounts already linked, each on another character listed in the other's record, a change on B while A is offline: A's page shows it after its next login.
+- A, **Link an account…** again: no role choice.
+- **Remove** on A, confirmed: the row goes.
+- A with no accounts left: the list's title is gone.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).

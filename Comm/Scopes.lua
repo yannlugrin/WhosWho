@@ -759,9 +759,43 @@ function Scopes.OnEnabled(listener)
     enabledListeners[#enabledListeners + 1] = listener
 end
 
+---The characters that reach my linked accounts: the one each link code named, and those of the record I hold of each
+---account, in the ruleset of the character I play.
+---@return string[] names
+function Scopes.LinkedAccountCharacters()
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    local names, listed = {}, {}
+    local function add(name)
+        if listed[name] then return end
+        listed[name] = true
+        names[#names + 1] = name
+    end
+    for id, name in pairs(Identity.AccountCharacters() or {}) do
+        add(name)
+        local person = People.Get(id)
+        local signedRecord = person and person.signedRecord
+        for _, character in pairs(signedRecord and signedRecord.chars or {}) do
+            if character.ruleset == ruleset then add(character.name) end
+        end
+    end
+    return names
+end
+
+---Whether that player is a character of one of my linked accounts.
+---@param name string
+---@return boolean
+function Scopes.IsLinkedAccountCharacter(name)
+    for _, accountCharacter in ipairs(Scopes.LinkedAccountCharacters()) do
+        if accountCharacter == name then return true end
+    end
+    return false
+end
+
 -- Whether my scopes allow sharing with that player; withoutGuildRule: not counting a guild enforcing linking, which I
--- share with whatever my Guild scope.
+-- share with whatever my Guild scope. My linked accounts are mine: no scope applies to them.
 local function allows(name, withoutGuildRule)
+    if Scopes.IsLinkedAccountCharacter(name) then return true end
+
     local friends = Scopes.Get("friends")
     local whispersOn = Scopes.Get("whispers")
     local guildOn = Scopes.Get("guild") or not withoutGuildRule

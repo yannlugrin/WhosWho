@@ -371,6 +371,7 @@ local function newEnvironment(session)
     env.C_ChatInfo = {
         SendAddonMessage = function(_, text, distribution, target) send(session, text, distribution, target) end,
     }
+    env.ChatFrame_AddMessageEventFilter = function() end
     env.CreateFrame = function()
         local frame = { events = {}, scripts = {}, shown = true }
         function frame:RegisterEvent(event) self.events[event] = true end
@@ -2995,6 +2996,63 @@ do
     check(rae.ns.Scopes.BnetSender(9999) == nil, "a message from a game account no friend plays on is dropped")
     logout(quin)
     logout(rae)
+end
+
+-- Linked accounts ---------------------------------------------------------------------------------------
+
+-- Soma and Tam are the same player's accounts: no guild, group or friend list in common, every scope off.
+do
+    local somaAccount, tamAccount = account("Soma"), account("Tam")
+    local somaMain = character("Soma Main", "Player-3-00050001", MAGE)
+    local tamMain = character("Tam Main", "Player-3-00050002", ROGUE)
+    local soma, tam = login(somaAccount, somaMain), login(tamAccount, tamMain)
+    slash(soma, "link")
+    slash(tam, "link")
+    run(30)
+    for _, session in ipairs({ soma, tam }) do
+        session.ns.settings.scopes.guild, session.ns.settings.scopes.friends = false, false
+        session.ns.settings.scopes.whispers, session.ns.settings.scopes.group = false, false
+    end
+    local somaId, tamId = soma.ns.Identity.Id(), tam.ns.Identity.Id()
+    local somaCode, tamCode = soma.ns.Identity.LinkCode("Soma Main"), tam.ns.Identity.LinkCode("Tam Main")
+
+    -- The settings stay open: nothing waits for them, or for the delays that gather messages.
+    soma.ns.Protocol.LockSending()
+    tam.ns.Protocol.LockSending()
+    check(soma.ns.Identity.LinkWithCode(tamCode, false), "the main identity pastes the other account's code")
+    clearLog()
+    soma.ns.Protocol.ReachLinkedAccounts()
+    run(1)
+    check(sent({ from = "Soma Main", type = "ANNOUNCE", target = "Tam Main" }) == 1 and sent({ from = "Tam Main", type = "ANNOUNCE" }) == 0
+        and sent({ from = "Tam Main", type = "GET" }) == 0 and tam.ns.People.Get(somaId) == nil,
+        "before the other account pasted mine, my whisper is ignored")
+
+    check(tam.ns.Identity.LinkWithCode(somaCode, true), "the other account pastes the main identity's code")
+    tam.ns.Protocol.ReachLinkedAccounts()
+    run(1)
+    check(soma.ns.People.DeclaresPartOf(tamId, somaId) and tam.ns.People.DeclaresAccount(somaId, tamId),
+        "once both pasted, each holds the other's record declaring the link, at once")
+    check(soma.ns.Scopes.IsLinkedAccountCharacter("Tam Main") and not soma.ns.Scopes.Allows("Eve Main"),
+        "my linked account is allowed, a stranger still isn't")
+    check(select(2, soma.ns.People.Find(tamMain.guid)).state ~= "confirmed", "its characters stay unconfirmed until met")
+    soma.ns.Protocol.UnlockSending()
+    tam.ns.Protocol.UnlockSending()
+    run(30)
+
+    -- Offline at the other's change: the next login reaches it.
+    logout(soma)
+    tam.ns.Identity.SetNickname("Tammy")
+    run(30)
+    soma = login(somaAccount, somaMain)
+    run(1)
+    check(soma.ns.People.Get(tamId).nickname == "Tammy", "at login, the linked account's newer record comes")
+
+    soma.ns.Identity.RemoveAccount(tamId)
+    check(soma.ns.Identity.AccountCharacters() == nil and not soma.ns.Scopes.Allows("Tam Main"), "a removed account is a stranger again")
+    tam.ns.Identity.SetPartOf(nil)
+    check(tam.ns.Identity.AccountCharacters() == nil, "so is a main identity no longer declared")
+    logout(soma)
+    logout(tam)
 end
 
 -- Payload limits ----------------------------------------------------------------------------------------

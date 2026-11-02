@@ -51,8 +51,8 @@ WhosWho/
 │   └── Protocol.lua               Announcements, GET, REC: waits, lock, requesters, own messages
 ├── UI/
 │   ├── Skin.lua                   EllesmereUI skin bridge (no-op without it)
-│   ├── Settings.xml               Settings list row templates: a section's information text, the Diagnostic page's stats and message log
-│   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Display, Minimap, Data; Diagnostic subcategory
+│   ├── Settings.xml               Settings list row templates: a section's information text, the Other accounts page, the Diagnostic page's stats and message log
+│   ├── Settings.lua               AddOns settings category (native Settings API): Sharing, Display, Minimap, Data; Other accounts and Diagnostic subcategories
 │   ├── Launcher.lua               Minimap button (shows the window) and add-on compartment entry (opens the settings), with LibDBIcon
 │   ├── Glyphs.lua                 Glyph images, colours, labels and tooltips
 │   ├── Main/                      The main window
@@ -64,7 +64,7 @@ WhosWho/
 │   │   ├── GuildRoster.lua        Shared by the Guild tab and the guild window's tab: my guild's rows, detail, sharing line
 │   │   └── Guild.lua              Guild tab: my guild's status, and its roster's identities and unknown characters
 │   ├── Dialogs/
-│   │   ├── Identity.lua           Dialogs on my identity: first-login prompts, a guild's rule, change main, unlink, forget me
+│   │   ├── Identity.lua           Dialogs on my identity: first-login prompts, a guild's rule, change main, unlink, forget me, link another account
 │   │   └── People.lua             Link character: to a person I know, or a new person
 │   └── Decorations/               Additions to the game's own frames
 │       ├── Chat.lua               Sender names in chat lines
@@ -232,6 +232,14 @@ Guild record (GuildRecord; see Guild Sharing, Guild records)
   sig         signature over every other field
   (later: the guild's info about the person, such as a role, a note or a join date, and about each character)
 ```
+
+### Other Accounts
+
+A player declares `accounts` or `partOf` from **Settings › Who's Who › Other accounts**, from a linked character. The page always shows this account's link code to copy, and **Link an account…** opens `IdentityDialogs.LinkAccount`, which takes the other's. A link code is the identity ID and the whole name of the character I play, joined by hyphens, with no space (`<id>-First-Surname`, `Identity.LinkCode`). `Identity.LinkWithCode` declares the account, through `Identity.AddAccount` from the main identity or `Identity.SetPartOf` from another account, and saves the character (`accountCharacters`, never sent); a refusal shows in red in the dialog (`ns.AccountErrorMessages`). The role is chosen only while the account has no link; an account already part of another has no button, and **Remove** clears the link, after a confirmation.
+
+Each row shows the name from `People` and the characters of the record I hold (`signedRecord.chars`), or "Unknown account" without a record. It says "Waiting for the other account" until that record declares this account back (`People.DeclaresPartOf`, `People.DeclaresAccount`). Nothing reads these declarations yet to show the accounts as one person.
+
+The two accounts exchange their records directly, whatever the scopes. `Scopes.LinkedAccountCharacters` lists the characters that reach my linked accounts: the one each link code named, and those of the record I hold of each account, in the ruleset of the character I play. `allows` accepts them first, so every scope check accepts them too. After **Link**, and at each login (`Protocol.AnnounceLogin`, even on a quick relog), `Protocol.ReachLinkedAccounts` whispers each of them my announcement asking theirs back; the game's "No player named" line for those not playing is hidden (see Channels). Whichever plays answers, and each side sends a GET if the record is new to it. With these characters, the answering announcement and the REC go out at once: they skip the sending lock, the gathering waits and `reachedRecently`. They leave `publishedRevision` alone, so everyone else still gets the revision the usual way. Only a linked character sends, since a record is refused from a character it doesn't list.
 
 ### Contents per Audience
 
@@ -563,6 +571,8 @@ identity    id (public key, hex), seed (private key, hex), rev, nickname (overri
             signatures = { [SHA-512 of the bytes] = signature } (the current revision's records, everyone's and each
             guild's members': a signature from an older record format is made again),
             enforcedLinkingOptIns = { [club ID] = true (opted in) | false (refused) } (see Enforced linking),
+            accounts = { [id] = true } or partOf = id (my other accounts, or my main identity; see Other Accounts),
+            accountCharacters = { [id] = name } (the character each linked account's link code named; see Other Accounts),
             lastLogout = { guid, at } (the account's last logout or /reload), lastBroadcastRevision (the revision my
             last announcement to every audience with acceptsGet = 1 carried; both for the quick relog, see Announcements)
 people      { [identityID or "M<n>" or "G<hex>"] = { id (the same as the key), signedRecord (shared only), nickname (the player's own, or the guild's),

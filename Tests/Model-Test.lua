@@ -324,9 +324,13 @@ do
     local revision = I.Revision()
     check(not I.AddAccount("xyz") and not I.AddAccount(I.Id()) and I.Revision() == revision,
         "an invalid ID or my own is not an account, and changes nothing")
+    check(select(2, I.AddAccount("xyz")) == "invalid" and select(2, I.AddAccount(I.Id())) == "own"
+        and select(2, I.SetPartOf("xyz")) == "invalid" and select(2, I.SetPartOf(I.Id())) == "own",
+        "an invalid ID and my own are told apart")
     check(I.AddAccount(B) and I.Revision() == revision + 1, "adding an account bumps")
     check(I.AddAccount(B) and I.Revision() == revision + 1, "adding it again changes nothing")
     check(not I.SetPartOf(C) and I.UnsignedRecord(true).partOf == nil, "an account with other accounts can't be part of another")
+    check(select(2, I.SetPartOf(C)) == "role" and I.Accounts()[B] == true and I.PartOf() == nil, "the refusal says why")
 
     local record = I.UnsignedRecord(true)
     check(R.Validate(record) and record.accounts[B] == true, "the record lists it")
@@ -344,6 +348,7 @@ do
 
     for i = 1, R.MAX_ACCOUNTS do check(I.AddAccount(("%064x"):format(i)), "accounts up to the maximum") end
     check(not I.AddAccount(B) and R.Validate(I.UnsignedRecord(true)), "past the maximum refused")
+    check(select(2, I.AddAccount(B)) == "full", "past the maximum says why")
     for i = 1, R.MAX_ACCOUNTS do I.RemoveAccount(("%064x"):format(i)) end
 
     revision = I.Revision()
@@ -352,6 +357,7 @@ do
     check(I.SetPartOf(B) and I.Revision() == revision + 1, "declaring the main identity bumps")
     check(I.SetPartOf(B) and I.Revision() == revision + 1, "declaring it again changes nothing")
     check(not I.AddAccount(C) and I.UnsignedRecord(true).accounts == nil, "an account part of another can't have other accounts")
+    check(select(2, I.AddAccount(C)) == "role" and I.PartOf() == B and I.Accounts() == nil, "that refusal says why")
     record = I.UnsignedRecord(true)
     check(R.Validate(record) and record.partOf == B, "the record names it")
     check(I.UnsignedRecord(false).partOf == nil and I.UnsignedRecord(false, 7, NORMAL).partOf == nil,
@@ -359,9 +365,25 @@ do
     check(R.Verify(I.SignedRecord(true)), "the record with a main identity verifies")
     check(I.SetPartOf(nil) and I.Revision() == revision + 2 and I.UnsignedRecord(true).partOf == nil, "clearing it bumps")
 
-    I.AddAccount(B)
+    local code = I.LinkCode("Ann Main")
+    check(code == I.Id() .. "-Ann-Main", "a link code holds my ID and the character's whole name, without a space")
+    check(select(2, I.LinkWithCode("xyz", false)) == "invalid" and select(2, I.LinkWithCode(B, false)) == "invalid"
+        and select(2, I.LinkWithCode(code, false)) == "own", "a code without a name, and my own, are refused")
+    check(I.LinkWithCode("  " .. B .. "-Bea\n-Main ", false) and I.Accounts()[B] == true
+        and I.AccountCharacters()[B] == "Bea Main", "a code's spaces are cleaned, its character kept")
+    revision = I.Revision()
+    check(I.LinkWithCode(B .. "-Bea-Alt", false) and I.AccountCharacters()[B] == "Bea Alt" and I.Revision() == revision,
+        "a newer code replaces the character, and makes no revision")
+    check(I.UnsignedRecord(true).accountCharacters == nil, "the character stays out of the record")
+    I.RemoveAccount(B)
+    check(I.AccountCharacters() == nil, "removing the account forgets its character")
+    check(I.LinkWithCode(B .. "-Bea-Main", true) and I.PartOf() == B and I.AccountCharacters()[B] == "Bea Main",
+        "a code links to a main identity too")
+    check(I.SetPartOf(nil) and I.AccountCharacters() == nil, "clearing the main identity forgets its character")
+
+    I.LinkWithCode(B .. "-Bea-Main", false)
     I.Forget()
-    check(I.UnsignedRecord(true).accounts == nil, "forgetting removes my other accounts")
+    check(I.UnsignedRecord(true).accounts == nil and I.AccountCharacters() == nil, "forgetting removes my other accounts")
     I.SetPartOf(B)
     I.Forget()
     check(I.UnsignedRecord(true).partOf == nil, "forgetting removes my main identity")
@@ -546,6 +568,25 @@ local function indexMatchesSavedData(guids)
         if (holderId(guid) or false) ~= before[i] then return false end
     end
     return true
+end
+
+-- What a held record declares about the player's other accounts.
+fresh()
+do
+    local P = ns.People
+    local A, B, C = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+
+    check(not P.DeclaresPartOf(A, B) and not P.DeclaresAccount(A, B), "no record held declares nothing")
+    local mainRecord = makeRecord(A, 1, { G1 }, "Ann")
+    mainRecord.accounts = { [B] = true }
+    P.Accept(mainRecord)
+    check(P.DeclaresAccount(A, B) and not P.DeclaresAccount(A, C), "a main identity's record declares its accounts only")
+    check(not P.DeclaresPartOf(A, B), "a main identity's record declares no main identity")
+    local otherRecord = makeRecord(B, 1, { G2 }, "Bob")
+    otherRecord.partOf = A
+    P.Accept(otherRecord)
+    check(P.DeclaresPartOf(B, A) and not P.DeclaresPartOf(B, C), "another account's record declares its main identity only")
+    check(not P.DeclaresAccount(B, A), "another account's record declares no accounts")
 end
 
 fresh()

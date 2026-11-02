@@ -233,6 +233,26 @@ function People.IdentityNickname(id)
     return person.nickname or (main and main.name)
 end
 
+---Whether the record I hold of an identity declares it part of that main identity.
+---@param id string
+---@param mainId string
+---@return boolean
+function People.DeclaresPartOf(id, mainId)
+    local person = ns.data.people[id]
+    local signedRecord = person and person.signedRecord
+    return signedRecord ~= nil and signedRecord.partOf == mainId
+end
+
+---Whether the record I hold of a main identity declares that identity one of its other accounts.
+---@param mainId string
+---@param id string
+---@return boolean
+function People.DeclaresAccount(mainId, id)
+    local person = ns.data.people[mainId]
+    local accounts = person and person.signedRecord and person.signedRecord.accounts
+    return accounts ~= nil and accounts[id] == true
+end
+
 ---The name a person is shown under: my nickname, otherwise the identity's own.
 ---@param id string
 ---@return string? nickname nil for an unknown person

@@ -261,6 +261,253 @@ layout:AddInitializer(CreateSettingsButtonInitializer(L["Forget everyone else"],
     function() StaticPopup_Show("WHOSWHO_FORGET_EVERYONE_ELSE") end,
     L["Forgets every person you know about."], true))
 
+-- Other accounts ---------------------------------------------------------------------------------
+
+local ACCOUNT_ROW_HEIGHT = 40
+local ACCOUNT_REMOVE_WIDTH = 96
+local ACCOUNT_BUTTON_HEIGHT = 22
+local ACCOUNT_BUTTON_TEXT_PADDING = 40
+local ACCOUNT_COLUMN_SPACING = 10
+-- The text, the link code, the link button and the list's title, with every row Record.MAX_ACCOUNTS allows: rows are
+-- hidden, not added.
+local ACCOUNTS_HEIGHT = 200 + ns.Record.MAX_ACCOUNTS * ACCOUNT_ROW_HEIGHT
+
+StaticPopupDialogs.WHOSWHO_REMOVE_ACCOUNT = {
+    text = L["Remove the link with %s?"] .. "\n\n"
+        .. L["Players who know you see the two accounts as two people again, once Who's Who reaches them. You can link them again later."],
+    button1 = L["Remove"],
+    button2 = CANCEL,
+    -- `id`, the popup's data: the account to remove.
+    OnAccept = function(_, id)
+        if ns.Identity.PartOf() == id then
+            ns.Identity.SetPartOf(nil)
+        else
+            ns.Identity.RemoveAccount(id)
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    -- Centred, where the game stacks its popups at the top of the screen.
+    AnchorDialogFrame = function(dialog) dialog:SetPoint("CENTER") end,
+}
+
+-- The characters in the record I hold of an account, by name, in class colours, separated by commas; nil without one.
+local function accountCharacters(id)
+    local person = ns.People.Get(id)
+    if not (person and person.signedRecord) then return nil end
+
+    local characters = {}
+    for _, character in pairs(person.signedRecord.chars) do characters[#characters + 1] = character end
+    table.sort(characters, function(a, b) return a.name < b.name end)
+    local names = {}
+    for i, character in ipairs(characters) do names[i] = ns.Lists.ClassColoredName(character.name, character.classID) end
+    return table.concat(names, ", ")
+end
+
+-- The accounts linked to this one, by name: my main identity on another account, my other accounts on my main identity.
+-- `waiting`: the record I hold of it doesn't declare the link back, or I hold none.
+local function linkedAccounts()
+    local Identity, People = ns.Identity, ns.People
+    local ownId, mainId = Identity.Id(), Identity.PartOf()
+    local accounts = {}
+    local function add(id, declaredBack)
+        accounts[#accounts + 1] = { id = id, name = People.Nickname(id), characters = accountCharacters(id), waiting = not declaredBack }
+    end
+    if mainId then
+        add(mainId, People.DeclaresAccount(mainId, ownId))
+    else
+        for id in pairs(Identity.Accounts() or {}) do add(id, People.DeclaresPartOf(id, ownId)) end
+    end
+    table.sort(accounts, function(a, b) return (a.name or "") < (b.name or "") end)
+    return accounts
+end
+
+---@class WhosWho.AccountRow: Frame
+---@field Name FontString
+---@field Id FontString
+---@field Waiting FontString
+---@field Characters FontString
+---@field RemoveButton Button
+
+---@param panel WhosWho.AccountsPanel
+---@param previous Region what the row sits below
+---@return WhosWho.AccountRow
+local function createAccountRow(panel, previous)
+    ---@type WhosWho.AccountRow
+    local row = CreateFrame("Frame", nil, panel)
+    row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT")
+    row:SetPoint("RIGHT", panel, "RIGHT", -TEXT_INSET, 0)
+    row:SetHeight(ACCOUNT_ROW_HEIGHT)
+
+    row.RemoveButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.RemoveButton:SetText(L["Remove"])
+    row.RemoveButton:SetSize(ACCOUNT_REMOVE_WIDTH, ACCOUNT_BUTTON_HEIGHT)
+    row.RemoveButton:SetPoint("RIGHT")
+
+    row.Name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.Name:SetPoint("TOPLEFT", 0, -4)
+    row.Id = row:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    row.Id:SetPoint("LEFT", row.Name, "RIGHT", ACCOUNT_COLUMN_SPACING, 0)
+    row.Waiting = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.Waiting:SetPoint("LEFT", row.Id, "RIGHT", ACCOUNT_COLUMN_SPACING, 0)
+    row.Waiting:SetText(L["Waiting for the other account"])
+
+    -- One line: the game cuts what doesn't fit, and the tooltip shows it whole.
+    row.Characters = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.Characters:SetPoint("TOPLEFT", row.Name, "BOTTOMLEFT", 0, -3)
+    row.Characters:SetPoint("RIGHT", row.RemoveButton, "LEFT", -ACCOUNT_COLUMN_SPACING, 0)
+    row.Characters:SetJustifyH("LEFT")
+    row.Characters:SetWordWrap(false)
+
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self)
+        local characters = self.Characters:GetText()
+        if not characters then return end
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+        GameTooltip:SetText(self.Name:GetText(), HIGHLIGHT_FONT_COLOR:GetRGB())
+        GameTooltip:AddLine(characters, nil, nil, nil, true)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", GameTooltip_Hide)
+    return row
+end
+
+---The Other accounts page; createAccountsPanel adds its regions the first time it is used.
+---@class WhosWho.AccountsPanel: Frame
+---@field Intro FontString
+---@field CodeLabel FontString
+---@field CodeInput EditBox
+---@field CodeHint FontString
+---@field ownCode string this account's link code, or empty from a character not linked
+---@field LinkButton Button
+---@field LinkFirst FontString
+---@field ListTitle FontString
+---@field ListHint FontString
+---@field Rows WhosWho.AccountRow[]
+
+---@param panel WhosWho.AccountsPanel
+local function createAccountsPanel(panel)
+    panel.Intro = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    panel.Intro:SetPoint("TOPLEFT", TEXT_INSET, 0)
+    panel.Intro:SetPoint("TOPRIGHT", -TEXT_INSET, 0)
+    panel.Intro:SetJustifyH("LEFT")
+    panel.Intro:SetText(L["If you play on more than one game account, link them here: players who know both see one person, with one nickname and all your characters. Players on an older Who's Who keep seeing two people."])
+
+    panel.CodeLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    panel.CodeLabel:SetPoint("TOPLEFT", panel.Intro, "BOTTOMLEFT", 0, -12)
+    panel.CodeLabel:SetText(L["This account's link code"])
+
+    -- Read-only: what is typed is put back, and selecting it stays possible for Ctrl+C.
+    panel.CodeInput = CreateFrame("EditBox", nil, panel, "LargeInputBoxTemplate")
+    panel.CodeInput:SetPoint("TOPLEFT", panel.CodeLabel, "BOTTOMLEFT", 0, -2)
+    panel.CodeInput:SetPoint("RIGHT", panel.Intro, "RIGHT")
+    panel.CodeInput:SetAutoFocus(false)
+    panel.CodeInput:SetFontObject("GameFontHighlightSmall")
+    panel.CodeInput:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput then return end
+        self:SetText(panel.ownCode)
+        self:HighlightText()
+    end)
+
+    panel.CodeHint = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    panel.CodeHint:SetPoint("TOPLEFT", panel.CodeInput, "BOTTOMLEFT", 0, -2)
+    panel.CodeHint:SetText(L["Ctrl+C to copy it, then paste it on the other account."])
+
+    panel.LinkButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    panel.LinkButton:SetText(L["Link an account…"])
+    panel.LinkButton:SetSize(panel.LinkButton:GetTextWidth() + ACCOUNT_BUTTON_TEXT_PADDING, ACCOUNT_BUTTON_HEIGHT)
+    panel.LinkButton:SetPoint("TOPLEFT", panel.CodeHint, "BOTTOMLEFT", 0, -10)
+    panel.LinkButton:SetScript("OnClick", function()
+        ns.IdentityDialogs.LinkAccount:SetAccount(ns.Identity.Accounts() == nil)
+        ns.IdentityDialogs.LinkAccount:Show()
+    end)
+
+    -- A link code names the character I play: the other account reaches it, and only a linked one sends my record.
+    panel.LinkFirst = panel:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    panel.LinkFirst:SetText(L["Link this character first: /ww link"])
+
+    panel.ListTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    panel.ListHint = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    panel.ListHint:SetPoint("TOPLEFT", panel.ListTitle, "BOTTOMLEFT", 0, -4)
+
+    panel.Rows = {}
+    for i = 1, ns.Record.MAX_ACCOUNTS do
+        panel.Rows[i] = createAccountRow(panel, panel.Rows[i - 1] or panel.ListHint)
+    end
+
+    ns.Skin.Apply(function(S)
+        S.EditBox(panel.CodeInput)
+        S.Button(panel.LinkButton)
+        for _, row in ipairs(panel.Rows) do S.Button(row.RemoveButton) end
+    end)
+end
+
+---@param panel WhosWho.AccountsPanel
+local function refreshAccountsPanel(panel)
+    local partOf = ns.Identity.PartOf() ~= nil
+    local isLinked = ns.Identity.IsLinked(UnitGUID("player"))
+    panel.LinkButton:SetShown(not partOf)
+    panel.LinkButton:SetEnabled(isLinked)
+    panel.LinkFirst:SetShown(not isLinked)
+    panel.LinkFirst:ClearAllPoints()
+    if partOf then
+        panel.LinkFirst:SetPoint("TOPLEFT", panel.CodeHint, "BOTTOMLEFT", 0, -6)
+    else
+        panel.LinkFirst:SetPoint("LEFT", panel.LinkButton, "RIGHT", ACCOUNT_COLUMN_SPACING, 0)
+    end
+    panel.ownCode = isLinked and ns.Identity.LinkCode(ns.UnitWholeName("player")) or ""
+    panel.CodeInput:SetEnabled(isLinked)
+    panel.CodeInput:SetText(panel.ownCode)
+    panel.CodeInput:SetCursorPosition(0)
+
+    local accounts = linkedAccounts()
+    panel.ListTitle:SetShown(accounts[1] ~= nil)
+    panel.ListHint:SetShown(accounts[1] ~= nil)
+    panel.ListTitle:ClearAllPoints()
+    panel.ListTitle:SetPoint("TOPLEFT", partOf and panel.CodeHint or panel.LinkButton, "BOTTOMLEFT", 0, partOf and not isLinked and -30 or -16)
+    panel.ListTitle:SetText(partOf and L["My main identity"] or L["My other accounts"])
+    panel.ListHint:SetText(partOf and L["This account is part of it: your nickname and your main are set on that account."]
+        or L["This account is your main identity: your nickname and your main are set here."])
+
+    for i, row in ipairs(panel.Rows) do
+        local account = accounts[i]
+        row:SetShown(account ~= nil)
+        if account then
+            local shortId = account.id:sub(1, 8)
+            local name = account.name or L["Unknown account"]
+            row.Name:SetFontObject(account.name and "GameFontHighlight" or "GameFontDisable")
+            row.Name:SetText(name)
+            row.Id:SetText(shortId)
+            row.Waiting:SetShown(account.waiting)
+            row.Characters:SetText(account.characters)
+            row.RemoveButton:SetScript("OnClick", function()
+                StaticPopup_Show("WHOSWHO_REMOVE_ACCOUNT", ("%s (%s)"):format(name, shortId), nil, account.id)
+            end)
+        end
+    end
+end
+
+local _, accountsLayout = Settings.RegisterVerticalLayoutSubcategory(category, L["Other accounts"])
+
+---@type WhosWho.AccountsPanel? the settings list's row for the panel, once it was shown
+local accountsPanel
+
+local accountsInitializer = Settings.CreateElementInitializer("WhosWhoSettingsAccountsTemplate", {})
+accountsInitializer.GetExtent = function() return ACCOUNTS_HEIGHT end
+accountsInitializer.InitFrame = function(_, frame)
+    if not frame.Rows then createAccountsPanel(frame) end
+    accountsPanel = frame
+    refreshAccountsPanel(frame)
+end
+accountsLayout:AddInitializer(accountsInitializer)
+
+local function refreshAccountsIfShown()
+    if accountsPanel and accountsPanel:IsVisible() then refreshAccountsPanel(accountsPanel) end
+end
+ns.Identity.OnRevisionChanged(refreshAccountsIfShown)
+ns.People.OnChanged(refreshAccountsIfShown)
+
 -- Diagnostic -------------------------------------------------------------------------------------
 
 local diagnosticCategory, diagnosticLayout = Settings.RegisterVerticalLayoutSubcategory(category, L["Diagnostic"])
@@ -532,6 +779,8 @@ Settings.RegisterAddOnCategory(category)
 
 -- The settings offer their own way to link the character.
 SettingsPanel:HookScript("OnShow", function() ns.IdentityDialogs.HideLinkPrompts() end)
+-- The link dialog opens over the settings, and closes with them.
+SettingsPanel:HookScript("OnHide", function() ns.IdentityDialogs.LinkAccount:Hide() end)
 
 ns.Commands.settings = function()
     Settings.OpenToCategory(category:GetID())

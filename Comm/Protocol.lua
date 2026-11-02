@@ -519,6 +519,30 @@ local function queueAnnouncement(name)
     answerAnnouncements()
 end
 
+-- My linked accounts ------------------------------------------------------------------------------
+
+-- The player is watching the link work: with a character of my linked accounts, nothing waits, neither for the settings
+-- to close nor for the delays that gather messages. Everyone else still gets my new revision the usual way.
+
+local function announceToAccountCharacter(name, wantsAnnouncement)
+    if not Identity.IsLinked(UnitGUID("player")) then return end
+
+    sendAnnouncement(announcementText(UnitLevel("player"), true, wantsAnnouncement), "WHISPER", name)
+    rememberAnnouncement(name, Identity.AnnouncedRevision(UnitGUID("player")))
+end
+
+local function sendRecordToAccountCharacter(name)
+    local general, clubId, ruleset = Scopes.RecordContentOf(name)
+    local signedRecord = Identity.SignedRecord(general, clubId, ruleset)
+    sendRecord(Codec.RecordUpdate(signedRecord), "WHISPER", name, contentKey(general, clubId))
+end
+
+---Whispers my announcement to the characters of my linked accounts, asking theirs back: whichever plays answers, and the
+---two accounts then ask each other for their records. After linking, and at each login.
+function Protocol.ReachLinkedAccounts()
+    for _, name in ipairs(Scopes.LinkedAccountCharacters()) do announceToAccountCharacter(name, true) end
+end
+
 -- Players new to my audience ----------------------------------------------------------------------
 -- A scope turned on, a group or guild joined, a friend added: they missed my announcements, so each gets one now and
 -- sends theirs back.
@@ -1003,7 +1027,11 @@ local function receiveAnnouncement(announcement, sender)
     if id == Identity.Id() then return end
 
     -- My answer, whatever the character I play: what it sends, if anything, is decided when the answers go out.
-    if announcement.wantsAnnouncement and Scopes.Allows(sender) then queueAnnouncement(sender) end
+    if announcement.wantsAnnouncement and Scopes.IsLinkedAccountCharacter(sender) then
+        announceToAccountCharacter(sender, false)
+    elseif announcement.wantsAnnouncement and Scopes.Allows(sender) then
+        queueAnnouncement(sender)
+    end
     if announcement.acceptsGet and Scopes.GuildMember(sender)
         and GuildSettings.IsWanted(Identity.GuildId(UnitGUID("player")), announcement.guildSettingsRev) then
         requestGuildSettings(sender, announcement.guildSettingsRev)
@@ -1041,7 +1069,9 @@ end
 local function receiveRecordRequest(request, sender)
     for _, id in ipairs(request.ids) do
         if id == Identity.Id() then
-            if Scopes.RecordReaches(sender) and not reachedRecently(sender) then
+            if Scopes.IsLinkedAccountCharacter(sender) and Scopes.RecordReaches(sender) then
+                sendRecordToAccountCharacter(sender)
+            elseif Scopes.RecordReaches(sender) and not reachedRecently(sender) then
                 requesters[sender] = true
                 scheduleRecordSending()
             end
@@ -1457,6 +1487,8 @@ end
 ---relog: the same character as the account's last logout, less than the quickRelogSeconds setting ago, announcing the revision
 ---my last announcement to every audience already carried.
 function Protocol.AnnounceLogin()
+    Protocol.ReachLinkedAccounts()
+
     local guid, lastLogout = UnitGUID("player"), Identity.LastLogout()
     local quickRelog = lastLogout and lastLogout.guid == guid
         and time() - lastLogout.at < Store.Advanced("quickRelogSeconds")

@@ -18,6 +18,7 @@ ns.Identity = Identity
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
 ---@field accounts table<string, true>? by identity ID: my other accounts, when this is my main identity
 ---@field partOf string? the ID of my main identity, when this is another of my accounts
+---@field accountCharacters table<string, string>? by identity ID: the character the link code of that account named; never sent
 ---@field signatures table<string, string>? the current revision's records' signatures, by SHA-512 (hex) of their bytes
 ---@field enforcedLinkingOptIns table<integer, boolean>? by club ID, my answer to a guild enforcing linking: true opts in
 ---@field guilds table<integer, WhosWho.OwnGuildEntry>? by club ID: what I say in that guild, in its members' record
@@ -526,30 +527,55 @@ function Identity.Forget()
     if not unlinked[1] and not identity.nickname and not identity.accounts and not identity.partOf then return end
 
     identity.main, identity.nickname, identity.accounts, identity.partOf = nil, nil, nil, nil
+    identity.accountCharacters = nil
     nextRevision()
     for _, character in ipairs(unlinked) do character.removedAt = time() end
 end
 
 -- Other accounts -----------------------------------------------------------------------------------
 
--- An identity ID other than mine.
-local function isOtherIdentity(id)
-    return ns.Record.IsId(id) and id ~= data().id
+---@alias WhosWho.AccountErrorCode "invalid"|"own"|"role"|"full"
+
+-- Why an ID can't be another of my accounts: not an identity ID, or my own.
+local function otherIdentityError(id)
+    if not ns.Record.IsId(id) then return "invalid" end
+    if id == data().id then return "own" end
+    return nil
+end
+
+local function setAccountCharacter(id, name)
+    local identity = data()
+    local characters = identity.accountCharacters or {}
+    characters[id] = name
+    identity.accountCharacters = next(characters) and characters or nil
+end
+
+---My other accounts, when this account is my main identity.
+---@return table<string, true>? accounts by identity ID
+function Identity.Accounts()
+    return data().accounts
+end
+
+---@return string? id my main identity's ID, when this account is part of it
+function Identity.PartOf()
+    return data().partOf
 end
 
 ---Declares another of my accounts, from my main identity.
 ---@param id string its identity ID
----@return boolean ok false for an invalid ID or my own, when this account is part of another, or past Record.MAX_ACCOUNTS
+---@return boolean ok
+---@return WhosWho.AccountErrorCode? err when refused
 function Identity.AddAccount(id)
     local identity = data()
-    if not isOtherIdentity(id) then return false end
-    if identity.partOf then return false end
+    local err = otherIdentityError(id)
+    if err then return false, err end
+    if identity.partOf then return false, "role" end
 
     local accounts = identity.accounts or {}
     if accounts[id] then return true end
     local count = 0
     for _ in pairs(accounts) do count = count + 1 end
-    if count >= ns.Record.MAX_ACCOUNTS then return false end
+    if count >= ns.Record.MAX_ACCOUNTS then return false, "full" end
 
     accounts[id] = true
     identity.accounts = accounts
@@ -567,22 +593,66 @@ function Identity.RemoveAccount(id)
 
     accounts[id] = nil
     if next(accounts) == nil then identity.accounts = nil end
+    setAccountCharacter(id, nil)
     nextRevision()
 end
 
 ---Declares this account part of my main identity, or no longer (nil).
 ---@param id string? my main identity's ID
----@return boolean ok false for an invalid ID or my own, or when this account already declares other accounts
+---@return boolean ok
+---@return WhosWho.AccountErrorCode? err when refused
 function Identity.SetPartOf(id)
     local identity = data()
-    if id ~= nil and not isOtherIdentity(id) then return false end
-    if id ~= nil and identity.accounts then return false end
+    if id ~= nil then
+        local err = otherIdentityError(id)
+        if err then return false, err end
+        if identity.accounts then return false, "role" end
+    end
 
     if identity.partOf ~= id then
+        if identity.partOf then setAccountCharacter(identity.partOf, nil) end
         identity.partOf = id
         nextRevision()
     end
     return true
+end
+
+---The code another of my accounts pastes to link to this one: my identity's ID, and the character I play, for the two
+---accounts to reach each other, without a space: "<id>-First-Surname".
+---@param name string the character's whole name
+---@return string
+function Identity.LinkCode(name)
+    return data().id .. "-" .. name:gsub(" ", "-")
+end
+
+---Links to the account of a link code: as my main identity, or as another of my accounts. Pasting a newer code of a
+---linked account only replaces its character.
+---@param code string
+---@param partOf boolean whether the code's account is my main identity
+---@return boolean ok
+---@return WhosWho.AccountErrorCode? err when refused
+function Identity.LinkWithCode(code, partOf)
+    local id, name = code:gsub("%s+", ""):match("^(%x+)%-(.+)$")
+    if not id then return false, "invalid" end
+    name = name:gsub("%-", " ")
+    if not ns.Record.IsName(name) then return false, "invalid" end
+
+    local ok, err
+    if partOf then
+        ok, err = Identity.SetPartOf(id)
+    else
+        ok, err = Identity.AddAccount(id)
+    end
+    if not ok then return false, err end
+
+    setAccountCharacter(id, name)
+    return true
+end
+
+---The character each linked account's link code named.
+---@return table<string, string>? by identity ID
+function Identity.AccountCharacters()
+    return data().accountCharacters
 end
 
 -- Main and nickname ------------------------------------------------------------------------------

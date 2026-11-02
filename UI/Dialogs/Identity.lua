@@ -11,6 +11,7 @@ local L = ns.L
 ---@field NicknameRequest WhosWho.GuildRequestDialog my guild asks me for a nickname
 ---@field MainRequest WhosWho.GuildRequestDialog my guild asks me for a main
 ---@field GuildInvite WhosWho.GuildInviteDialog the character I play asks an officer of one of my guilds for an invite
+---@field LinkAccount WhosWho.LinkAccountDialog links another of my game accounts to this one
 local IdentityDialogs = {}
 ns.IdentityDialogs = IdentityDialogs
 
@@ -569,6 +570,107 @@ local function createGuildInviteDialog()
     return dialog
 end
 
+-- Other accounts ---------------------------------------------------------------------------------
+
+-- UIRadioButtonTemplate's width: its label starts after it, and clicking the label chooses it too.
+local RADIO_WIDTH = 16
+-- Two lines: an ID's 64 characters and a name don't fit on one.
+local CODE_BOX_HEIGHT = 40
+local CODE_BOX_INSET = 6
+
+local function addCodeBox(dialog)
+    local inset = CreateFrame("Frame", nil, dialog, "InsetFrameTemplate")
+    inset:SetSize(WIDTH - 2 * SIDE_PADDING, CODE_BOX_HEIGHT)
+    dialog.rows[#dialog.rows + 1] = { region = inset }
+
+    local input = CreateFrame("EditBox", nil, inset, "InputBoxScriptTemplate")
+    input:SetPoint("TOPLEFT", CODE_BOX_INSET, -CODE_BOX_INSET)
+    input:SetSize(inset:GetWidth() - 2 * CODE_BOX_INSET, inset:GetHeight() - 2 * CODE_BOX_INSET)
+    input:SetMultiLine(true)
+    input:SetAutoFocus(false)
+    input:SetFontObject("GameFontHighlightSmall")
+
+    -- A multi-line edit box is only as tall as its text: a click anywhere else in the box goes to it too.
+    inset:EnableMouse(true)
+    inset:SetScript("OnMouseDown", function() input:SetFocus() end)
+
+    ns.Skin.Apply(function(S) S.Inset(inset) end)
+    return input
+end
+
+local function createLinkAccountDialog()
+    ---@class WhosWho.LinkAccountDialog: WhosWho.PromptDialog
+    ---@field CancelButton Button
+    local dialog = createDialog(WIDTH)
+    addText(dialog, "GameFontNormalLarge"):SetText(L["Link another of your accounts"])
+    addText(dialog, "GameFontDisableSmall"):SetText(L["Paste the code shown on the other account's Other accounts page. The two show as one person once each has pasted the other's."])
+
+    -- Only while this account has no link: it can't be both.
+    dialog.RoleLabel = addLabel(dialog, L["This account is"])
+    local function addRadio(text)
+        local radio = CreateFrame("CheckButton", nil, dialog, "UIRadioButtonTemplate")
+        radio.text:SetFontObject("GameFontHighlight")
+        radio.text:SetText(text)
+        radio:SetHitRectInsets(0, -(WIDTH - 2 * SIDE_PADDING - RADIO_WIDTH), 0, 0)
+        dialog.rows[#dialog.rows + 1] = { region = radio }
+        return radio
+    end
+    dialog.MainRadio = addRadio(L["my main identity"])
+    dialog.PartOfRadio = addRadio(L["part of my main identity, on another account"])
+
+    dialog.OtherLabel = addLabel(dialog, "")
+    dialog.OtherInput = addCodeBox(dialog)
+    dialog.Error = addText(dialog, "GameFontHighlight")
+    dialog.Error:SetJustifyH("LEFT")
+    dialog.Warning = addText(dialog, "GameFontNormal")
+
+    addButtons(dialog, { { "LinkButton", L["Link"] }, { "CancelButton", CANCEL } })
+
+    local function setPartOf(partOf)
+        dialog.partOf = partOf
+        dialog.MainRadio:SetChecked(not partOf)
+        dialog.PartOfRadio:SetChecked(partOf)
+        dialog.OtherLabel:SetText(partOf and L["Your main identity's link code"] or L["The other account's link code"])
+        dialog.Warning:SetText(partOf
+            and L["Link only to an identity of yours: players who know both will see them as one person, under its nickname."]
+            or L["Add only an account of yours: players who know both will see them as one person, under your nickname."])
+        layOut(dialog)
+    end
+    dialog.MainRadio:SetScript("OnClick", function() setPartOf(false) end)
+    dialog.PartOfRadio:SetScript("OnClick", function() setPartOf(true) end)
+
+    dialog.LinkButton:SetScript("OnClick", function()
+        local ok, err = ns.Identity.LinkWithCode(dialog.OtherInput:GetText(), dialog.partOf)
+        if not ok then
+            dialog.Error:SetText(RED_FONT_COLOR:WrapTextInColorCode(ns.AccountErrorMessages[err]))
+            dialog.Error:Show()
+            layOut(dialog)
+            return
+        end
+        ns.Protocol.ReachLinkedAccounts()
+        dialog:Hide()
+    end)
+    dialog.CancelButton:SetScript("OnClick", function() dialog:Hide() end)
+
+    ---@param canChooseRole boolean false when this account already has other accounts: it stays the main identity
+    function dialog:SetAccount(canChooseRole)
+        self.OtherInput:SetText("")
+        self.Error:Hide()
+        self.RoleLabel:SetShown(canChooseRole)
+        self.MainRadio:SetShown(canChooseRole)
+        self.PartOfRadio:SetShown(canChooseRole)
+        setPartOf(false)
+    end
+
+    ns.Skin.Apply(function(S)
+        S.Shell(dialog)
+        S.CloseButton(dialog.CloseButton)
+        S.Button(dialog.LinkButton)
+        S.Button(dialog.CancelButton)
+    end)
+    return dialog
+end
+
 IdentityDialogs.NewIdentity = createNewIdentityDialog()
 IdentityDialogs.LinkCharacter = createLinkCharacterDialog()
 IdentityDialogs.GuildRule = createGuildRuleDialog()
@@ -578,6 +680,7 @@ IdentityDialogs.NicknameRequest = createGuildRequestDialog({
 })
 IdentityDialogs.MainRequest = createGuildRequestDialog({ { "AcceptButton", L["Accept"] }, { "RefuseButton", L["Refuse"] } })
 IdentityDialogs.GuildInvite = createGuildInviteDialog()
+IdentityDialogs.LinkAccount = createLinkAccountDialog()
 
 ---Closes both first-login dialogs, leaving the character unanswered.
 function IdentityDialogs.HideLinkPrompts()
