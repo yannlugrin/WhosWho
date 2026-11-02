@@ -25,7 +25,7 @@ local BUTTON_SPACING = 6
 
 -- The person's name as the popups show it, in its glyph's colour.
 local function coloredNickname(id)
-    local person = People.Get(id)
+    local person = People.Shown(id)
     return Glyphs.Nickname[Lists.NicknameSource(person)].color:WrapTextInColorCode(People.Nickname(id))
 end
 
@@ -328,12 +328,12 @@ StaticPopupDialogs.WHOSWHO_EDIT_PERSON_NICKNAME = {
     button1 = L["Save"],
     button2 = CANCEL,
     button3 = L["Remove my nickname"],
-    DisplayButton3 = function(_, id) return People.Get(id).customNickname ~= nil end,
+    DisplayButton3 = function(_, id) return People.Shown(id).customNickname ~= nil end,
     OnShow = function(popup, id)
         popup.baseText = popup:GetText()
         local editBox = popup:GetEditBox()
         editBox.Instructions:SetText(People.IdentityNickname(id) or "")
-        editBox:SetText(People.Get(id).customNickname or "")
+        editBox:SetText(People.Shown(id).customNickname or "")
         editBox:SetFocus()
     end,
     OnAccept = function(popup) return not savePersonNickname(popup) end,
@@ -419,7 +419,7 @@ noteEditor.Text:RegisterCallback("OnTextChanged", updateCount, noteEditor)
 function noteEditor:Open(id)
     self.id = id
     self.About:SetText(L["About %s"]:format(coloredNickname(id)))
-    self.Text:SetText(People.Get(id).note or "")
+    self.Text:SetText(People.Shown(id).note or "")
     updateCount()
     self:Show()
     self.Text:SetFocus()
@@ -479,7 +479,7 @@ StaticPopupDialogs.WHOSWHO_FORGET_PERSON = {
 function PeopleDialogs.ConfirmForget(id)
     local nickname = coloredNickname(id)
     local characterCount = 0
-    for _ in pairs(People.Get(id).chars) do characterCount = characterCount + 1 end
+    for _ in pairs(People.Shown(id).chars) do characterCount = characterCount + 1 end
     StaticPopup_Show("WHOSWHO_FORGET_PERSON", nickname,
         L["%s and their %d |4character:characters; are removed from your list. This can't be undone."]:format(
             nickname, characterCount), id)

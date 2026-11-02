@@ -635,6 +635,63 @@ do
     check(I.Nickname() ~= "Bea" and P.Get(B).nickname == "Bea" and LA.Holding(G3) == nil, "the link ends: it is a person")
 end
 
+-- Another player's two accounts: one person once the records I hold declare each other.
+fresh()
+do
+    local P, Res = ns.People, ns.Resolver
+    local A, B, C = string.rep("a", 64), string.rep("b", 64), string.rep("c", 64)
+    local changes = 0
+    P.OnChanged(function() changes = changes + 1 end)
+
+    local mainRecord = makeRecord(A, 1, { G1, G2 }, "Ann")
+    mainRecord.accounts = { [B] = true }
+    local otherRecord = makeRecord(B, 1, { G3 }, "Ann")
+    otherRecord.partOf = A
+
+    P.Accept(otherRecord)
+    check(P.JoinedMainId(B) == nil and P.All()[B] ~= nil, "alone, an account declaring a main identity stands alone")
+    P.Rename(B, "My Bea")
+    P.SetNote(B, "note on B")
+    P.Accept(makeRecord(A, 1, { G1, G2 }, "Ann"))
+    check(P.JoinedMainId(B) == nil and P.All()[A] ~= nil and P.All()[B] ~= nil, "two people until the main identity declares it back")
+
+    P.Accept({ v = mainRecord.v, id = A, rev = 2, nickname = "Ann", main = G1, chars = mainRecord.chars, guild = mainRecord.guild,
+        accounts = { [B] = true } })
+    check(P.JoinedMainId(B) == A and P.JoinedMainId(A) == nil, "the two records declare each other: the account joins")
+    check(P.All()[A] ~= nil and P.All()[B] == nil, "one person in the list")
+    local shown = P.Shown(B)
+    check(shown.id == A and shown.main == G1 and shown.signedRecord.id == A, "under the main identity's ID and main")
+    check(shown.chars[G1] and shown.chars[G2] and shown.chars[G3], "with every account's characters")
+    check(shown.customNickname == "My Bea" and shown.note == "note on B", "my nickname and note on the account show until the main has its own")
+    check(P.Nickname(B) == "My Bea" and P.Nickname(A) == "My Bea" and Res.Resolve(G3).nickname == "My Bea", "wherever the name is read")
+
+    -- My edits go to the main identity; nothing is deleted, and each account keeps its own record.
+    P.Rename(A, "My Ann")
+    P.SetNote(A, "note on A")
+    check(P.Nickname(B) == "My Ann" and P.Shown(B).note == "note on A", "the main identity's own come first")
+    check(P.Get(B).customNickname == "My Bea" and P.Get(B).note == "note on B", "the account's stay saved")
+    check(P.Get(A).chars[G3] == nil and P.Get(B).chars[G1] == nil and P.Get(B).signedRecord.id == B, "and saved data isn't joined")
+    check(P.Find(G3).id == B, "a character's holder stays its own account")
+    check(select(2, P.Find(G3)).state == "listed", "a character keeps its state until met")
+
+    -- The link ends: two people again, as they were.
+    P.Accept({ v = mainRecord.v, id = A, rev = 3, nickname = "Ann", main = G1, chars = mainRecord.chars, guild = mainRecord.guild })
+    check(P.JoinedMainId(B) == nil and P.All()[B] ~= nil and P.Nickname(B) == "My Bea" and P.Shown(B).id == B, "no longer declared: two people again")
+
+    -- Another main identity's list doesn't join it.
+    P.Accept({ v = mainRecord.v, id = C, rev = 1, nickname = "Cid", main = G4,
+        chars = { [G4] = { name = "N1", ruleset = NORMAL, classID = MAGE } }, guild = mainRecord.guild, accounts = { [B] = true } })
+    check(P.JoinedMainId(B) == nil and P.All()[C] ~= nil and P.All()[B] ~= nil, "a main identity the account doesn't declare doesn't join it")
+
+    -- Forgetting the person forgets both.
+    P.Accept({ v = mainRecord.v, id = A, rev = 4, nickname = "Ann", main = G1, chars = mainRecord.chars, guild = mainRecord.guild,
+        accounts = { [B] = true } })
+    check(P.JoinedMainId(B) == A, "joined again")
+    changes = 0
+    P.Forget(A)
+    check(P.Get(A) == nil and P.Get(B) == nil and P.Find(G3) == nil and changes == 1, "forgetting the person forgets both accounts, in one change")
+end
+
 fresh()
 do
     local P = ns.People

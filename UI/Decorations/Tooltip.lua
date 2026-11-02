@@ -92,7 +92,7 @@ local function decorate(tooltip, data)
     end
 
     -- A character of my linked account has my nickname, and no person.
-    local person = ns.People.Get(resolution.id)
+    local person = ns.People.Shown(resolution.id)
     if not person then return end
 
     if settings.tooltip.otherCharacters.enable then

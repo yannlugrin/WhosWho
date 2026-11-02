@@ -106,16 +106,68 @@ end
 
 -- Reading ----------------------------------------------------------------------------------------
 
+---What I hold of that identity alone, one account of a player: for its record. People.Shown gives the person I see.
 ---@param id string
 ---@return WhosWho.Person?
 function People.Get(id)
     return ns.data.people[id]
 end
 
----Every person I hold.
+---The main identity an account joins: the records I hold of the two declare each other.
+---@param id string
+---@return string? mainId nil when the account stands alone
+function People.JoinedMainId(id)
+    local person = ns.data.people[id]
+    local mainId = person and person.signedRecord and person.signedRecord.partOf
+    local main = mainId and ns.data.people[mainId]
+    local accounts = main and main.signedRecord and main.signedRecord.accounts
+    return accounts and accounts[id] and mainId or nil
+end
+
+-- The accounts that join that main identity, by ID.
+local function joinedAccounts(mainId)
+    local main = ns.data.people[mainId]
+    local ids = {}
+    for id in pairs(main and main.signedRecord and main.signedRecord.accounts or {}) do
+        if People.JoinedMainId(id) == mainId then ids[#ids + 1] = id end
+    end
+    table.sort(ids)
+    return ids
+end
+
+---The person I see behind that identity. A player's joined accounts are one person, to read only: the main identity's
+---ID, name and main, every account's characters, and my nickname and note on the main identity, otherwise the first
+---account's holding one.
+---@param id string
+---@return WhosWho.Person?
+function People.Shown(id)
+    local mainId = People.JoinedMainId(id) or id
+    local main = ns.data.people[mainId]
+    local accounts = joinedAccounts(mainId)
+    if not (main and accounts[1]) then return main end
+
+    local person = {}
+    for key, value in pairs(main) do person[key] = value end
+    person.chars = {}
+    for guid, character in pairs(main.chars) do person.chars[guid] = character end
+    for _, accountId in ipairs(accounts) do
+        local account = ns.data.people[accountId]
+        for guid, character in pairs(account.chars) do person.chars[guid] = character end
+        person.customNickname = person.customNickname or account.customNickname
+        person.note = person.note or account.note
+        person.updatedAt = math.max(person.updatedAt or 0, account.updatedAt or 0)
+    end
+    return person
+end
+
+---Every person I see: a player's joined accounts are one (People.Shown).
 ---@return table<string, WhosWho.Person> by identity ID
 function People.All()
-    return ns.data.people
+    local people = {}
+    for id in pairs(ns.data.people) do
+        if not People.JoinedMainId(id) then people[id] = People.Shown(id) end
+    end
+    return people
 end
 
 ---Adds a function called after each change to the people I hold: a person, a character, a nickname or an activity.
@@ -227,7 +279,7 @@ end
 ---@param id string
 ---@return string? nickname nil for an unknown person
 function People.IdentityNickname(id)
-    local person = ns.data.people[id]
+    local person = People.Shown(id)
     if not person then return nil end
 
     -- Another identity can hold the main (a confirmation moved it there); its name is still in the record.
@@ -239,7 +291,7 @@ end
 ---@param id string
 ---@return string? nickname nil for an unknown person
 function People.Nickname(id)
-    local person = ns.data.people[id]
+    local person = People.Shown(id)
     if not person then return nil end
 
     return person.customNickname or People.IdentityNickname(id)
@@ -431,10 +483,14 @@ local function forget(id)
     ns.data.people[id] = nil
 end
 
+---Forgets a person, with the accounts it joins.
 ---@param id string
 function People.Forget(id)
     if not ns.data.people[id] then return end
-    forget(id)
+
+    local mainId = People.JoinedMainId(id) or id
+    for _, accountId in ipairs(joinedAccounts(mainId)) do forget(accountId) end
+    forget(mainId)
     changed()
 end
 

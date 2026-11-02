@@ -114,7 +114,7 @@ end
 ---Selects a person: their row is marked and the detail panel shows them; nil clears the selection.
 ---@param id string?
 function panel:Select(id)
-    local person = id and People.Get(id)
+    local person = id and People.Shown(id)
     browser:SetSelected(person and id or nil)
     browser:SetPerson(person and PersonBrowser.PersonDetail(person, ns.Scopes.OnlineGuids()) or nil)
 end
@@ -157,11 +157,12 @@ function panel:ShowPerson(id)
     for _, filter in ipairs(FILTERS) do self.filters[filter.key] = true end
     self.FilterDropdown:GenerateMenu()
     self.SearchBox:SetText("")
-    browser.selectedId = id
+    local person = People.Shown(id)
+    browser.selectedId = person and person.id or id
     window:Show()
     Main.SelectTab(self)
     self:Refresh()
-    browser:ScrollTo(id)
+    browser:ScrollTo(browser.selectedId)
 end
 
 -- A click on the active column reverses it; another column starts A to Z for names, most recent first for last seen.

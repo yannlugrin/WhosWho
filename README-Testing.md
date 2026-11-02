@@ -268,6 +268,18 @@ Needs A and B on two accounts, both linked, sharing nothing else: no group, guil
 - **Remove** on A, confirmed: the row goes, the group goes, and B comes back in **People**.
 - A with no accounts left: the list's title is gone.
 
+## Joined Accounts
+
+Needs a third player, C, sharing with A's and B's accounts (guild, friends, or whispers), and A and B linked to each other (see Other Accounts).
+
+- C knows B alone, with a nickname and a note of C's: B's row shows them.
+- C then holds A's record too: one row in **People**, under A's name, with A's and B's characters in one list, the crown on A's main. C's nickname and note for B still show.
+- C edits the nickname and the note: they show, on the one row. C removes the nickname: B's shows again.
+- C's tooltip and chat on a character of B show the same name as on a character of A. **Also:** lists both accounts' characters.
+- B's characters not met yet have their unconfirmed mark; one logged in and heard from loses it.
+- **Forget** on the row: both accounts leave.
+- A removes B, with C still holding them: once C has A's new record, two rows again, with C's nickname and note where they were.
+
 ## Still to Test
 
 - During a boss fight, in a real group run: `/dump C_ChatInfo.InChatMessagingLockdown(), C_ChatInfo.SendAddonMessage("WhosWho", "test", "PARTY"), issecretvalue(UnitGUID("party1")), issecretvalue(UnitName("party1"))` (inside a dungeon out of a boss fight, all are fine).
