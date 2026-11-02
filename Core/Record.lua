@@ -12,6 +12,7 @@ ns.Record = Record
 -- signed over a fixed list of fields.
 Record.VERSION = 2
 Record.MAX_CHARACTERS = 50
+Record.MAX_ACCOUNTS = 8
 -- Larger numbers would lose digits once written into the signed bytes.
 Record.MAX_REVISION = 2 ^ 31 - 1
 
@@ -24,6 +25,8 @@ Record.MAX_REVISION = 2 ^ 31 - 1
 ---@field main string? GUID of the main character, one of chars; nil without characters, or when a guild main stands in
 ---@field chars table<string, WhosWho.Character> by GUID
 ---@field guild WhosWho.GuildSharing
+---@field accounts table<string, true>? by identity ID: the owner's other accounts, when this is their main identity
+---@field partOf string? the ID of the owner's main identity, when this is another of their accounts
 
 ---What the owner allows within the guilds of their characters, and, in the record sent to a guild's members, that guild's
 ---entry: what the owner says there.
@@ -168,6 +171,23 @@ local function isGuildSharing(guild, chars)
     return true
 end
 
+-- An identity ID other than the record's own.
+local function isOtherIdentity(s, id)
+    return Record.IsId(s) and s ~= id
+end
+
+-- The main identity's other accounts: from one to Record.MAX_ACCOUNTS.
+local function isAccountList(accounts, id)
+    if type(accounts) ~= "table" or next(accounts) == nil then return false end
+
+    local count = 0
+    for account, listed in pairs(accounts) do
+        if listed ~= true or not isOtherIdentity(account, id) then return false end
+        count = count + 1
+    end
+    return count <= Record.MAX_ACCOUNTS
+end
+
 ---Checks the structure only: the fields this version knows, and the limits of the signed bytes; fields a later version
 ---adds are kept. The signature is checked by Record.Verify.
 ---@param record any
@@ -190,6 +210,9 @@ function Record.Validate(record)
     end
     if count > Record.MAX_CHARACTERS then return false, "chars" end
     if not isGuildSharing(record.guild, record.chars) then return false, "guild" end
+    if record.accounts ~= nil and not isAccountList(record.accounts, record.id) then return false, "accounts" end
+    if record.partOf ~= nil and not isOtherIdentity(record.partOf, record.id) then return false, "partOf" end
+    if record.accounts ~= nil and record.partOf ~= nil then return false, "partOf" end
 
     if count == 0 then
         if record.main ~= nil then return false, "main" end

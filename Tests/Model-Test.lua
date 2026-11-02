@@ -278,9 +278,97 @@ do
             raceID = 99, maxLevelAt = R.MAX_REVISION }
         r.main, r.guild.main, r.guild.forced[guid] = guid, guid, true
     end
+    r.accounts = {}
+    for i = 1, R.MAX_ACCOUNTS do r.accounts[("%064x"):format(i)] = true end
     bytes = R.Canonical(r)
     check(R.Validate(r) and #bytes <= R.MAX_SIGNED_LENGTH / 2,
         ("the largest legitimate record, %d signed bytes, stays under half the limit"):format(bytes and #bytes or 0))
+
+    -- The owner's other accounts.
+    local OTHER = string.rep("b", 64)
+    r = base(); r.accounts = { [OTHER] = true }
+    check(R.Validate(r) and R.Canonical(r) ~= R.Canonical(base()), "a main identity's other accounts are valid and signed")
+    r = base(); r.partOf = OTHER
+    check(R.Validate(r) and R.Canonical(r) ~= R.Canonical(base()), "the main identity an account is part of is valid and signed")
+    r = base(); r.accounts = {}
+    check(select(2, R.Validate(r)) == "accounts", "an empty list of accounts refused")
+    r = base(); r.accounts = OTHER
+    check(select(2, R.Validate(r)) == "accounts", "accounts that aren't a list refused")
+    r = base(); r.accounts = { xyz = true }
+    check(select(2, R.Validate(r)) == "accounts", "an account that isn't an ID refused")
+    r = base(); r.accounts = { [OTHER] = "yes" }
+    check(select(2, R.Validate(r)) == "accounts", "an account mark other than true refused")
+    r = base(); r.accounts = { [r.id] = true }
+    check(select(2, R.Validate(r)) == "accounts", "a record listing its own ID refused")
+    r = base(); r.accounts = {}
+    for i = 1, R.MAX_ACCOUNTS + 1 do r.accounts[("%064x"):format(i)] = true end
+    check(select(2, R.Validate(r)) == "accounts", "more accounts than the maximum refused")
+    r = base(); r.partOf = "xyz"
+    check(select(2, R.Validate(r)) == "partOf", "a main identity that isn't an ID refused")
+    r = base(); r.partOf = r.id
+    check(select(2, R.Validate(r)) == "partOf", "a record part of itself refused")
+    r = base(); r.accounts, r.partOf = { [OTHER] = true }, string.rep("c", 64)
+    check(select(2, R.Validate(r)) == "partOf", "both a list of accounts and a main identity refused")
+end
+
+-- My other accounts --------------------------------------------------------------------------------
+
+fresh()
+do
+    local I, R = ns.Identity, ns.Record
+    I.EnsureKeys()
+    I.Refresh(G1, "Ann Main", NORMAL, MAGE, nil, 10)
+    I.Link(G1)
+    local B, C = string.rep("b", 64), string.rep("c", 64)
+
+    local revision = I.Revision()
+    check(not I.AddAccount("xyz") and not I.AddAccount(I.Id()) and I.Revision() == revision,
+        "an invalid ID or my own is not an account, and changes nothing")
+    check(I.AddAccount(B) and I.Revision() == revision + 1, "adding an account bumps")
+    check(I.AddAccount(B) and I.Revision() == revision + 1, "adding it again changes nothing")
+    check(not I.SetPartOf(C) and I.UnsignedRecord(true).partOf == nil, "an account with other accounts can't be part of another")
+
+    local record = I.UnsignedRecord(true)
+    check(R.Validate(record) and record.accounts[B] == true, "the record lists it")
+    record.accounts[C] = true
+    check(I.UnsignedRecord(true).accounts[C] == nil, "the record holds a copy of the list")
+    check(I.UnsignedRecord(false).accounts == nil and I.UnsignedRecord(false, 7, NORMAL).accounts == nil,
+        "a record without the general part doesn't list them")
+    local signed = I.SignedRecord(true)
+    check(R.Verify(signed), "the record with accounts verifies")
+
+    I.RemoveAccount(C)
+    check(I.Revision() == revision + 1, "removing an account not listed changes nothing")
+    I.RemoveAccount(B)
+    check(I.Revision() == revision + 2 and I.UnsignedRecord(true).accounts == nil, "removing the last one leaves no list")
+
+    for i = 1, R.MAX_ACCOUNTS do check(I.AddAccount(("%064x"):format(i)), "accounts up to the maximum") end
+    check(not I.AddAccount(B) and R.Validate(I.UnsignedRecord(true)), "past the maximum refused")
+    for i = 1, R.MAX_ACCOUNTS do I.RemoveAccount(("%064x"):format(i)) end
+
+    revision = I.Revision()
+    check(not I.SetPartOf("xyz") and not I.SetPartOf(I.Id()) and I.Revision() == revision,
+        "an invalid ID or my own is not a main identity, and changes nothing")
+    check(I.SetPartOf(B) and I.Revision() == revision + 1, "declaring the main identity bumps")
+    check(I.SetPartOf(B) and I.Revision() == revision + 1, "declaring it again changes nothing")
+    check(not I.AddAccount(C) and I.UnsignedRecord(true).accounts == nil, "an account part of another can't have other accounts")
+    record = I.UnsignedRecord(true)
+    check(R.Validate(record) and record.partOf == B, "the record names it")
+    check(I.UnsignedRecord(false).partOf == nil and I.UnsignedRecord(false, 7, NORMAL).partOf == nil,
+        "a record without the general part doesn't name it")
+    check(R.Verify(I.SignedRecord(true)), "the record with a main identity verifies")
+    check(I.SetPartOf(nil) and I.Revision() == revision + 2 and I.UnsignedRecord(true).partOf == nil, "clearing it bumps")
+
+    I.AddAccount(B)
+    I.Forget()
+    check(I.UnsignedRecord(true).accounts == nil, "forgetting removes my other accounts")
+    I.SetPartOf(B)
+    I.Forget()
+    check(I.UnsignedRecord(true).partOf == nil, "forgetting removes my main identity")
+    I.SetPartOf(B)
+    revision = I.Revision()
+    I.Forget()
+    check(I.Revision() == revision + 1, "forgetting only a main identity still makes a revision")
 end
 
 -- A character's race and when it reached the highest level, in my record.

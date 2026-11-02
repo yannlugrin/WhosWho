@@ -16,6 +16,8 @@ ns.Identity = Identity
 ---@field nickname string? override; the main character's name is shown otherwise
 ---@field main string? GUID of the main character, always a linked one
 ---@field chars table<string, WhosWho.OwnCharacter> by GUID
+---@field accounts table<string, true>? by identity ID: my other accounts, when this is my main identity
+---@field partOf string? the ID of my main identity, when this is another of my accounts
 ---@field signatures table<string, string>? the current revision's records' signatures, by SHA-512 (hex) of their bytes
 ---@field enforcedLinkingOptIns table<integer, boolean>? by club ID, my answer to a guild enforcing linking: true opts in
 ---@field guilds table<integer, WhosWho.OwnGuildEntry>? by club ID: what I say in that guild, in its members' record
@@ -521,11 +523,66 @@ function Identity.Forget()
         if character.linked then unlinked[#unlinked + 1] = character end
         character.linked = nil
     end
-    if not unlinked[1] and not identity.nickname then return end
+    if not unlinked[1] and not identity.nickname and not identity.accounts and not identity.partOf then return end
 
-    identity.main, identity.nickname = nil, nil
+    identity.main, identity.nickname, identity.accounts, identity.partOf = nil, nil, nil, nil
     nextRevision()
     for _, character in ipairs(unlinked) do character.removedAt = time() end
+end
+
+-- Other accounts -----------------------------------------------------------------------------------
+
+-- An identity ID other than mine.
+local function isOtherIdentity(id)
+    return ns.Record.IsId(id) and id ~= data().id
+end
+
+---Declares another of my accounts, from my main identity.
+---@param id string its identity ID
+---@return boolean ok false for an invalid ID or my own, when this account is part of another, or past Record.MAX_ACCOUNTS
+function Identity.AddAccount(id)
+    local identity = data()
+    if not isOtherIdentity(id) then return false end
+    if identity.partOf then return false end
+
+    local accounts = identity.accounts or {}
+    if accounts[id] then return true end
+    local count = 0
+    for _ in pairs(accounts) do count = count + 1 end
+    if count >= ns.Record.MAX_ACCOUNTS then return false end
+
+    accounts[id] = true
+    identity.accounts = accounts
+    nextRevision()
+    return true
+end
+
+---Removes one of my other accounts from my main identity.
+---@param id string its identity ID
+function Identity.RemoveAccount(id)
+    local identity = data()
+    local accounts = identity.accounts
+    if not accounts then return end
+    if not accounts[id] then return end
+
+    accounts[id] = nil
+    if next(accounts) == nil then identity.accounts = nil end
+    nextRevision()
+end
+
+---Declares this account part of my main identity, or no longer (nil).
+---@param id string? my main identity's ID
+---@return boolean ok false for an invalid ID or my own, or when this account already declares other accounts
+function Identity.SetPartOf(id)
+    local identity = data()
+    if id ~= nil and not isOtherIdentity(id) then return false end
+    if id ~= nil and identity.accounts then return false end
+
+    if identity.partOf ~= id then
+        identity.partOf = id
+        nextRevision()
+    end
+    return true
 end
 
 -- Main and nickname ------------------------------------------------------------------------------
@@ -618,7 +675,8 @@ function Identity.CharactersInGuild(clubId, ruleset)
     return guids
 end
 
----The unsigned record of the current revision. Its general part: my linked characters, my nickname and my main. For the
+---The unsigned record of the current revision. Its general part: my linked characters, my nickname, my main and my other
+---accounts or the main identity this one is part of. For the
 ---members of a guild whose members get a record of their own (Identity.HasGuildContent), that guild's entry: when it
 ---enforces linking, my characters in that guild too, listed as forced when the record has no general part or they
 ---aren't linked; the guild main I chose there, otherwise my main when it is in the guild, otherwise, when the guild
@@ -682,9 +740,15 @@ function Identity.UnsignedRecord(general, clubId, ruleset)
     if clubId and (guildMain or forced or entry.nickname) then
         guild.id, guild.main, guild.nickname, guild.forced = clubId, guildMain, entry.nickname, forced
     end
+
+    local accounts
+    if general and identity.accounts then
+        accounts = {}
+        for id in pairs(identity.accounts) do accounts[id] = true end
+    end
     return {
         v = ns.Record.VERSION, id = identity.id, rev = identity.rev, nickname = general and identity.nickname or nil,
-        main = main, chars = chars, guild = guild,
+        main = main, chars = chars, guild = guild, accounts = accounts, partOf = general and identity.partOf or nil,
     }
 end
 
