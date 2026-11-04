@@ -75,66 +75,101 @@ end
 
 -- My own identity ---------------------------------------------------------------------------------
 
--- My record as most of my guild's members get it (Scopes.GuildMembersContent); while they get none, my record with its
--- general part.
----@return WhosWho.IdentityRecord
-local function ownGuildRecord()
+---One of my accounts as my guild sees it.
+---@class WhosWho.OwnGuildAccount
+---@field record WhosWho.IdentityRecord
+---@field chars table<string, WhosWho.Character> by GUID
+
+-- My accounts as my guild sees them, the main identity's first: my record as most of my guild's members get it
+-- (Scopes.GuildMembersContent; while they get none, my record with its general part), with its characters; and each
+-- linked account that declares the link back, with its characters in my guild, as the record I hold lists them.
+---@return WhosWho.OwnGuildAccount[]
+local function ownAccounts()
     local general, clubId, ruleset = ns.Scopes.GuildMembersContent()
-    return Identity.UnsignedRecord(general or not clubId, clubId, ruleset)
+    local record = Identity.UnsignedRecord(general or not clubId, clubId, ruleset)
+    local accounts = { { record = record, chars = record.chars } }
+    for _, account in ipairs(ns.LinkedAccounts.List()) do
+        if not account.waiting then
+            local chars = {}
+            for guid, character in pairs(ns.LinkedAccounts.Characters(account.id)) do
+                if ns.Scopes.GuildRankIndex(guid) then chars[guid] = character end
+            end
+            local linked = { record = ns.LinkedAccounts.Record(account.id), chars = chars }
+            if account.id == Identity.PartOf() then
+                table.insert(accounts, 1, linked)
+            else
+                accounts[#accounts + 1] = linked
+            end
+        end
+    end
+    return accounts
 end
 
--- The name my guild's members show me under: my nickname there, otherwise the name of the main they see.
-local function ownNickname(record)
-    return ns.Record.ShownNickname(record, record.guild.id)
-        or record.chars[ns.Record.ShownMain(record, record.guild.id)].name
+-- Every character of my accounts, by GUID.
+---@param accounts WhosWho.OwnGuildAccount[]
+local function ownCharactersOf(accounts)
+    local characters = {}
+    for _, account in ipairs(accounts) do
+        for guid, character in pairs(account.chars) do characters[guid] = character end
+    end
+    return characters
+end
+
+-- The name my guild's members show me under: my main identity's nickname there, otherwise the name of its main they
+-- see.
+---@param accounts WhosWho.OwnGuildAccount[]
+local function ownNickname(accounts)
+    local record, clubId = accounts[1].record, Identity.GuildId(UnitGUID("player"))
+    return ns.Record.ShownNickname(record, clubId) or record.chars[ns.Record.ShownMain(record, clubId)].name
 end
 
 -- My own identity's row: the characters my guild gets, the one I play online.
----@param record WhosWho.IdentityRecord
+---@param accounts WhosWho.OwnGuildAccount[]
 ---@return WhosWho.PersonListEntry
-local function ownListEntry(record)
+local function ownListEntry(accounts)
     local ownCharacterGuid, ownCharacters = UnitGUID("player"), Identity.Characters()
     local characterCount, lastSeen, onlineCharacter = 0, nil, nil
-    for guid, character in pairs(record.chars) do
+    for guid, character in pairs(ownCharactersOf(accounts)) do
         characterCount = characterCount + 1
-        local seen = ownCharacters[guid].lastSeen
-        if not lastSeen or seen > lastSeen then lastSeen = seen end
+        local seen = ownCharacters[guid] and ownCharacters[guid].lastSeen
+        if seen and (not lastSeen or seen > lastSeen) then lastSeen = seen end
         if guid == ownCharacterGuid then
             onlineCharacter = { guid = guid, name = character.name, classID = character.classID }
         end
     end
     return {
-        id = Identity.Id(), nickname = ownNickname(record), source = "confirmed", characterCount = characterCount,
+        id = Identity.Id(), nickname = ownNickname(accounts), source = "confirmed", characterCount = characterCount,
         lastSeen = lastSeen, online = onlineCharacter ~= nil, onlineCharacter = onlineCharacter,
     }
 end
 
----@param record WhosWho.IdentityRecord
+---@param accounts WhosWho.OwnGuildAccount[]
 ---@return WhosWho.PersonDetail
-local function ownDetail(record)
+local function ownDetail(accounts)
     local ownCharacterGuid, ownCharacters = UnitGUID("player"), Identity.Characters()
-    local mainGuid = ns.Record.ShownMain(record, record.guild.id)
+    local onlineGuids = ns.Scopes.OnlineGuids()
+    local mainGuid = ns.Record.ShownMain(accounts[1].record, Identity.GuildId(ownCharacterGuid))
     local characters = {}
-    for guid, character in pairs(record.chars) do
-        local ownCharacter = ownCharacters[guid]
+    for guid, character in pairs(ownCharactersOf(accounts)) do
+        local ownCharacter = ownCharacters[guid] or {}
         characters[#characters + 1] = {
             guid = guid,
             name = character.name, classID = character.classID, state = "confirmed", main = guid == mainGuid,
-            online = guid == ownCharacterGuid, lastSeen = ownCharacter.lastSeen, level = ownCharacter.level,
-            ruleset = character.ruleset,
+            online = guid == ownCharacterGuid or onlineGuids[guid] == true, lastSeen = ownCharacter.lastSeen,
+            level = ownCharacter.level, ruleset = character.ruleset,
         }
     end
     PersonBrowser.SortCharacters(characters)
     return {
-        nickname = ownNickname(record), source = "confirmed", characters = characters, id = Identity.Id(),
+        nickname = ownNickname(accounts), source = "confirmed", characters = characters, id = Identity.Id(),
     }
 end
 
 -- Whether the search text, lowercased, is in my nickname or the name of a character my guild gets.
----@param record WhosWho.IdentityRecord
-local function ownMatchesSearch(record, text)
-    if text == "" or ownNickname(record):lower():find(text, 1, true) then return true end
-    for _, character in pairs(record.chars) do
+---@param accounts WhosWho.OwnGuildAccount[]
+local function ownMatchesSearch(accounts, text)
+    if text == "" or ownNickname(accounts):lower():find(text, 1, true) then return true end
+    for _, character in pairs(ownCharactersOf(accounts)) do
         if character.name:lower():find(text, 1, true) then return true end
     end
     return false
@@ -230,8 +265,9 @@ end
 ---@field alt integer
 ---@field unknown integer
 
----A row for each identity whose main is in my guild, mine included, and one for each character no identity holds,
----mine my guild doesn't get included, with the search applied.
+---A row for each person whose main is in my guild, mine included, and one for each character no identity holds, mine
+---my guild doesn't get included, with the search applied. A player's joined accounts are one person (People.Shown):
+---the row stands on the main identity's main, otherwise on the main of a joined account in my guild.
 ---@param text string the search, lowercased
 ---@param members WhosWho.GuildMember[] the roster, from GuildRoster.Members
 ---@return WhosWho.GuildRosterEntry[] entries
@@ -239,8 +275,29 @@ end
 function GuildRoster.Entries(text, members)
     local onlineGuids = ns.Scopes.OnlineGuids()
     local trusted, clubId = ns.Protocol.CanChangeGuildRecords(), Identity.GuildId(UnitGUID("player"))
-    local ownRecord = ownGuildRecord()
-    local ownMainGuid = ns.Record.ShownMain(ownRecord, ownRecord.guild.id)
+    local rosterGuids = {}
+    for _, member in ipairs(members) do rosterGuids[member.guid] = true end
+
+    local ownAccountList = ownAccounts()
+    local ownCharacters, ownMainGuid = ownCharactersOf(ownAccountList), nil
+    for _, account in ipairs(ownAccountList) do
+        local mainGuid = ns.Record.ShownMain(account.record, clubId)
+        if not ownMainGuid and rosterGuids[mainGuid] then ownMainGuid = mainGuid end
+    end
+    -- The main each person's row stands on, and the account holding it: the main identity's, otherwise the joined
+    -- account's with the lowest ID.
+    local rowMainById, rowAccountById = {}, {}
+    for _, member in ipairs(members) do
+        local account = People.Find(member.guid)
+        if account and member.guid == account.main then
+            local id = People.JoinedMainId(account.id) or account.id
+            local kept = rowAccountById[id]
+            if not kept or (kept ~= id and (account.id == id or account.id < kept)) then
+                rowMainById[id], rowAccountById[id] = member.guid, account.id
+            end
+        end
+    end
+
     local entries, counts = {}, { main = 0, alt = 0, unknown = 0 }
     -- The member each identity's row shows: the one online, else its main, else the first met.
     local memberById = {}
@@ -252,25 +309,27 @@ function GuildRoster.Entries(text, members)
     end
     for _, member in ipairs(members) do
         local guid = member.guid
-        local person = People.Find(guid)
+        local account = People.Find(guid)
         local entry
-        if ownRecord.chars[guid] then
+        if ownCharacters[guid] then
             keepMember(Identity.Id(), member, guid == ownMainGuid)
             if guid ~= ownMainGuid then
                 counts.alt = counts.alt + 1
             else
                 counts.main = counts.main + 1
-                if ownMatchesSearch(ownRecord, text) then entry = ownListEntry(ownRecord) end
+                if ownMatchesSearch(ownAccountList, text) then entry = ownListEntry(ownAccountList) end
             end
-        elseif person then
-            keepMember(person.id, member, guid == person.main)
-            if guid ~= person.main then
+        elseif account then
+            local id = People.JoinedMainId(account.id) or account.id
+            keepMember(id, member, guid == rowMainById[id])
+            if guid ~= rowMainById[id] then
                 counts.alt = counts.alt + 1
             else
                 counts.main = counts.main + 1
+                local person = People.Shown(id)
                 if Lists.MatchesSearch(person, text) then
                     entry = PersonBrowser.ListEntry(person, onlineGuids)
-                    entry.openRequest = trusted and hasOpenRequest(clubId, person.id)
+                    entry.openRequest = trusted and hasOpenRequest(clubId, id)
                     -- The nickname mine replaces, after mine.
                     local baseNickname = PersonBrowser.BaseNickname(person)
                     entry.nicknameAside = baseNickname and GRAY_FONT_COLOR:WrapTextInColorCode(baseNickname)
@@ -328,13 +387,13 @@ local function playerClaims(clubId, id)
     return claims
 end
 
----The detail of a person, or of my own identity as my guild gets it; nil for an identity I don't hold. The guild's
----view: the guild's nickname and Unlink, for an officer on one of my guild's identities; nothing of mine.
+---The detail of a person (People.Shown), or of my own identity as my guild gets it; nil for an identity I don't hold.
+---The guild's view: the guild's nickname and Unlink, for an officer on one of my guild's identities; nothing of mine.
 ---@param id string
 ---@return WhosWho.PersonDetail?
 function GuildRoster.Detail(id)
-    if id == Identity.Id() then return ownDetail(ownGuildRecord()) end
-    local person = People.Get(id)
+    if id == Identity.Id() then return ownDetail(ownAccounts()) end
+    local person = People.Shown(id)
     if not person then return nil end
     local detail = PersonBrowser.PersonDetail(person, ns.Scopes.OnlineGuids())
     local clubId = Identity.GuildId(UnitGUID("player"))

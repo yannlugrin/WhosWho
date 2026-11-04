@@ -128,9 +128,8 @@ end
 ---@param tab WhosWho.PersonTab
 local function addGuildSection(root, guid, character, tab)
     local Identity, People = ns.Identity, ns.People
-    if Identity.Characters()[guid] or not (ns.Protocol.CanChangeGuildRecords() and ns.Scopes.GuildRankIndex(guid)) then
-        return
-    end
+    if Identity.Characters()[guid] or ns.LinkedAccounts.Holding(guid) then return end
+    if not (ns.Protocol.CanChangeGuildRecords() and ns.Scopes.GuildRankIndex(guid)) then return end
     local clubId = Identity.GuildId(UnitGUID("player"))
     local person, held = People.Find(guid)
     local dialogs = ns.PeopleDialogs
@@ -149,13 +148,15 @@ local function addGuildSection(root, guid, character, tab)
             entries[#entries + 1] = { L["Unlink"], function() dialogs.ConfirmGuildUnlink(clubId, id, guid) end }
         end
     end
-    -- A player who shares an identity: the guild asks for a nickname, or for one of their other characters in it as main.
+    -- A player who shares an identity: the guild asks the main identity for a nickname, or for one of its other
+    -- characters in it as main; a record names only its own characters as main.
+    local mainAccount = person and People.Get(People.JoinedMainId(person.id) or person.id)
     local mains = {}
-    if person and person.signedRecord then
-        local id = person.id
+    if mainAccount and mainAccount.signedRecord then
+        local id = mainAccount.id
         entries[#entries + 1] = { L["Ask for a nickname…"], function() dialogs.AskGuildNickname(clubId, id) end }
-        for otherGuid, other in pairs(person.chars) do
-            if other.guild == clubId and otherGuid ~= person.main then
+        for otherGuid, other in pairs(mainAccount.chars) do
+            if other.guild == clubId and otherGuid ~= mainAccount.main then
                 mains[#mains + 1] = { name = other.name, classID = other.classID, guid = otherGuid }
             end
         end
@@ -169,7 +170,7 @@ local function addGuildSection(root, guid, character, tab)
         local askMain = root:CreateButton(L["Ask for a main"])
         for _, main in ipairs(mains) do
             askMain:CreateButton(ns.Lists.ClassColoredName(main.name, main.classID),
-                function() dialogs.AskGuildMain(clubId, person.id, main.guid) end)
+                function() dialogs.AskGuildMain(clubId, mainAccount.id, main.guid) end)
         end
     end
 end

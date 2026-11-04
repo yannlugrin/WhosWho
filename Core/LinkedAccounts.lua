@@ -32,6 +32,13 @@ local function recordOf(id)
     return account and account.signedRecord
 end
 
+---The record I hold of an account, as received.
+---@param id string
+---@return WhosWho.SignedIdentityRecord?
+function LinkedAccounts.Record(id)
+    return recordOf(id)
+end
+
 ---What the record I hold of an account says it goes by: its nickname, or its main's name.
 ---@param id string
 ---@return string? nickname nil without a record, or when it names no main

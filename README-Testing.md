@@ -279,6 +279,10 @@ Needs a third player, C, sharing with A's and B's accounts (guild, friends, or w
 - B's characters not met yet have their unconfirmed mark; one logged in and heard from loses it.
 - **Forget** on the row: both accounts leave.
 - A removes B, with C still holding them: once C has A's new record, two rows again, with C's nickname and note where they were.
+- In a guild with A's and B's characters, C holding both: **Guild** tab, one row under A's guild nickname, the counts counting it once; its detail lists both accounts' characters.
+- Same, with only B's characters in the guild: the row stands on B's main.
+- A officer: right-click a character of B, **For the guild**: **Ask for a main** lists only A's characters in the guild.
+- On A, **Guild** tab: my row holds B's characters in the guild, none of them an unknown member; their menu has no **For the guild** section.
 
 ## Still to Test
 

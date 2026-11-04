@@ -187,6 +187,7 @@ local function refreshIfShown()
 end
 -- Records, announcements and my own changes while the panel is open.
 People.OnChanged(refreshIfShown)
+ns.LinkedAccounts.OnChanged(refreshIfShown)
 Identity.OnRevisionChanged(refreshIfShown)
 
 -- The tab is shown only in a guild that enabled Who's Who. Its club ID comes with the roster.

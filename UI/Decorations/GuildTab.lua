@@ -761,6 +761,7 @@ local function addTab(frame)
     end
     ns.GuildSettings.OnChanged(refreshShown)
     ns.People.OnChanged(refreshShown)
+    ns.LinkedAccounts.OnChanged(refreshShown)
     ns.Identity.OnRevisionChanged(refreshShown)
 
     -- Tab ----------------------------------------------------------------------------------------
