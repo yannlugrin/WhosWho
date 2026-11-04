@@ -27,6 +27,15 @@ function LinkedAccounts.OnChanged(listener)
     changeListeners[#changeListeners + 1] = listener
 end
 
+---@type fun(id: string)[]
+local releaseListeners = {}
+
+---Adds a function called when an account is no longer linked, before what I hold of it goes.
+---@param listener fun(id: string)
+function LinkedAccounts.OnReleasing(listener)
+    releaseListeners[#releaseListeners + 1] = listener
+end
+
 local function recordOf(id)
     local account = ns.data.linkedAccounts[id]
     return account and account.signedRecord
@@ -146,6 +155,7 @@ end
 ---That identity is no longer one of my linked accounts: it is a person again, with what I held of it.
 ---@param id string
 function LinkedAccounts.Release(id)
+    for _, listener in ipairs(releaseListeners) do listener(id) end
     local account = ns.data.linkedAccounts[id]
     if not account then return end
 

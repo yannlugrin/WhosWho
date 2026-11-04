@@ -539,10 +539,33 @@ local function sendRecordToAccountCharacter(name)
     sendRecord(Codec.RecordUpdate(signedRecord), "WHISPER", name, contentKey(general, clubId))
 end
 
+-- The characters of the accounts whose link just went, by name, for this session: my next change of revision is
+-- whispered to them once (leaving), and then one of them asking gets my record once, whatever my scopes (former), so
+-- that the other account learns at once that the link went.
+---@type table<string, true>
+local leavingAccountCharacters = {}
+---@type table<string, true>
+local formerAccountCharacters = {}
+
+-- The character of an account whose link just went asked: my record with its general part, which no longer declares
+-- that account.
+local function sendRecordToFormerAccountCharacter(name)
+    formerAccountCharacters[name] = nil
+    if not Identity.IsLinked(UnitGUID("player")) then return end
+
+    sendRecord(Codec.RecordUpdate(Identity.SignedRecord(true, nil, nil)), "WHISPER", name, contentKey(true, nil))
+end
+
 ---Whispers my announcement to the characters of my linked accounts, asking theirs back: whichever plays answers, and the
----two accounts then ask each other for their records. After linking, at each login and at each change of revision.
+---two accounts then ask each other for their records. After linking, at each login and at each change of revision; once
+---to the characters of the accounts whose link just went, without asking theirs back.
 function Protocol.ReachLinkedAccounts()
     for _, name in ipairs(Scopes.LinkedAccountCharacters()) do announceToAccountCharacter(name, true) end
+    for name in pairs(leavingAccountCharacters) do
+        announceToAccountCharacter(name, false)
+        formerAccountCharacters[name] = true
+    end
+    leavingAccountCharacters = {}
 end
 
 -- Players new to my audience ----------------------------------------------------------------------
@@ -1092,6 +1115,8 @@ local function receiveRecordRequest(request, sender)
         if id == Identity.Id() then
             if Scopes.IsLinkedAccountCharacter(sender) and Scopes.RecordReaches(sender) then
                 sendRecordToAccountCharacter(sender)
+            elseif formerAccountCharacters[sender] then
+                sendRecordToFormerAccountCharacter(sender)
             elseif Scopes.RecordReaches(sender) and not reachedRecently(sender) then
                 requesters[sender] = true
                 scheduleRecordSending()
@@ -1511,6 +1536,9 @@ function Protocol.Start()
     Identity.OnRevisionChanged(function()
         scheduleRecordSending(Store.Advanced("revisionWaitSeconds"))
         Protocol.ReachLinkedAccounts()
+    end)
+    ns.LinkedAccounts.OnReleasing(function(id)
+        for _, name in ipairs(Scopes.LinkedAccountCharactersOf(id)) do leavingAccountCharacters[name] = true end
     end)
     Scopes.OnEnabled(scopeEnabled)
     Scopes.OnGuildMembersChanged(tidyGuildRecords)

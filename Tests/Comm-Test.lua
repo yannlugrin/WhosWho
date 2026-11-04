@@ -3089,17 +3089,46 @@ do
     check(soma.ns.LinkedAccounts.Characters(tamId)[tamMain.guid] ~= nil,
         "linked again, it is back on the linked account, without being met")
 
-    -- The link ends: the other account has its own nickname back.
+    -- The main identity removes the account: a stranger again, which hears it at once.
+    clearLog()
+    soma.ns.Identity.RemoveAccount(tamId)
+    check(soma.ns.Identity.AccountCharacters() == nil and not soma.ns.Scopes.Allows("Tam Main")
+        and soma.ns.People.All()[tamId] ~= nil and soma.ns.LinkedAccounts.Nickname(tamId) == nil,
+        "a removed account is a stranger again, back in my People")
+    run(1)
+    check(sent({ from = "Soma Main", type = "ANNOUNCE", target = "Tam Main" }) == 1
+        and sent({ from = "Soma Main", type = "REC", target = "Tam Main" }) == 1 and tam.ns.LinkedAccounts.List()[1].waiting,
+        "the removed account gets my announcement and, asking, my record, once: it waits for my main identity again")
+
+    -- The other account ends the link too: its own nickname is back.
     tam.ns.Identity.SetNickname("Tammy")
     check(tam.ns.Identity.Nickname() == "Somnia", "a nickname set on the other account waits")
     tam.ns.Identity.SetPartOf(nil)
     check(tam.ns.Identity.AccountCharacters() == nil and tam.ns.Identity.Nickname() == "Tammy",
         "a main identity no longer declared is a stranger again, and my own nickname is back")
     check(tam.ns.Identity.SignedRecord(true).nickname == "Tammy", "in my record too")
-    soma.ns.Identity.RemoveAccount(tamId)
-    check(soma.ns.Identity.AccountCharacters() == nil and not soma.ns.Scopes.Allows("Tam Main")
-        and soma.ns.People.All()[tamId] ~= nil and soma.ns.LinkedAccounts.Nickname(tamId) == nil,
-        "so is a removed account, back in my People")
+
+    -- Linked again, then the other account ends the link: the main identity hears it at once.
+    check(soma.ns.Identity.LinkWithCode(tamCode, false) and tam.ns.Identity.LinkWithCode(somaCode, true),
+        "the two link again")
+    run(1)
+    check(not soma.ns.LinkedAccounts.List()[1].waiting, "each holding the other's record declaring the link")
+    clearLog()
+    tam.ns.Identity.SetPartOf(nil)
+    run(1)
+    check(sent({ from = "Tam Main", type = "ANNOUNCE", target = "Soma Main" }) == 1
+        and sent({ from = "Tam Main", type = "REC", target = "Soma Main" }) == 1 and soma.ns.LinkedAccounts.List()[1].waiting,
+        "the main identity gets the other account's record no longer declaring it, at once: it waits")
+
+    -- Linked again, then Forget me on the other account: its character leaves the main identity's account at once.
+    check(tam.ns.Identity.LinkWithCode(somaCode, true), "linked again")
+    run(1)
+    clearLog()
+    tam.ns.Identity.Forget()
+    run(1)
+    check(sent({ from = "Tam Main", type = "NOID", target = "Soma Main" }) == 1
+        and soma.ns.LinkedAccounts.Characters(tamId)[tamMain.guid] == nil,
+        "Forget me on the other account whispers NOID: the main identity drops that character at once")
     logout(soma)
     logout(tam)
 end

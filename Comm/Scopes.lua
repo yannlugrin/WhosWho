@@ -760,22 +760,28 @@ function Scopes.OnEnabled(listener)
     enabledListeners[#enabledListeners + 1] = listener
 end
 
----The characters that reach my linked accounts: the one each link code named, and those of the record I hold of each
----account, in the ruleset of the character I play.
+---The characters that reach one of my linked accounts: the one its link code named, and those of the record I hold of
+---it, in the ruleset of the character I play; none without a link code.
+---@param id string
+---@return string[] names
+function Scopes.LinkedAccountCharactersOf(id)
+    local linkCodeName = (Identity.AccountCharacters() or {})[id]
+    if not linkCodeName then return {} end
+
+    local ruleset = Identity.Ruleset(UnitGUID("player"))
+    local names = { linkCodeName }
+    for _, character in pairs(LinkedAccounts.Characters(id)) do
+        if character.ruleset == ruleset and character.name ~= linkCodeName then names[#names + 1] = character.name end
+    end
+    return names
+end
+
+---The characters that reach my linked accounts (Scopes.LinkedAccountCharactersOf).
 ---@return string[] names
 function Scopes.LinkedAccountCharacters()
-    local ruleset = Identity.Ruleset(UnitGUID("player"))
-    local names, listed = {}, {}
-    local function add(name)
-        if listed[name] then return end
-        listed[name] = true
-        names[#names + 1] = name
-    end
-    for id, name in pairs(Identity.AccountCharacters() or {}) do
-        add(name)
-        for _, character in pairs(LinkedAccounts.Characters(id)) do
-            if character.ruleset == ruleset then add(character.name) end
-        end
+    local names = {}
+    for id in pairs(Identity.AccountCharacters() or {}) do
+        for _, name in ipairs(Scopes.LinkedAccountCharactersOf(id)) do names[#names + 1] = name end
     end
     return names
 end

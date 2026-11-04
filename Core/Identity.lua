@@ -529,10 +529,11 @@ function Identity.Forget()
 
     local linkedAccounts = ns.LinkedAccounts.List()
     identity.main, identity.nickname, identity.accounts, identity.partOf = nil, nil, nil, nil
-    identity.accountCharacters, identity.mainIdentityNickname = nil, nil
+    -- Each account is released while the character its link code named is still known: it is told after.
     for _, account in ipairs(linkedAccounts) do ns.LinkedAccounts.Release(account.id) end
-    nextRevision()
+    identity.accountCharacters, identity.mainIdentityNickname = nil, nil
     for _, character in ipairs(unlinked) do character.removedAt = time() end
+    nextRevision()
 end
 
 -- Other accounts -----------------------------------------------------------------------------------
@@ -597,8 +598,8 @@ function Identity.RemoveAccount(id)
 
     accounts[id] = nil
     if next(accounts) == nil then identity.accounts = nil end
-    setAccountCharacter(id, nil)
     ns.LinkedAccounts.Release(id)
+    setAccountCharacter(id, nil)
     nextRevision()
 end
 
@@ -616,9 +617,11 @@ function Identity.SetPartOf(id)
 
     if identity.partOf ~= id then
         local previous = identity.partOf
-        if previous then setAccountCharacter(previous, nil) end
         identity.partOf = id
-        if previous then ns.LinkedAccounts.Release(previous) end
+        if previous then
+            ns.LinkedAccounts.Release(previous)
+            setAccountCharacter(previous, nil)
+        end
         if id then ns.LinkedAccounts.Hold(id) end
         identity.mainIdentityNickname = id and ns.LinkedAccounts.Nickname(id) or nil
         nextRevision()

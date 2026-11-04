@@ -266,6 +266,8 @@ Needs A and B on two accounts, both linked, sharing nothing else: no group, guil
 - A knows B as a person, with a nickname and a note of A's, then links B: B leaves **People**. **Remove** on A: B is back with that nickname and note.
 - **Remove** on B, confirmed: B has its own nickname back, the edit button and the Main column too, with no group titles.
 - **Remove** on A, confirmed: the row goes, the group goes, and B comes back in **People**.
+- **Remove** on A with B online: within seconds, B's **Other accounts** row says "Waiting for the other account". The same the other way, **Remove** on B.
+- **Forget me** on B with A online: within seconds, A's row for B no longer lists B's character played.
 - A with no accounts left: the list's title is gone.
 
 ## Joined Accounts
