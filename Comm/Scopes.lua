@@ -165,15 +165,15 @@ function Scopes.GuildInviteReceived(inviter)
     if inviter and notSecret(inviter) then guildInviter = inviter end
 end
 
----Whether that member of my guild is trusted for its first settings: an officer (or the guild master) in my roster, or
----the member who invited me.
+---Whether that member of my guild is trusted for its first settings: at a settings rank in my roster
+---(GuildSettings.IsSettingsRank), or the member who invited me.
 ---@param name string
 ---@return boolean
 function Scopes.TrustedForGuildSettings(name)
     if name == guildInviter then return true end
     local guid = guildMemberGuid(name)
     local rankIndex = guid and Scopes.GuildRankIndex(guid)
-    return rankIndex ~= nil and rankIndex <= GuildSettings.LOWEST_RANK_INDEX
+    return rankIndex ~= nil and GuildSettings.IsSettingsRank(rankIndex)
 end
 
 ---The online members of my guild but me, from the roster: the member who invited me first, then by rank (the guild

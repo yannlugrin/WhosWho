@@ -680,12 +680,12 @@ local function sendGuildSettings()
     if announcement then announceToGuild(announcement) end
 end
 
----Whether the character I play may change my guild's records (GuildRecord): while I exchange guild lists, at a rank
----index up to GuildList.TRUSTED_RANK_INDEX in my roster, the rank the members check.
+---Whether the character I play may change my guild's records (GuildRecord): while I exchange guild lists, at a
+---trusted rank in my roster (GuildList.IsTrustedRank), the rank the members check.
 ---@return boolean
 function Protocol.CanChangeGuildRecords()
     local rankIndex = Scopes.GuildRankIndex(UnitGUID("player"))
-    return guildListsActive() and rankIndex ~= nil and rankIndex <= GuildList.TRUSTED_RANK_INDEX
+    return guildListsActive() and rankIndex ~= nil and GuildList.IsTrustedRank(rankIndex)
 end
 
 ---@type table<string, true> by identity ID: my guild's records I changed, sent once the changes that follow gathered
@@ -752,7 +752,7 @@ end
 function Protocol.ChangeGuildSettings(settings)
     local ownCharacterGuid = UnitGUID("player")
     local clubId, rankIndex = Identity.GuildId(ownCharacterGuid), Scopes.GuildRankIndex(ownCharacterGuid)
-    if not (clubId and rankIndex and rankIndex <= GuildSettings.LOWEST_RANK_INDEX) then return end
+    if not (clubId and rankIndex and GuildSettings.IsSettingsRank(rankIndex)) then return end
     local enabling = settings.enable and not GuildSettings.Get(clubId).enable
     GuildSettings.Change(clubId, settings, UnitGUID("player"), GetServerTime())
     if enabling then
@@ -787,7 +787,7 @@ local listGivenTo = {}
 local function trustedMember(name)
     local guid = Scopes.SenderGuid(name)
     local rankIndex = guid and Scopes.GuildRankIndex(guid)
-    return rankIndex ~= nil and rankIndex <= GuildList.TRUSTED_RANK_INDEX
+    return rankIndex ~= nil and GuildList.IsTrustedRank(rankIndex)
 end
 
 -- The members who announced that list (the same hash, the same content), trusted ones only when asked.

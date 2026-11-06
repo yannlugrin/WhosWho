@@ -10,8 +10,8 @@ local Crypto, GuildRecord, Identity, People = ns.Crypto, ns.GuildRecord, ns.Iden
 local GuildList = {}
 ns.GuildList = GuildList
 
--- A member at this rank index or above (0 = guild master) passes on identities I don't hold yet.
-GuildList.TRUSTED_RANK_INDEX = 1
+-- Edit Officer Note, among a rank's permissions (C_GuildInfo.GuildControlGetRankFlags).
+local EDIT_OFFICER_NOTE_PERMISSION = 12
 -- Characters of an identity that place it in the guild's list.
 local IN_LIST_STATES = { confirmed = true, relayed = true }
 
@@ -19,6 +19,16 @@ local IN_LIST_STATES = { confirmed = true, relayed = true }
 ---@class WhosWho.GuildListRevision
 ---@field at integer server time; 0 until it first changes, so that a member's first list is older than everyone's
 ---@field hash string 8 hex characters
+
+---Whether that rank of my guild is trusted: its members pass on identities I don't hold yet and sign the guild's
+---records. The guild master's, or one that may edit the officer notes.
+---@param rankIndex integer 0 for the guild master
+---@return boolean
+function GuildList.IsTrustedRank(rankIndex)
+    if rankIndex == 0 then return true end
+    local permissions = C_GuildInfo.GuildControlGetRankFlags(rankIndex + 1)
+    return permissions ~= nil and permissions[EDIT_OFFICER_NOTE_PERMISSION] == true
+end
 
 ---@return table<integer, WhosWho.GuildListRevision> by club ID
 local function revisions()
@@ -154,7 +164,7 @@ end
 ---@param clubId integer
 ---@param ruleset WhosWho.Ruleset the ruleset of the character I play
 ---@param list WhosWho.GuildListUpdate
----@param fromTrustedMember boolean the character I play at a rank index up to TRUSTED_RANK_INDEX in my roster
+---@param fromTrustedMember boolean the character I play at a trusted rank in my roster (GuildList.IsTrustedRank)
 ---@return boolean
 function GuildList.LacksFromMine(clubId, ruleset, list, fromTrustedMember)
     for id, rev in pairs(GuildList.Entries(clubId, ruleset)) do

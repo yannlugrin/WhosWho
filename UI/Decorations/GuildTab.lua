@@ -44,10 +44,10 @@ local COLUMNS = {
 }
 local RANK_COLUMN = { key = "Rank", title = COMMUNITIES_ROSTER_COLUMN_TITLE_RANK, width = 85 }
 
--- The guild master and the officers change the settings.
+-- The guild master and the ranks that may modify the guild info change the settings.
 local function hasSettingsRank()
     local _, _, rankIndex = GetGuildInfo("player")
-    return rankIndex ~= nil and rankIndex <= ns.GuildSettings.LOWEST_RANK_INDEX
+    return rankIndex ~= nil and ns.GuildSettings.IsSettingsRank(rankIndex)
 end
 
 -- The settings are signed from the character I play, which the other members must know as mine, and sent to the guild.

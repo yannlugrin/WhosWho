@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Fixed
+
+- **Guilds**: officers in guilds with several ranks above them can now change the Who's Who settings and the guild's records. Who's Who now follows the game's rank permissions: Modify Guild Info for the settings, Edit Officer Note for the guild's records and for passing on identities.
+
 ## [1.0.0] - 2026-10-23
 
 First release for the live game of World of Warcraft: Forever. What Who's Who does:

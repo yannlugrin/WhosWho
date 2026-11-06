@@ -15,6 +15,8 @@ GetServerTime = os.time
 UnitGUID = function() return "Player-70-00000001" end
 fastrandom = math.random
 C_CreatureInfo = { GetClassInfo = function(classID) if classID <= 13 then return {} end end }
+-- Edit Officer Note (12) and Modify Guild Info (13) for the guild master and rank index 1.
+C_GuildInfo = { GuildControlGetRankFlags = function(rankOrder) return { [12] = rankOrder <= 2, [13] = rankOrder <= 2 } end }
 strlenutf8 = function(s) return select(2, s:gsub("[^\128-\191]", "")) end
 
 local ns = {}

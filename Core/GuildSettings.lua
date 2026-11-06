@@ -11,8 +11,8 @@ ns.GuildSettings = GuildSettings
 -- Raised only for a field the versions before it must not ignore: they refuse the record. Version 1, up to 0.2.0, was
 -- signed over a fixed list of fields.
 GuildSettings.VERSION = 2
--- The guild master (rank index 0) and the officers (1) change the settings.
-GuildSettings.LOWEST_RANK_INDEX = 1
+-- Modify Guild Info, among a rank's permissions (C_GuildInfo.GuildControlGetRankFlags).
+local MODIFY_GUILD_INFO_PERMISSION = 13
 
 ---@class WhosWho.GuildSettingsValues
 ---@field enable boolean Who's Who enabled for the guild
@@ -222,8 +222,17 @@ function GuildSettings.IsNewer(signedRecord)
     return not held or held.signerUnconfirmed == true or GuildSettings.IsNewerThan(signedRecord, held.record)
 end
 
+---Whether that rank of my guild changes the settings: the guild master's, or one that may modify the guild info.
+---@param rankIndex integer 0 for the guild master
+---@return boolean
+function GuildSettings.IsSettingsRank(rankIndex)
+    if rankIndex == 0 then return true end
+    local permissions = C_GuildInfo.GuildControlGetRankFlags(rankIndex + 1)
+    return permissions ~= nil and permissions[MODIFY_GUILD_INFO_PERMISSION] == true
+end
+
 ---Holds a verified record that is newer, when its signer may change the settings: its signing character confirmed,
----and at a rank index up to GuildSettings.LOWEST_RANK_INDEX in my roster. A guild's first settings (none held, or held
+---and at a settings rank in my roster (GuildSettings.IsSettingsRank). A guild's first settings (none held, or held
 ---unconfirmed), whose signer I can't confirm yet, are taken unconfirmed when their signer is at such a rank, or when a
 ---trusted member sent them (an officer, or who invited me), until a confirmed record replaces them whatever its revision.
 ---"pending": the signing character is not confirmed yet, or not in my roster yet; the record may be accepted later.
@@ -233,7 +242,7 @@ end
 ---@return "accepted"|"stale"|"pending"|"refused"
 function GuildSettings.Accept(signedRecord, signerRankIndex, sentByTrusted)
     if not GuildSettings.IsNewer(signedRecord) then return "stale" end
-    local signerOfficer = signerRankIndex ~= nil and signerRankIndex <= GuildSettings.LOWEST_RANK_INDEX
+    local signerOfficer = signerRankIndex ~= nil and GuildSettings.IsSettingsRank(signerRankIndex)
     if signerOfficer and People.IsConfirmedCharacter(signedRecord.signer, signedRecord.signerGuid) then
         hold(signedRecord, false)
         return "accepted"

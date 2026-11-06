@@ -497,6 +497,9 @@ end
 ---@field nickname string
 ---@field names string[] those characters
 
+-- The lowest rank index taken for an officer's in a guild I don't play in, whose ranks' permissions I can't read.
+local OFFICER_RANK_INDEX = 1
+
 -- The officers of that guild I know of, by nickname.
 ---@return WhosWho.KnownOfficer[]
 local function knownOfficers(clubId)
@@ -505,7 +508,7 @@ local function knownOfficers(clubId)
         local names = {}
         for _, character in pairs(person.signedRecord and person.chars or {}) do
             if character.guild == clubId and character.rankIndex
-                and character.rankIndex <= ns.GuildList.TRUSTED_RANK_INDEX then
+                and character.rankIndex <= OFFICER_RANK_INDEX then
                 names[#names + 1] = character.name
             end
         end

@@ -340,6 +340,8 @@ local function newEnvironment(session)
             end
             return false
         end,
+        -- Edit Officer Note (12) and Modify Guild Info (13) for the guild master and rank index 1.
+        GuildControlGetRankFlags = function(rankOrder) return { [12] = rankOrder <= 2, [13] = rankOrder <= 2 } end,
     }
 
     local function friendInfo(friend)
