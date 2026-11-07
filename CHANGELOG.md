@@ -4,6 +4,8 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-07
+
 ### Fixed
 
 - **Guilds**: officers in guilds with several ranks above them can now change the Who's Who settings and the guild's records. Who's Who now follows the game's rank permissions: Modify Guild Info for the settings, Edit Officer Note for the guild's records and for passing on identities.
@@ -190,7 +192,8 @@ First beta, for World of Warcraft: Forever.
 - **EllesmereUI**: its look, when it is installed.
 - **French translation.**
 
-[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/yannlugrin/WhosWho/compare/1.0.1...HEAD
+[1.0.1]: https://github.com/yannlugrin/WhosWho/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/yannlugrin/WhosWho/compare/0.5.0...1.0.0
 [0.5.0]: https://github.com/yannlugrin/WhosWho/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/yannlugrin/WhosWho/compare/0.4.2...0.4.3
