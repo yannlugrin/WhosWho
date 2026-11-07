@@ -516,20 +516,6 @@ end
 
 -- Guild invite -----------------------------------------------------------------------------------
 
--- The officers' characters just asked: the game's line for each one not playing is hidden.
-local NOT_PLAYING_SECONDS = 10
----@type table<string, number> by name: when it was asked (GetTime())
-local askedOfficers = {}
-
-local function hideNotPlaying(_, _, message)
-    for name, at in pairs(askedOfficers) do
-        if GetTime() - at < NOT_PLAYING_SECONDS and message == ERR_CHAT_PLAYER_NOT_FOUND_S:format(name) then return true end
-    end
-    return false
-end
-local addMessageEventFilter = ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter or ChatFrame_AddMessageEventFilter
-addMessageEventFilter("CHAT_MSG_SYSTEM", hideNotPlaying)
-
 local function createGuildInviteDialog()
     ---@class WhosWho.GuildInviteDialog: WhosWho.PromptDialog
     ---@field AskButton Button
@@ -546,7 +532,6 @@ local function createGuildInviteDialog()
 
     -- To each of the officer's characters: the one playing gets it, and its Who's Who checks who asks.
     dialog.AskButton:SetScript("OnClick", function()
-        for _, name in ipairs(dialog.officer.names) do askedOfficers[name] = GetTime() end
         ns.Protocol.AskGuildInvite(dialog.officer.names)
         dialog:Hide()
     end)

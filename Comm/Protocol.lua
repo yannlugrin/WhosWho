@@ -102,6 +102,25 @@ local function sendOverBnet(message, gameAccountID)
     return true
 end
 
+-- The game answers a whisper to a character not playing with a line in chat; the whispers of mine that just left, for
+-- that line to be hidden (Protocol.WhisperedRecently).
+local NOT_PLAYING_SECONDS = 10
+---@type table<string, number> by name: when a part of my last whisper to it left (GetTime())
+local whisperedAt = {}
+
+-- AceComm's callback after each part of a message left; `name` is nil on the other channels.
+local function whisperLeft(name)
+    if name then whisperedAt[name] = GetTime() end
+end
+
+---Whether a whisper of mine to that character left in the last seconds.
+---@param name string
+---@return boolean
+function Protocol.WhisperedRecently(name)
+    local at = whisperedAt[name]
+    return at ~= nil and GetTime() - at < NOT_PLAYING_SECONDS
+end
+
 -- A whisper to a Battle.net friend's key goes over Battle.net.
 local function sendQueued(message, channel, name)
     if loggingOut then return end
@@ -112,7 +131,7 @@ local function sendQueued(message, channel, name)
         return
     end
 
-    Protocol:SendCommMessage(PREFIX, message, channel, name)
+    Protocol:SendCommMessage(PREFIX, message, channel, name, nil, whisperLeft, name)
 end
 
 local function sendNow(message, channel, name)
@@ -124,6 +143,7 @@ local function sendNow(message, channel, name)
     end
 
     C_ChatInfo.SendAddonMessage(PREFIX, message, channel, name)
+    whisperLeft(name)
 end
 
 -- Hello ------------------------------------------------------------------------------------------
@@ -321,6 +341,7 @@ local function sendRecord(message, channel, name, key)
         return
     end
     Protocol:SendCommMessage(PREFIX, message, channel, name, "NORMAL", function(_, sent, total)
+        whisperLeft(name)
         if sent >= total then delivery.leftAt = GetTime() end
     end)
 end

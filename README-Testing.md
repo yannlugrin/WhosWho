@@ -97,6 +97,7 @@ A's own `GUILD` and `PARTY` messages come back to A; they are printed and ignore
 **Joining a guild** (needs a guild). A linked, Guild scope on, not in a guild. A joins B's guild.
 
 - A, once its guild roster arrives (a moment after joining): `Sent, WHISPER <member>: 2 ANNOUNCE … 1 1 0` to each online member, nothing on `GUILD` (see Workarounds in README-Technical). B answers as for a login when its roster lists A. *To verify*: whether it does by then (`/dump C_GuildInfo.MemberExistsByName("<A's name>")` on B).
+- A member the roster still shows online who just logged out: A's chat shows no "No player named … is currently playing" line for it. On A, `/w <that member> hi` by hand, more than 10 s after: the line shows.
 - A changes its revision in that session (`/ww nick …`): after 15 s, its announcement goes by whisper to each online member, and the `REC`s answering their `GET`s by whisper too; nothing on `GUILD`.
 - A logs out and back in: `Sent, GUILD: 2 ANNOUNCE … 1 1 0`, and B receives it. A member whose roster does not list A yet answers anyway, and its roster is requested (`/dump C_GuildInfo.MemberExistsByName("<A's name>")` on it gives `true` once it comes back).
 

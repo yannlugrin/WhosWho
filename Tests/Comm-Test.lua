@@ -1314,6 +1314,14 @@ check(sent({ from = "Eve Main", type = "ANNOUNCE", distribution = "WHISPER" }) =
     and sent({ from = "Eve Main", distribution = "GUILD" }) == 0
     and lastWantsAnnouncement({ from = "Eve Main", distribution = "WHISPER" }),
     "then announces to each online member, wanting theirs back")
+do
+    local whisperedMembers = 0
+    for _, member in ipairs(guildMembers(GUILD)) do
+        if eve.ns.Protocol.WhisperedRecently(member.name) then whisperedMembers = whisperedMembers + 1 end
+    end
+    check(whisperedMembers == 3 and not eve.ns.Protocol.WhisperedRecently("Nobody Main"),
+        "the game's line for a member not playing would be hidden: just whispered")
+end
 run(6)
 check(sent({ type = "ANNOUNCE", target = "Eve Main" }) == 3, "and the members answer")
 clearLog()

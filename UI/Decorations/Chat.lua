@@ -20,3 +20,17 @@ end
 if ChatFrameUtil and ChatFrameUtil.AddSenderNameFilter then
     ChatFrameUtil.AddSenderNameFilter(addNickname)
 end
+
+-- The game's "No player named … is currently playing" line, as a pattern capturing the name.
+local NOT_PLAYING_PATTERN = "^" .. ERR_CHAT_PLAYER_NOT_FOUND_S:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+    :gsub("%%%%s", "(.+)") .. "$"
+
+-- That line for a character my add-on messages just whispered: hidden, the player never whispered it.
+local function hideNotPlaying(_, _, message)
+    if issecretvalue(message) then return false end
+
+    local name = message:match(NOT_PLAYING_PATTERN)
+    return name ~= nil and ns.Protocol.WhisperedRecently(name)
+end
+local addMessageEventFilter = ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter or ChatFrame_AddMessageEventFilter
+addMessageEventFilter("CHAT_MSG_SYSTEM", hideNotPlaying)

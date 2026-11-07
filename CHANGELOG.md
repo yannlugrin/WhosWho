@@ -7,6 +7,7 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 ### Fixed
 
 - **Guilds**: officers in guilds with several ranks above them can now change the Who's Who settings and the guild's records. Who's Who now follows the game's rank permissions: Modify Guild Info for the settings, Edit Officer Note for the guild's records and for passing on identities.
+- **Chat**: no more "No player named … is currently playing" lines when Who's Who whispers a character that just logged out, for example after joining a guild (reported by @aarthurjolly-droid).
 
 ## [1.0.0] - 2026-10-23
 
