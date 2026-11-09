@@ -4,6 +4,10 @@ All notable changes to Who's Who. The format follows [Keep a Changelog](https://
 
 ## [Unreleased]
 
+### Added
+
+- **Other accounts**: if you play on more than one game account, link them in **Settings › Who's Who › Other accounts** by pasting each account's link code on the other. Players who know both accounts see one person, with your main identity's nickname and all your characters, in the People and Guild tabs, chat and tooltips; players on an older Who's Who keep seeing two people. My identity lists your other accounts' characters, and the accounts keep each other up to date, whatever your sharing options.
+
 ## [1.0.1] - 2026-11-07
 
 ### Fixed
