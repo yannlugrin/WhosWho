@@ -3072,6 +3072,8 @@ do
     run(1)
     check(sent({ from = "Soma Alt", type = "ANNOUNCE", target = "Tam Main" }) == 1, "linking a new character whispers the other account")
     check(tam.ns.LinkedAccounts.Characters(somaId)[somaAlt.guid] ~= nil, "which then holds it")
+    check(sent({ from = "Tam Main", type = "ANNOUNCE", target = "Soma Alt" }) == 1,
+        "and answers it once the record lists it")
     logout(soma)
     soma = login(somaAccount, somaMain)
     run(1)

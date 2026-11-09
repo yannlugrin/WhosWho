@@ -1049,6 +1049,10 @@ local answerGuildRecordRequests = newGathering(REQUEST_WAIT, sendGuildRecords)
 -- Characters new to my linked accounts, not in the records I hold of them yet, that I asked for that record.
 ---@type table<string, true> by name
 local askedAccountCharacters = {}
+-- Characters new to my linked accounts that asked for my announcement, answered once a record of their account lists
+-- them.
+---@type table<string, string> by name: the linked account's identity ID
+local unansweredAccountCharacters = {}
 
 -- A character of my linked account: its record is all I want, from a linked character. A character new to that account
 -- isn't in the record I hold: the announcement's ID is enough to ask, and the record's signature decides.
@@ -1058,8 +1062,21 @@ local function receiveAccountAnnouncement(announcement, sender)
     if not announcement.acceptsGet then
         recordRequests[id] = nil
     elseif Identity.IsLinked(UnitGUID("player")) and LinkedAccounts.IsNewer(id, announcement.rev) then
-        if not Scopes.IsLinkedAccountCharacter(sender) then askedAccountCharacters[sender] = true end
+        if not Scopes.IsLinkedAccountCharacter(sender) then
+            askedAccountCharacters[sender] = true
+            if announcement.wantsAnnouncement then unansweredAccountCharacters[sender] = id end
+        end
         requestRecord(id, sender)
+    end
+end
+
+-- The characters new to that linked account that its record now lists get my announcement.
+local function answerAccountCharacters(id)
+    for name, accountId in pairs(unansweredAccountCharacters) do
+        if accountId == id and Scopes.IsLinkedAccountCharacter(name) then
+            unansweredAccountCharacters[name] = nil
+            announceToAccountCharacter(name, false)
+        end
     end
 end
 
@@ -1154,6 +1171,7 @@ local function receiveAccountRecord(signedRecord, sender)
     RecordVerification.Queue(signedRecord, Record, function(verified)
         recordRequests[verified.id] = nil
         LinkedAccounts.Accept(verified)
+        answerAccountCharacters(verified.id)
     end)
 end
 

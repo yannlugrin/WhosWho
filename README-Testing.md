@@ -258,6 +258,7 @@ Needs A and B on two accounts, both linked, sharing nothing else: no group, guil
 - With the two accounts already linked, each on another character listed in the other's record, a change on B while A is offline: A's page shows it after its next login.
 - A, **Link an account…** again: no role choice.
 - A logs in on a new character and links it, with B online: within seconds, the character is in **Other accounts** and in **My identity** on B.
+- A change on B while A is offline, then A logs in on a new character and links it, with B online: within seconds, A's page shows B's change.
 - B unlinks the character it plays, its last linked one, with A online: within seconds, A shows B with no characters. B links it again: A shows it again.
 - A, **My identity**: A's characters directly under the column header, with their crowns and checkboxes, then a line and **Other account** with B's short ID and B's characters, no crown, no checkbox, a dash for level and last played. The count says "on this account", and the footer that B's characters are managed from B. B is not in **People**, nor in the person chooser.
 - B, **My identity**: "Part of" above A's name, no edit button, no Main column, **Main identity** with A's characters. Unlinking B's main works, and B's name doesn't change.
